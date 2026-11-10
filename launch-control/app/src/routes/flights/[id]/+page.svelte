@@ -1,12 +1,18 @@
 <script lang="ts">
-	// The launch console. The countdown is an OPAL execution (WO-0041) of a released procedure,
-	// read and written through the launch-control plugin (lib/opal/link). Everything on this page
-	// is simulated in the browser (lib/launch/sim). launch-control/DESIGN.md has the design basis.
+	// The launch console: telemetry and launch control. The checklist is an OPAL execution
+	// (WO-0041) the crew works in OPAL. This page shows where they are and gates ARM on it,
+	// through the launch-control plugin (lib/opal/link). Everything on this page is simulated in
+	// the browser (lib/launch/sim). launch-control/DESIGN.md has the design basis.
 	import TabStrip from '#lib/components/opal/TabStrip.svelte';
 	import CountdownBar from '#lib/components/launch/CountdownBar.svelte';
 	import PollPanel from '#lib/components/launch/PollPanel.svelte';
 	import CriteriaPanel from '#lib/components/launch/CriteriaPanel.svelte';
-	import CountSteps from '#lib/components/launch/CountSteps.svelte';
+	import ProcedureStrip from '#lib/components/launch/ProcedureStrip.svelte';
+	import PadBoxPanel from '#lib/components/launch/PadBoxPanel.svelte';
+	import StripCharts from '#lib/components/launch/StripCharts.svelte';
+	import FlightTimeline from '#lib/components/launch/FlightTimeline.svelte';
+	import AttitudePanel from '#lib/components/launch/AttitudePanel.svelte';
+	import RecoveryPanel from '#lib/components/launch/RecoveryPanel.svelte';
 	import IgnitionPanel from '#lib/components/launch/IgnitionPanel.svelte';
 	import TelemetryPanel from '#lib/components/launch/TelemetryPanel.svelte';
 	import AlertList from '#lib/components/launch/AlertList.svelte';
@@ -38,7 +44,8 @@
 <div class="flex min-h-[calc(100svh-var(--shell-h))] flex-col">
 	<SimBanner {sim} />
 	<CountdownBar {sim} />
-	<div class="px-3 pt-3">
+	<div class="flex flex-col gap-3 px-3 pt-3">
+		<ProcedureStrip {sim} />
 		<TabStrip
 			tabs={[
 				{ id: 'console', label: 'Console' },
@@ -49,22 +56,33 @@
 		/>
 	</div>
 	{#if tab === 'console'}
+		<!-- Fixed positions: launch control left, telemetry centre, vehicle and recovery right. -->
 		<div
-			class="grid flex-1 gap-3 p-3 lg:grid-cols-[17rem_minmax(0,1fr)_20rem] xl:grid-cols-[19rem_minmax(0,1fr)_23rem]"
+			class="grid flex-1 gap-3 p-3 lg:grid-cols-[19rem_minmax(0,1fr)] 2xl:grid-cols-[21rem_minmax(0,1fr)_26rem]"
 		>
 			<div class="flex min-w-0 flex-col gap-3">
+				<IgnitionPanel {sim} />
+				<PadBoxPanel {sim} />
 				<PollPanel {sim} />
 				<CriteriaPanel {sim} />
 			</div>
 			<div class="flex min-w-0 flex-col gap-3">
-				<IgnitionPanel {sim} />
-				<CountSteps {sim} />
+				<FlightTimeline {sim} />
+				<StripCharts {sim} />
+				<div class="grid gap-3 xl:grid-cols-2 2xl:hidden">
+					<AttitudePanel {sim} />
+					<RecoveryPanel {sim} />
+				</div>
 			</div>
-			<div class="flex min-w-0 flex-col gap-3">
+			<div class="flex min-w-0 flex-col gap-3 lg:col-span-2 2xl:col-span-1">
 				<AlertList {sim} />
+				<div class="hidden flex-col gap-3 2xl:flex">
+					<AttitudePanel {sim} />
+					<RecoveryPanel {sim} />
+				</div>
 				<TelemetryPanel {sim} />
 			</div>
-			<div class="lg:col-span-3">
+			<div class="lg:col-span-2 2xl:col-span-3">
 				<EventLog {sim} />
 			</div>
 		</div>

@@ -2,7 +2,9 @@
 
 Launch Control is an app for amateur sounding-rocket launches. The launch director runs the count on it. The vehicle has a high-power solid motor, a flight computer, recovery pyro channels and thrust vector control. The pad has a box with a physical arm key and an igniter continuity check. Telemetry comes over LoRa.
 
-The app is in `launch-control/app`. It is a SvelteKit app with vendored shadcn-svelte. It follows the design language of OPAL in `STYLE.md`. The plugin is a concept. It has no code yet. The contract between the app and the plugin is `app/src/lib/opal/link.ts`. The simulator is `app/src/lib/launch/sim.svelte.ts`. The prototype runs on simulated data. It has no pad hardware yet.
+The app is in `launch-control/app`. It is a SvelteKit app with vendored shadcn-svelte. It follows the design language of OPAL in `STYLE.md`. The plugin is a concept. It has no code yet. The contract between the app and the plugin is `app/src/lib/opal/link.ts`. The simulator is `app/src/lib/launch/sim.svelte.ts`.
+
+Launch Control focuses on telemetry and the launch control itself. OPAL already holds the checklists. Launch Control does not show or complete procedure steps. It shows one read-only line: the OPAL work order (WO-0041), the procedure (PROC-0012 rev C), the current OPAL step and an OPEN IN OPAL link. The crew completes the steps in OPAL. The contract file `link.ts` must follow the same change. The `step` journal entries and the step completion calls leave that file. The steps stay in the flight read. Another person edits `link.ts`. This document does not change code. The prototype runs on simulated data. It has no pad hardware yet.
 
 ## 1. What this is and why it is separate
 
@@ -42,9 +44,9 @@ flowchart LR
 The links between the two groups can fail at any time. The links inside the range group carry the count.
 
 1. The app and the ground station exchange telemetry and commands. The pad box is the real interlock.
-2. The app sends journal entries to the plugin. Each entry has a `seq`. The plugin accepts each `seq` once.
+2. The app sends journal entries to the plugin. Each entry has a `seq`. The plugin accepts each `seq` once. The journal holds hold, resume, poll, arm, safe, fire, flight events and alerts. It does not hold step completion.
 3. The plugin calls OPAL operations with its scoped token.
-4. The app reads the flight, the steps and the signatures from the plugin.
+4. The app reads the flight, the step state and the signatures from the plugin. The read is only for the ARM interlock "OPAL WO-0041 steps 1 to 8 complete" and for the line that shows where the crew is.
 
 ### The plugin concept
 
@@ -62,9 +64,9 @@ The manifest would have these parts. The values are a sketch.
 The routes come from `link.ts`.
 
 1. `GET /api/flights` lists flights with their execution and state.
-2. `GET /api/flights/:number` returns the linked flight.
+2. `GET /api/flights/:number` returns the linked flight. The steps in the answer are read-only.
 3. `POST /api/flights` cuts the work order from a released procedure and links it.
-4. `POST /api/flights/:number/journal` accepts journal entries. It is idempotent by `seq`.
+4. `POST /api/flights/:number/journal` accepts journal entries. It is idempotent by `seq`. The plugin writes each entry as an execution comment. Entries of the type `step` do not come from Launch Control. The crew completes steps in OPAL.
 5. `POST /api/flights/:number/samples` appends telemetry rows to the dataset.
 6. `GET /panel/execution?execution=<id>` shows the flight in the `execution.side` panel in OPAL.
 
@@ -76,15 +78,15 @@ The plugin would keep the last accepted `seq` of each flight in its data folder.
 |---|---|
 | Flight, `FLT-` number | A plugin link record. It ties one execution to the vehicle, the motor and the dataset. The number follows the sequence rules in `CLAUDE.md`. |
 | Countdown | An execution (work order) cut from a released procedure. `POST /api/flights` cuts it. |
-| Count step | A step of the execution. The system stamps who and when. The title is struck through. |
+| Checklist step | A step of the execution. The crew completes it in OPAL. Launch Control reads the step state only. It shows one read-only line with the work order, the procedure, the current step and an OPEN IN OPAL link. It reads the state also for the ARM interlock "OPAL WO-0041 steps 1 to 8 complete". |
 | Hold time on a step | `notBefore` on the procedure step. It is authored in the procedure. |
-| Poll GO from the range safety officer | A sign-off slot on a step. The RSO signs it in OPAL. It is `humanOnly`. Launch Control reads the signature and cannot sign. |
-| Motor | A stock lot. It is allocated at cut and consumed at fire. |
-| Telemetry | Rows appended to an OPAL dataset in the flight project. |
+| Poll GO from the range safety officer | A sign-off slot on a step. The RSO signs it in OPAL. It is `humanOnly`. Launch Control shows who answered. It cannot sign. It writes the poll to the journal. |
+| Motor | A stock lot. It is allocated at cut. The plugin consumes it at fire. |
+| Telemetry | Rows that Launch Control appends to an OPAL dataset in the flight project, through the plugin. |
 | Requirements | Linked requirements. Apogee, recovery and landing evidence verify them. |
 | Anomaly | An OPAL issue. Launch Control opens the issue form in a new tab. It carries the execution and the step. It asks only for a title. |
 | Risk | A linked risk. A realized risk is stamped on the flight. |
-| Hold, resume, scrub, arm, safe, fire | Entries in the journal. The plugin writes them to the execution as notes and stamps. |
+| Count journal: hold, resume, poll, arm, safe, fire, flight events, alerts | Entries in the journal. The plugin writes them to the execution as comments. |
 | Scrub | A strike of the whole flight. It needs a reason. The record stays legible. |
 
 ### Commit moments
@@ -154,18 +156,32 @@ The table lists what the app does and where the reference comes from. A section 
 | Alerts use two senses: visual and tone. The warning tone repeats until acknowledged. The caution tone sounds once. | 14 CFR 25.1322(c)(2) is named for an aural cue beside a visual cue in an FAA guidance summary. AC 25.1322-1 asks for a unique tone for each master alert. Paragraph numbers in the AC not verified. | `AlertList.svelte`, `sim.svelte.ts` audio, MUTE key |
 | An alert latches until a person acknowledges it | Same rule as OPAL STALE in STYLE.md. AC 25.1322-1 on acknowledge. Section not verified. | `AlertList.svelte` |
 | Word and color together. The word carries the meaning. | NASA Human Integration Design Handbook chapter 10. FAA HF-STD-001B. MIL-STD-1472H. Sections not verified. | Every state fill |
-| Stale telemetry is marked. The value is quieted and not hidden. | NASA Human Integration Design Handbook chapter 10. Section not verified. | `TelemetryPanel.svelte` |
+| Stale telemetry is marked. The value is quieted and not hidden. | NASA Human Integration Design Handbook chapter 10. Section not verified. | `TelemetryPanel.svelte` (Vehicle health), `StripCharts.svelte`, `PadBoxPanel.svelte` |
 | A critical command needs two actions and a hold. | MIL-STD-1472H on guarded controls. NASA-STD-3001 Volume 2 section 10. Sections not verified. | `IgnitionPanel.svelte` |
 | The count clock and HOLD stay in the same place on every state | NASA-STD-3001 Volume 2 V2 10005 (consistent crew interfaces, section 10.1.1). Verified from search result. V2 10006 asks for standard nomenclature. | `CountdownBar.svelte` |
-| Every value shows its unit | OPAL rule 11 in `CLAUDE.md`. NASA Human Integration Design Handbook chapter 10. Section not verified. | `TelemetryPanel.svelte`, `CriteriaPanel.svelte` |
+| The flight events and the predicted times show against the actual times | Standard flight-test practice. | `FlightTimeline.svelte`, `StripCharts.svelte` |
+| Every value shows its unit | OPAL rule 11 in `CLAUDE.md`. NASA Human Integration Design Handbook chapter 10. Section not verified. | `TelemetryPanel.svelte`, `CriteriaPanel.svelte`, `StripCharts.svelte`, `AttitudePanel.svelte`, `RecoveryPanel.svelte`, `PadBoxPanel.svelte` |
 | Text is at least 12px | STYLE.md Type. | All components |
 | Contrast is at least 4.5:1 | STYLE.md Importance. WCAG 2.x as a common basis. Section not verified. | Tokens in the app stylesheet |
 | No modals during the count | OPAL rule 9 in `CLAUDE.md`. | All components |
 | HOLD is always available | Section 4 of this document. | `CountdownBar.svelte`, key H |
-| Warnings come before the step in the order warning, caution, note. They hold no action. | OPAL rule 10 in `CLAUDE.md`. | `CountSteps.svelte` |
+| Warnings come before the step in the order warning, caution, note. They hold no action. The procedure and its warnings stay in OPAL. | OPAL rule 10 in `CLAUDE.md`. | OPAL. In Launch Control, `ProcedureStrip.svelte` shows one read-only line. |
 | The event log shows UTC and T-time on every row | OPAL rule 6 in `CLAUDE.md`. Standard flight-test practice. | `EventLog.svelte` |
 | The poll shows who answered and when. The app cannot answer for a role. | OPAL rule 14 in `CLAUDE.md`. | `PollPanel.svelte` |
-| The flight record shows the OPAL numbers and links | OPAL rule 4 in `CLAUDE.md`. | `FlightRecord.svelte` |
+| The flight record shows the OPAL numbers and links | OPAL rule 4 in `CLAUDE.md`. | `FlightRecord.svelte`, `ProcedureStrip.svelte` |
+
+### Telemetry display
+
+The telemetry panels are `StripCharts.svelte`, `FlightTimeline.svelte`, `AttitudePanel.svelte`, `RecoveryPanel.svelte`, `PadBoxPanel.svelte` and `TelemetryPanel.svelte`, named Vehicle health. They follow these rules. The reasons are human factors. They are design choices and not cited requirements.
+
+1. All strips share one time axis. The director compares altitude, vertical velocity, acceleration, tilt, FC battery and RSSI at the same moment. A separate axis for each strip makes this comparison hard.
+2. Flight-event lines cross all strips. The director sees the cause of a change in a value next to the event, for example burnout or apogee.
+3. A limit line shows the word LIMIT. The word carries the meaning. Color alone does not.
+4. Each panel shows data age. The director knows how old each value is.
+5. Stale values are quieted. They stay readable. A hidden value gives no information. A value that looks live can be wrong.
+6. Every value shows its unit.
+7. Each panel stays in a fixed position. The director learns where to look and does not search.
+8. Each strip shows the minimum and the maximum of the window. The director sees the range without a scan of the trace.
 
 ### Range rules the app checks
 
@@ -174,8 +190,8 @@ The table lists what the app does and where the reference comes from. A section 
 | Launch does not proceed in wind over 20 mph (8.9 m/s) | NAR High Power Rocket Safety Code. Verified from search result. | Wind is a commit criterion. A gust breaks it and the count holds. |
 | The launch system has a safety interlock in series with the launch switch. The interlock is not installed until the rocket is ready. The launch switch returns to off when released. | NAR High Power Rocket Safety Code. Verified from search result. | The pad key is the interlock. The FIRE key cancels on release. |
 | A 5-second countdown before launch, and a way to warn people if something goes wrong | NAR High Power Rocket Safety Code. Verified from search result. | The count is longer than 5 seconds. The warning tone is a prototype only. The range needs a horn. |
-| Launcher distance from people and buildings | NAR code and NFPA 1127. Values not verified. | Step 1 posts the range. The prototype uses 30 m for the pad crew only. |
-| Notice to air traffic control before launch | 14 CFR 101.27 is the ATC notification section. 101.29 lists the content of the notice. Verified from search result. 101.25 is the operating limitations section for Class 2 and Class 3 rockets. | A count step for the ATC notice is a candidate. It is not in the prototype. |
+| Launcher distance from people and buildings | NAR code and NFPA 1127. Values not verified. | An OPAL procedure step posts the range. The prototype uses 30 m for the pad crew only. |
+| Notice to air traffic control before launch | 14 CFR 101.27 is the ATC notification section. 101.29 lists the content of the notice. Verified from search result. 101.25 is the operating limitations section for Class 2 and Class 3 rockets. | An OPAL procedure step for the ATC notice is a candidate. It is not in the prototype. |
 
 Flight termination, as in RCC 319, is out of scope. The app has no command destruct and no termination channel.
 

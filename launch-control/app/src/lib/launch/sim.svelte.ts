@@ -72,6 +72,31 @@ export interface Sample {
 	alt: number;
 }
 
+/** One telemetry frame, kept for the strip charts. `t` is count time in seconds. */
+export interface Frame {
+	t: number;
+	alt: number;
+	vel: number;
+	acc: number;
+	tilt: number;
+	batt: number;
+	rssi: number;
+}
+
+/** Flight phase times from the profile, s after ignition. The timeline shows them as predictions. */
+export const PREDICTED: Record<Exclude<FlightState, 'PAD'>, number> = {
+	BOOST: 0,
+	COAST: 1.6,
+	DROGUE: 11.9,
+	MAIN: 44.7,
+	LANDED: 78
+};
+
+/** The pad, and metres east/north of it as degrees. */
+export const PAD = { lat: 35.4721, lon: -115.916 };
+const M_PER_DEG_LAT = 111_320;
+const M_PER_DEG_LON = 111_320 * Math.cos((PAD.lat * Math.PI) / 180);
+
 const START_MS = -180_000;
 /** Built-in hold: the clock stops here until the poll is GO and the director resumes. */
 const BUILT_IN_HOLD_MS = -60_000;
@@ -184,6 +209,29 @@ export class LaunchSim {
 	flight = $state<FlightState>('PAD');
 	apogee = $state(0);
 	samples = $state<Sample[]>([]);
+	/** The last 120 s of frames at 10 Hz, on the pad and in flight. */
+	frames = $state<Frame[]>([]);
+	flightTimes = $state<Partial<Record<FlightState, number>>>({});
+
+	// Attitude and TVC
+	roll = $state(0);
+	servoX = $state(0);
+	servoY = $state(0);
+	fcTemp = $state(31.4);
+	logPct = $state(12);
+	packetRate = $state(10);
+	packetsLost = $state(0);
+
+	// Position: metres east and north of the pad
+	east = $state(0);
+	north = $state(0);
+	track = $state<{ e: number; n: number }[]>([]);
+	windDir = 250; // degrees from: the wind blows toward 070
+
+	// Pad box
+	relay = $state<'OPEN' | 'CLOSED'>('OPEN');
+	contTestAt = $state<string | null>(null);
+	fireCurrent = $state(0);
 
 	poll = $state<PollRole[]>([
 		{ id: 'ld', role: 'Launch director', person: ME, answer: null, at: null },
@@ -242,12 +290,18 @@ export class LaunchSim {
 					text: 'Shunt the igniter leads until they are on the clips.'
 				}
 			],
-			capture: () => `Igniter ${this.igniterOhm.toFixed(1)} Ω`
+			capture: () => `Igniter ${this.igniterOhm.toFixed(1)} Ω`,
+			doneBy: 'M. Chen',
+			doneAt: '',
+			captured: 'Igniter 1.9 Ω'
 		},
 		{
 			n: 6,
 			title: 'Clear the pad crew to the safe distance',
-			capture: () => `Pad crew at 30 m`
+			capture: () => `Pad crew at 30 m`,
+			doneBy: 'M. Chen',
+			doneAt: '',
+			captured: 'Pad crew at 30 m'
 		},
 		{
 			n: 7,
@@ -310,6 +364,41 @@ export class LaunchSim {
 		if (this.opalDown) return;
 		this.opalDroppedAt = null;
 		this.opalBackAt = null;
+	}
+
+	get range(): number {
+		return Math.hypot(this.east, this.north);
+	}
+
+	/** Degrees true from the pad to the vehicle. */
+	get bearing(): number {
+		return ((Math.atan2(this.east, this.north) * 180) / Math.PI + 360) % 360;
+	}
+
+	get lat(): number {
+		return PAD.lat + this.north / M_PER_DEG_LAT;
+	}
+
+	get lon(): number {
+		return PAD.lon + this.east / M_PER_DEG_LON;
+	}
+
+	/** Where the vehicle lands if the wind holds: drift for the descent time left. */
+	get predicted(): { e: number; n: number } | null {
+		if (this.flight !== 'DROGUE' && this.flight !== 'MAIN' && this.flight !== 'COAST') return null;
+		const left = Math.max(0, PREDICTED.LANDED - this.clockMs / 1000);
+		const to = ((this.windDir + 180) * Math.PI) / 180;
+		const d = left * this.wind * 0.9;
+		return { e: this.east + Math.sin(to) * d, n: this.north + Math.cos(to) * d };
+	}
+
+	/** Continuity test: a small current through each channel, read back as resistance. */
+	contTest() {
+		this.contTestAt = iso();
+		this.say(
+			'Pad box',
+			`Continuity test: igniter ${this.igniterOhm.toFixed(1)} Ω, drogue ${this.drogueOhm.toFixed(1)} Ω, main ${this.mainOhm.toFixed(1)} Ω`
+		);
 	}
 
 	get current(): CountStep | undefined {
@@ -389,7 +478,7 @@ export class LaunchSim {
 			{ label: 'Launch commit criteria met', met: this.criteriaMet },
 			{ label: 'Pad key ARMED', met: this.padKey === 'ARMED' },
 			{ label: 'Flight computer PAD_READY', met: this.fcState === 'PAD_READY' },
-			{ label: 'Steps 1 to 8 complete', met: cur >= 9 }
+			{ label: 'OPAL WO-0041 steps 1 to 8 complete', met: cur >= 9 }
 		];
 	}
 
@@ -475,7 +564,21 @@ export class LaunchSim {
 			this.fcBatt = +(8.12 + noise(0.01)).toFixed(2);
 			this.padBatt = +(12.6 + noise(0.02)).toFixed(2);
 			this.igniterOhm = this.contLost ? 99.9 : +(1.9 + noise(0.04)).toFixed(2);
-			this.tilt = +(0.4 + noise(0.05)).toFixed(2);
+			if (this.phase !== 'flight' && this.phase !== 'landed') {
+				this.tilt = +(0.4 + noise(0.05)).toFixed(2);
+				this.roll = +noise(0.3).toFixed(1);
+				this.servoX = 0;
+				this.servoY = 0;
+			}
+			this.fcTemp = +(31.4 + noise(0.1) + (this.phase === 'flight' ? 2 : 0)).toFixed(1);
+			this.packetRate = 10;
+		} else {
+			this.packetRate = 0;
+			if (Math.random() < 0.1) this.packetsLost += 1;
+		}
+		if (this.relay === 'CLOSED' && this.firedAt && t - Date.parse(this.firedAt) > 1000) {
+			this.relay = 'OPEN';
+			this.fireCurrent = 0;
 		}
 
 		if (this.phase === 'count') {
@@ -500,8 +603,53 @@ export class LaunchSim {
 				this.samples = [...this.samples, { t: this.clockMs / 1000, alt: this.baroAlt }].slice(
 					-1200
 				);
+				const ft = this.clockMs / 1000;
+				// Attitude: weathercocks a little in boost, pitches over in coast, swings under canopy.
+				if (p.state === 'BOOST') this.tilt = +(1 + ft * 0.8 + noise(0.2)).toFixed(1);
+				else if (p.state === 'COAST') this.tilt = +(2.3 + (ft - 1.6) * 1.6 + noise(0.3)).toFixed(1);
+				else if (p.state === 'LANDED') this.tilt = 90;
+				else this.tilt = +(15 + noise(12)).toFixed(1);
+				this.roll = +(
+					p.state === 'BOOST' || p.state === 'COAST' ? 40 + noise(8) : noise(20)
+				).toFixed(1);
+				this.servoX = p.state === 'BOOST' ? +(1.6 * Math.sin(ft * 9) + noise(0.2)).toFixed(1) : 0;
+				this.servoY = p.state === 'BOOST' ? +(1.1 * Math.cos(ft * 7) + noise(0.2)).toFixed(1) : 0;
+				this.logPct = Math.min(100, +(12 + ft * 0.3).toFixed(1));
+				// Drift downwind under canopy, a little upwind weathercock in boost.
+				const to = ((this.windDir + 180) * Math.PI) / 180;
+				const under = p.state === 'DROGUE' || p.state === 'MAIN';
+				const v = under ? this.wind * 0.9 : p.state === 'COAST' ? 3 : 0;
+				if (p.state !== 'LANDED') {
+					this.east += Math.sin(to) * v * (dt / 1000);
+					this.north += Math.cos(to) * v * (dt / 1000);
+					if (this.track.length === 0 || this.samples.length % 5 === 0)
+						this.track = [...this.track, { e: this.east, n: this.north }];
+				}
 			}
 			if (p.state !== this.flight) this.flightEvent(p.state);
+		}
+
+		if (!this.linkDown)
+			this.frames = [
+				...this.frames.filter((f) => f.t > this.clockMs / 1000 - 120),
+				{
+					t: this.clockMs / 1000,
+					alt: this.baroAlt,
+					vel: this.vel,
+					acc: this.acc,
+					tilt: this.tilt,
+					batt: this.fcBatt,
+					rssi: this.rssi
+				}
+			];
+
+		// Crew work on the OPAL execution: step 8 closes there when the key turns after the RSO GO.
+		const s8 = this.steps[7];
+		if (!s8.doneBy && this.steps[6].doneBy && this.rsoGo && this.padKey === 'ARMED') {
+			s8.doneBy = 'M. Chen';
+			s8.doneAt = iso();
+			s8.captured = s8.capture?.();
+			this.say('OPAL', `WO-0041 step 8 complete by M. Chen`);
 		}
 
 		// The count holds itself on a broken commit criterion, and drops the arm.
@@ -672,6 +820,8 @@ export class LaunchSim {
 		this.fireStart = null;
 		this.fireProgress = 0;
 		this.firedAt = iso();
+		this.relay = 'CLOSED';
+		this.fireCurrent = 6.2;
 		this.armed = false;
 		this.phase = 'flight';
 		this.clockMs = 0;
@@ -682,6 +832,7 @@ export class LaunchSim {
 
 	private flightEvent(next: FlightState) {
 		this.flight = next;
+		this.flightTimes = { ...this.flightTimes, [next]: this.clockMs / 1000 };
 		const text: Record<FlightState, string> = {
 			PAD: '',
 			BOOST: 'Liftoff',

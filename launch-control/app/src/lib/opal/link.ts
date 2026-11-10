@@ -10,7 +10,10 @@
  * and Launch Control reads that signature here. Launch Control cannot sign for anyone.
  */
 
-/** One step of the released procedure, as the execution in OPAL holds it. */
+/**
+ * One step of the released procedure, as the execution in OPAL holds it. Read-only here: the crew
+ * completes steps in OPAL. Launch Control reads them for the ARM interlock and the procedure line.
+ */
 export interface LinkedStep {
 	n: number;
 	title: string;
@@ -57,15 +60,6 @@ export interface LinkedFlight {
 
 /** One entry of the count journal. Sent in order, each once, keyed by `seq`. */
 export type JournalEntry =
-	| {
-			seq: number;
-			at: string;
-			t: number;
-			kind: 'step';
-			step: number;
-			by: string;
-			captured?: string;
-	  }
 	| {
 			seq: number;
 			at: string;
