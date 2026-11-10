@@ -608,7 +608,8 @@ export class LaunchSim {
 				if (p.state === 'BOOST') this.tilt = +(1 + ft * 0.8 + noise(0.2)).toFixed(1);
 				else if (p.state === 'COAST') this.tilt = +(2.3 + (ft - 1.6) * 1.6 + noise(0.3)).toFixed(1);
 				else if (p.state === 'LANDED') this.tilt = 90;
-				else this.tilt = +(15 + noise(12)).toFixed(1);
+				// Swings slowly under canopy.
+				else this.tilt = +(14 + 9 * Math.sin(ft * 1.3) + noise(0.8)).toFixed(1);
 				this.roll = +(
 					p.state === 'BOOST' || p.state === 'COAST' ? 40 + noise(8) : noise(20)
 				).toFixed(1);

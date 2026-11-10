@@ -6,7 +6,7 @@
 
 	let { sim }: { sim: LaunchSim } = $props();
 
-	const utc = (v: string | null) => (v ? `${v.slice(11, 19)} UTC` : '—');
+	const utc = (v: string | null) => (v ? `${v.slice(11, 19)}Z` : '—');
 	const firstOpen = $derived(sim.interlocks.findIndex((i) => !i.met));
 	const atZero = $derived(sim.phase === 'awaiting-fire');
 
@@ -35,8 +35,8 @@
 	{:else if sim.phase === 'scrubbed'}
 		<p class="px-3 py-2 text-quiet" aria-live="assertive">SAFE — scrubbed</p>
 	{:else}
-		<div class="flex flex-col gap-4 p-3 lg:flex-row lg:items-start lg:gap-8">
-			<div class="min-w-0 lg:w-80">
+		<div class="flex flex-col gap-4 p-3">
+			<div class="order-2 min-w-0">
 				<ul class="text-sm">
 					{#each sim.interlocks as il, i (il.label)}
 						<li class="flex gap-3 border-b border-dotted border-border py-1 last:border-b-0">
@@ -60,8 +60,8 @@
 				</p>
 			</div>
 
-			<div class="flex flex-wrap items-start gap-4">
-				<div class="flex w-44 flex-col gap-1">
+			<div class="order-1 flex items-start gap-3">
+				<div class="flex min-w-0 flex-1 flex-col gap-1">
 					<span class="label">1 ARM</span>
 					{#if sim.armed}
 						<div
@@ -79,7 +79,7 @@
 					{/if}
 				</div>
 
-				<div class="flex w-44 flex-col gap-1">
+				<div class="flex min-w-0 flex-1 flex-col gap-1">
 					<span class="label">2 FIRE</span>
 					<!-- Red fill is allowed here: FIRE commits the most hazardous act on the console, and the
 					     colour matches its consequence. It is lit only while the server-side rules allow it. -->
@@ -117,7 +117,7 @@
 				</div>
 
 				{#if sim.armed}
-					<div class="flex w-28 flex-col gap-1">
+					<div class="flex w-24 flex-col gap-1">
 						<span class="label">SAFE</span>
 						<Button
 							variant="outline"

@@ -265,7 +265,7 @@
 						text-anchor="end"
 						class="mono"
 						font-size="12"
-						fill="var(--quiet)">{s.b} {s.c.unit}</text
+						fill="var(--quiet)">{+s.b.toFixed(3)} {s.c.unit}</text
 					>
 					<text
 						x={M.l - 6}
@@ -273,7 +273,7 @@
 						text-anchor="end"
 						class="mono"
 						font-size="12"
-						fill="var(--quiet)">{s.a} {s.c.unit}</text
+						fill="var(--quiet)">{+s.a.toFixed(3)} {s.c.unit}</text
 					>
 					{#if s.c.zero && s.a < 0 && s.b > 0}
 						<line
