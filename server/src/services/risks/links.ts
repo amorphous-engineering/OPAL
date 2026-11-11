@@ -12,6 +12,7 @@ import { issue, issueLink, risk, riskReference } from '../../db/schema/index.ts'
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { create as createIssue } from '../issues/service.ts';
 import { numbersFor } from '../org/project.ts';
+import { keepsItsLines, requireAddable, requireRemovable } from './line-rules.ts';
 import { load, one } from './service.ts';
 
 function loadIssue(ctx: Ctx, id: number) {
@@ -20,9 +21,17 @@ function loadIssue(ctx: Ctx, id: number) {
 	return row;
 }
 
+/** The link shows on the issue too, and a void issue takes only comments. */
+function requireNotVoid(target: { issueNumber: string; status: string }) {
+	if (target.status === 'void') {
+		throw conflict('issue_state', `${target.issueNumber} is void, so its links stay as they are`);
+	}
+}
+
 export function linkIssue(ctx: Ctx, riskId: number, issueId: number, role: RiskIssueRole): Risk {
-	load(ctx, riskId);
+	requireAddable(load(ctx, riskId));
 	const target = loadIssue(ctx, issueId);
+	requireNotVoid(target);
 	const dup = ctx.db
 		.select({ id: issueLink.id })
 		.from(issueLink)
@@ -40,6 +49,7 @@ export function spawnIssue(
 	input: { role: RiskIssueRole | 'realized'; title: string; description?: string | null }
 ): Risk {
 	const r = load(ctx, riskId);
+	requireAddable(r);
 	if (input.role === 'realized' && r.realizedIssueId !== null) {
 		const existing = loadIssue(ctx, r.realizedIssueId);
 		throw conflict(
@@ -65,13 +75,14 @@ export function spawnIssue(
 }
 
 export function unlinkIssue(ctx: Ctx, riskId: number, issueId: number): Risk {
-	load(ctx, riskId);
+	requireRemovable(load(ctx, riskId));
 	const link = ctx.db
 		.select({ id: issueLink.id })
 		.from(issueLink)
 		.where(and(eq(issueLink.riskId, riskId), eq(issueLink.issueId, issueId)))
 		.get();
 	if (!link) throw notFound('Link');
+	requireNotVoid(loadIssue(ctx, issueId));
 	remove(ctx, issueLink, link.id);
 	return one(ctx, riskId);
 }
@@ -85,7 +96,7 @@ export function addReference(
 	riskId: number,
 	input: { type: 'opal' | 'work_order'; value: string; notes?: string | null }
 ): Risk {
-	load(ctx, riskId);
+	requireAddable(load(ctx, riskId));
 	// Typed at any width: stored at one, so a duplicate at another width is caught.
 	const value = numbersFor(ctx.db).canonical(input.value.trim().toUpperCase());
 	if (!FORMAT[input.type].test(value)) {
@@ -114,7 +125,7 @@ export function addReference(
 }
 
 export function removeReference(ctx: Ctx, riskId: number, referenceId: number): Risk {
-	load(ctx, riskId);
+	requireRemovable(load(ctx, riskId));
 	const row = ctx.db
 		.select({ id: riskReference.id })
 		.from(riskReference)
@@ -128,7 +139,7 @@ export function removeReference(ctx: Ctx, riskId: number, referenceId: number): 
 /** For the issue page: the risks an issue responds to or realizes. */
 export function risksOfIssue(ctx: Ctx, issueId: number) {
 	const linked = ctx.db
-		.select({ id: risk.id, riskNumber: risk.riskNumber, title: risk.title, role: issueLink.riskRole })
+		.select({ id: risk.id, riskNumber: risk.riskNumber, title: risk.title, disposition: risk.disposition, role: issueLink.riskRole })
 		.from(issueLink)
 		.innerJoin(risk, eq(risk.id, issueLink.riskId))
 		.where(and(eq(issueLink.issueId, issueId), isNotNull(issueLink.riskId)))
@@ -137,13 +148,14 @@ export function risksOfIssue(ctx: Ctx, issueId: number) {
 			riskId: r.id,
 			riskNumber: r.riskNumber,
 			title: r.title,
-			relation: r.role!
+			relation: r.role!,
+			canUnlink: !keepsItsLines(r.disposition)
 		}));
 	const realized = ctx.db
 		.select({ id: risk.id, riskNumber: risk.riskNumber, title: risk.title })
 		.from(risk)
 		.where(eq(risk.realizedIssueId, issueId))
 		.all()
-		.map((r) => ({ riskId: r.id, riskNumber: r.riskNumber, title: r.title, relation: 'realized' as const }));
+		.map((r) => ({ riskId: r.id, riskNumber: r.riskNumber, title: r.title, relation: 'realized' as const, canUnlink: false }));
 	return [...linked, ...realized];
 }

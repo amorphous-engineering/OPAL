@@ -192,6 +192,17 @@ export const zBomTreeNode: z.ZodType<BomTreeNode> = z.lazy(() =>
 
 export const zPartExpects = z.object({ bom: z.boolean(), suppliers: z.boolean(), poLines: z.boolean() });
 
+/** The other end of a revision: the part it revised, or a part that revises this one. */
+export const zPartRevisionRef = z.object({
+	partId: z.number().int(),
+	internalPn: z.string(),
+	state: z.enum(PART_STATES),
+	reason: z.string(),
+	createdAt: zTimestamp,
+	createdBy: z.string().nullable()
+});
+export type PartRevisionRef = z.infer<typeof zPartRevisionRef>;
+
 export const zPartDetail = z.object({
 	part: zPart,
 	tierCode: z.string().nullable(),
@@ -201,9 +212,19 @@ export const zPartDetail = z.object({
 	/** Nonzero counts of everything that references this part. */
 	references: z.record(z.string(), z.number().int()),
 	deletable: z.boolean(),
-	/** Stock or purchase order lines count in this unit, so it cannot change. */
+	/** Stock or purchase order lines count in this unit, or a locked BOM reads through it, so it cannot change. */
 	unitLocked: z.boolean(),
+	/** A locked BOM names this part, so a draft keeps its number and tier. */
+	identityLocked: z.boolean(),
 	bom: z.array(zBomLine),
+	/** What exists of this part, in words, when that locks its BOM. Null while the BOM is pencil. */
+	bomLockedBy: z.string().nullable(),
+	/** Current published procedures that output this part. Their kits are as published, not this BOM. */
+	publishedKits: z.array(
+		z.object({ procedureId: z.number().int(), templateNumber: z.string(), name: z.string(), versionNumber: z.number().int() })
+	),
+	revises: zPartRevisionRef.nullable(),
+	revisedBy: z.array(zPartRevisionRef),
 	whereUsed: z.array(zBomLine),
 	family: zPartFamily
 });
@@ -532,6 +553,17 @@ const parts_ = {
 		summary: 'Delete a draft part that nothing references. Its number is retired and never issued again.',
 		input: z.object({ id: zId }),
 		output: zOk,
+		access: 'signed-in',
+		mcp: true
+	}),
+	revise: op({
+		name: 'parts.revise',
+		method: 'POST',
+		path: '/parts/:id/revise',
+		summary:
+			'File a draft copy of an active part with its BOM, under a new number, to change the design once copies exist. The part stays as it is. A reason is required.',
+		input: z.object({ id: zId, reason: z.string().trim().min(1).max(MAX_TEXT) }),
+		output: zPart,
 		access: 'signed-in',
 		mcp: true
 	}),

@@ -2,6 +2,32 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
+## 2.0.0-beta.2
+
+### Added
+- **`opal backup <folder> [--keep <n>]`.** Writes a checked backup while OPAL runs: the database, attachments, avatars, plugins and key files. A backup holds secrets, and its files are owner-only. A missing or damaged attachment file is left out and named, so the backup of everything else still finishes, and `--keep` removes no older backup until the file is put back.
+- **`opal restore <backup-folder>`.** Restores into an empty data folder, and refuses a folder with anything in it or an incomplete backup.
+- **systemd user units in `contrib/`.** `opal.service` runs `opal serve`, and `opal-backup.timer` backs up nightly and keeps 14.
+- **Stored secrets are encrypted.** The single sign-on client secret and plugin secrets are encrypted in the database with a key kept outside it: `.opal_secrets_key` in the data folder, or `OPAL_SECRETS_KEY`. Existing secrets are encrypted at the first start. Back up the key with the data, and see [Stored secrets and their key](README.md#stored-secrets-and-their-key) for what happens without it. `opal secrets rotate` changes the key. When a plugin update makes a setting secret, its earlier values are hidden in the audit log, and a new audit entry records that. Onshape settings and API keys from a 1.x database are removed at the first start, since OPAL does not use them. `opal.legacy.db` still holds them.
+- **OPAL 2 imports real 1.x databases**, from every release from 1.2.2 through 1.4.0-beta.3. The first start, or `opal import`, brings a private copy forward and imports it. The original stays as `opal.legacy.db`, byte for byte. `import-report.txt` lists every table in the old file and what became of its rows. The import keeps every row or does not happen: one failed row leaves the old database in place, and `opal import --accept-failed-rows` goes on after you have read which rows they are.
+- **The import survives a crash, in 1.x or in itself.** An unfinished write from 1.x is undone on the private copy, and the original moves together with its journal. An import stopped at any point leaves the old database working, and a large one is not killed for taking a while.
+- **Records with one number all stay.** Work orders, orders and parts that share a number, at any width, stay separate: the later one reads as that number with `-DUP2`, and the report lists each change.
+- **What someone signed stays.** A 1.x disposition of `other` still reads `other`, as it was signed. Requirements from `opal.project.yaml` become draft requirements, and part allocations stay with them, verified and waived ones too.
+- **A printed sign-in link for databases from before 1.4.** They have no passwords, so the first start prints a link where the administrator sets one.
+- **`opal.project.yaml` is read once** for databases from before 1.4, so the project name, tiers and part numbering carry over. `opal import --project` names the file if OPAL cannot find it.
+
+### Security
+- **Plugins are confined on Linux.** A plugin reaches only its own `plugin-data/<id>`, its code and system files, using Landlock and a seccomp filter, or a separate OS user when OPAL runs as root. The plugin page shows the result under **Confinement**, and `OPAL_PLUGIN_CONFINEMENT` can require it or turn it off. macOS, Windows and Linux without Landlock are not confined: there a plugin still has shell-level access. A plugin that used `/tmp` or files outside its repository must change, see the SDK README.
+
+### Not carried over
+- Extensions, Onshape links and Onshape keys. The report lists them. When keys were left out, the import also warns in the terminal: they are still in plaintext in the old database, so revoke them in Onshape if you no longer need them.
+- Free-text part requirement rows from before the requirement register, when no requirement has that number. They stay in the `legacy_row` table, and the report lists them.
+
+### Fixed
+- **A revised requirement no longer strands its parts and children.** When a revision baselines, each allocated part gets a new open allocation to verify against the new text, and the old allocation stays as the evidence for the old text. Children move to the new revision and stay STALE until someone reviews them. Revisions superseded before this fix keep their old allocations: allocate the part again from its page.
+- **A cancelled draft revision no longer leaves its requirement stuck.** The baseline stays in force, takes new allocations and can be revised again. The cancelled draft stays on record under its own revision number. A baseline with a draft revision open cannot be cancelled until the draft is.
+- **A risk can no longer link or unlink a void issue.** A void issue takes only comments, from the risk's page as from its own.
+
 ## 2.0.0-beta.1
 
 OPAL 2 is a rewrite in TypeScript: one Bun binary, one SQLite file. The Python 1.x backend is gone, and

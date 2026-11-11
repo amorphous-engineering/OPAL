@@ -6,6 +6,8 @@ import type { MigrationMeta } from 'drizzle-orm/migrator';
 import { join } from 'node:path';
 import { embedded } from '../http/embedded.ts';
 import { retireAbortedStatus } from './retire-aborted.ts';
+import { ensureInstanceId } from './instance-id.ts';
+import { holdsPlaintextSecret, sealDatabase } from './seal-secrets.ts';
 import * as schema from './schema/index.ts';
 import { snapshotBeforeMigrating } from './snapshot.ts';
 
@@ -13,8 +15,12 @@ export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 export const MIGRATIONS_DIR = join(import.meta.dir, '../../drizzle');
 
+/** The binary has no drizzle/ folder on disk, so it reads the same files from memory. */
+export const migrationFiles = (migrationsFolder = MIGRATIONS_DIR): MigrationMeta[] =>
+	embedded()?.migrations ?? readMigrationFiles({ migrationsFolder });
+
 /** Newest applied migration, by the same `created_at` drizzle's migrator compares against. */
-function lastApplied(sqlite: Database): number {
+export function lastApplied(sqlite: Database): number {
 	const table = sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'").get();
 	if (!table) return 0;
 	const row = sqlite.query('SELECT max(created_at) AS at FROM __drizzle_migrations').get() as { at: number | null };
@@ -41,19 +47,31 @@ function applyMigrations(sqlite: Database, pending: MigrationMeta[], apply: () =
 	}
 }
 
-export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR, snapshot = snapshotBeforeMigrating): Db {
+export interface OpenOptions {
+	/** The caller runs `scrubDatabase` once it is ready to, because that can take a while on a large file. */
+	scrubLater?: boolean;
+}
+
+export function openDb(
+	path: string,
+	migrationsFolder = MIGRATIONS_DIR,
+	snapshot: (sqlite: Database, path: string) => string | null = snapshotBeforeMigrating,
+	options: OpenOptions = {}
+): Db {
 	const sqlite = new Database(path, { create: true, strict: true });
 	sqlite.run('PRAGMA journal_mode = WAL');
 	sqlite.run('PRAGMA foreign_keys = ON');
 	sqlite.run('PRAGMA busy_timeout = 5000');
 	const db = drizzle(sqlite, { schema });
-	// The binary has no drizzle/ folder on disk, so it reads the same files from memory.
-	const files = embedded()?.migrations ?? readMigrationFiles({ migrationsFolder });
+	const files = migrationFiles(migrationsFolder);
 	const last = lastApplied(sqlite);
 	const pending = files.filter((m) => m.folderMillis > last);
+	const onDisk = path !== ':memory:';
 	// A new database has nothing to lose, and a test's :memory: has no folder to put a copy in.
-	if (pending.length && last > 0 && path !== ':memory:') {
-		console.log(`Copied the database before upgrading it: ${snapshot(sqlite, path)}`);
+	// Sealing the first time is an upgrade too: this copy is the way back to a version that cannot read a sealed value.
+	if (last > 0 && onDisk && (pending.length || holdsPlaintextSecret(sqlite))) {
+		const copy = snapshot(sqlite, path);
+		if (copy) console.log(`Copied the database before upgrading it: ${copy}`);
 	}
 	const internals = db as unknown as {
 		dialect: { migrate(m: MigrationMeta[], session: unknown, config: object): void };
@@ -63,5 +81,9 @@ export function openDb(path: string, migrationsFolder = MIGRATIONS_DIR, snapshot
 		retireAbortedStatus(sqlite);
 		internals.dialect.migrate(files, internals.session, { migrationsFolder });
 	});
+	if (onDisk) {
+		sealDatabase(sqlite, last === 0, options.scrubLater);
+		ensureInstanceId(sqlite);
+	}
 	return db;
 }

@@ -2,10 +2,10 @@
  * Purchasing service. Registers what references a part and how purchasing tables read in the
  * audit trail and in search.
  */
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { purchase, purchaseExpense, purchaseLine, supplier, supplierPart } from '../../db/schema/index.ts';
 import { registerEntity, registerSearchable } from '../platform/index.ts';
-import { registerPartReference } from '../parts/references.ts';
+import { registerPartCopies, registerPartReference } from '../parts/references.ts';
 
 export * from './suppliers.ts';
 export * from './orders.ts';
@@ -20,6 +20,18 @@ registerPartReference({
 	locksUnit: true,
 	count: (ctx, id) =>
 		ctx.db.select({ n: sql<number>`count(*)` }).from(purchaseLine).where(eq(purchaseLine.partId, id)).get()?.n ?? 0
+});
+
+// A draft order commits to nothing. Placing it does.
+registerPartCopies({
+	label: ['placed PO line', 'placed PO lines'],
+	count: (ctx, id) =>
+		ctx.db
+			.select({ n: sql<number>`count(*)` })
+			.from(purchaseLine)
+			.innerJoin(purchase, eq(purchase.id, purchaseLine.purchaseId))
+			.where(and(eq(purchaseLine.partId, id), isNotNull(purchase.orderedAt)))
+			.get()?.n ?? 0
 });
 
 registerEntity(supplier, { label: 'Supplier', ref: (r) => ({ label: r.name, href: `/suppliers/${r.id}` }) });

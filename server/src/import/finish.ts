@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { designatorSequence, part, stockRecord } from '../db/schema/index.ts';
 import { legacyAudit } from '../db/schema/legacy.ts';
 import { validatePartNumber } from '../services/org/numbering.ts';
-import { type ImportCtx, type Row, chunks, readTable, tableExists, warn } from './context.ts';
+import { type ImportCtx, type Row, chunks, ident, readTable, tableExists, warn } from './context.ts';
 
 /** Legacy audit rows go into legacy_audit as they were. */
 export function importAudit(c: ImportCtx): void {
@@ -66,7 +66,7 @@ export function importDesignators(c: ImportCtx): void {
 		}
 		if (!exists) continue;
 		const re = new RegExp(`^${prefix}-(\\d+)$`);
-		for (const r of sqlite.query(`SELECT "${column}" AS v FROM "${table}"`).all() as Row[]) {
+		for (const r of sqlite.query(`SELECT ${ident(column)} AS v FROM ${ident(table)}`).all() as Row[]) {
 			const m = re.exec(String(r.v ?? ''));
 			if (m) bump(prefix, Number(m[1]));
 		}
@@ -101,7 +101,7 @@ export function setSequences(c: ImportCtx): void {
 		.query("SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%AUTOINCREMENT%'")
 		.all() as { name: string }[];
 	for (const { name } of tables) {
-		const max = (sqlite.query(`SELECT MAX(id) AS m FROM "${name}"`).get() as { m: number | null }).m ?? 0;
+		const max = (sqlite.query(`SELECT MAX(id) AS m FROM ${ident(name)}`).get() as { m: number | null }).m ?? 0;
 		if (max === 0) continue;
 		const set = sqlite.query('UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = ?');
 		if (set.run(max, name).changes === 0) sqlite.query('INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)').run(name, max);

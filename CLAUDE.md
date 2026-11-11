@@ -60,6 +60,7 @@ Handlers are thin. Business rules live in `server/src/services`.
 12. No request header gives identity. Identity comes from the session cookie or a bearer API token. Token actors cannot do `humanOnly` operations.
 13. Working docs, audits and scratch notes go in `notes/` (gitignored). The repo is public.
 14. Sequence numbers (part numbers, OPAL-, PO-, T-, WO-, IT-, RISK-, REQ-) follow the rules in the next section. Serials (`001`) do not.
+15. A secret kept in the database is sealed with `server/src/auth/sealed.ts`, never stored as plain text, and never reaches the audit log. A new kind of secret is added to `server/src/db/seal-secrets.ts` as well.
 
 ## Sequence numbers
 
@@ -90,6 +91,7 @@ screen, in links, in exports and in MCP, and moves no stored row.
 - `bun test`. Each test opens `openDb(':memory:')` and calls the app with `app.request()`. No server process.
 - Name tests after the business rule they check.
 - Every operation needs at least one HTTP-level test (`test:ops` checks it).
+- `server/test/fixtures/legacy-released` holds databases made by the released 1.x code. `build.sh` there remakes them; real Alembic's result is the expected output of `src/import/bridge.ts`.
 - Real data for screen checks: copy `server/assets/demo-seed.db` (a 1.x demo database) into a temp `OPAL_DATA_DIR` as `opal.db`. The first start imports it. Sign in as `build` / `kestrel-demo`.
 
 ## Records

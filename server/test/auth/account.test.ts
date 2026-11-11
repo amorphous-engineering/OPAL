@@ -190,6 +190,37 @@ describe('password change', () => {
 		expect(Object.keys((await res.json()).fields)).toEqual(['newPassword']);
 	});
 
+	test('a common password is refused, whatever its case', async () => {
+		const h = await harness();
+		const cookie = await adminSession(h);
+		for (const newPassword of ['1234567890', 'QwertyUiop', 'PASSWORD123']) {
+			const res = await h.call('POST', '/auth/password', { currentPassword: ADMIN.password, newPassword }, { cookie });
+			expect(res.status).toBe(422);
+			expect((await res.json()).fields.newPassword).toBe('That password is too common. Choose another.');
+		}
+		expect(await signIn(h, 'abby', ADMIN.password)).toStartWith('opal_session=');
+	});
+
+	test('an account that already has a common password can still sign in and change it', async () => {
+		const h = await harness();
+		await adminSession(h);
+		makeUser(h, { username: 'older', passwordHash: await hashPassword('1234567890') });
+		const cookie = await signIn(h, 'older', '1234567890');
+		const res = await h.call('POST', '/auth/password', { currentPassword: '1234567890', newPassword: 'brand-new-password-1' }, { cookie });
+		expect(res.status).toBe(200);
+	});
+
+	test('setup and an administrator creating a person refuse a common password too', async () => {
+		const h = await harness();
+		const setup = await h.call('POST', '/auth/setup', { username: 'first', name: 'First', password: '1234567890' });
+		expect(setup.status).toBe(422);
+		expect((await setup.json()).fields.password).toBe('That password is too common. Choose another.');
+		const cookie = await adminSession(h);
+		const created = await h.call('POST', '/users', { name: 'New Person', password: '1234567890' }, { cookie });
+		expect(created.status).toBe(400);
+		expect((await created.json()).error).toBe('weak_password');
+	});
+
 	test('an account with no password sets its first one without a current password', async () => {
 		const h = await harness();
 		await adminSession(h);

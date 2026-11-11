@@ -1,9 +1,9 @@
 import {
 	CONTAINMENTS,
-	DISPOSITION_TYPES,
 	ISSUE_PRIORITIES,
 	ISSUE_STATUSES,
 	ISSUE_TYPES,
+	RECORDED_DISPOSITION_TYPES,
 	RISK_ISSUE_ROLES // added by risks
 } from '@opal/shared';
 import { sql } from 'drizzle-orm';
@@ -57,7 +57,7 @@ export const issue = sqliteTable(
 
 		rootCause: text('root_cause'),
 		correctiveAction: text('corrective_action'),
-		dispositionType: text('disposition_type', { enum: DISPOSITION_TYPES }),
+		dispositionType: text('disposition_type', { enum: RECORDED_DISPOSITION_TYPES }),
 		dispositionRationale: text('disposition_rationale'),
 		dispositionedAt: text('dispositioned_at'),
 		dispositionedById: userRef('dispositioned_by_id'),
@@ -83,7 +83,7 @@ export const issue = sqliteTable(
 		oneOf('issue_status_check', 'status', ISSUE_STATUSES),
 		oneOf('issue_priority_check', 'priority', ISSUE_PRIORITIES),
 		oneOf('issue_containment_check', 'containment', CONTAINMENTS),
-		oneOf('issue_disposition_check', 'disposition_type', DISPOSITION_TYPES)
+		oneOf('issue_disposition_check', 'disposition_type', RECORDED_DISPOSITION_TYPES)
 	]
 );
 

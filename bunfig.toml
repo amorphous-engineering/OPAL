@@ -1,0 +1,4 @@
+# Bun reads this file from the folder it runs in, so a test run from the repo root needs its own copy
+# of the preload in server/bunfig.toml. Without it, tests can write to the real data folder.
+[test]
+preload = ["./server/test/preload.ts"]

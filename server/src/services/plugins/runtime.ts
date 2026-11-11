@@ -31,7 +31,7 @@ export interface PluginRuntime {
 	stopAll(): Promise<void>;
 }
 
-const STOPPED: PluginProcess = { state: 'stopped', pid: null, startedAt: null, restarts: 0, exitCode: null };
+const STOPPED: PluginProcess = { state: 'stopped', pid: null, confinement: null, startedAt: null, restarts: 0, exitCode: null };
 
 export const idleRuntime: PluginRuntime = {
 	port: () => null,

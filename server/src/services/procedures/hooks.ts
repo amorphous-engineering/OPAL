@@ -16,7 +16,7 @@ import {
 	stepImage
 } from '../../db/schema/index.ts';
 import { registerWorkcenterWork } from '../org/workcenters.ts';
-import { registerPartReference } from '../parts/references.ts';
+import { registerPartReference, registerPublishedKits } from '../parts/references.ts';
 import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { registerEntity, registerReversible, registerSearchable, revertRows } from '../platform/index.ts';
 import type { AuditRow } from '../platform/undo.ts';
@@ -43,6 +43,25 @@ registerPartReference({
 			.where(sql`${procedureVersion.content} LIKE ${`%"partId":${partId},%`} OR ${procedureVersion.content} LIKE ${`%"partId":${partId}}%`}`)
 			.get()?.n ?? 0
 });
+
+registerPublishedKits((ctx, partId) =>
+	ctx.db
+		.select({
+			procedureId: procedure.id,
+			templateNumber: procedure.templateNumber,
+			name: procedure.name,
+			versionNumber: procedureVersion.versionNumber
+		})
+		.from(procedureVersion)
+		.innerJoin(procedure, eq(procedure.id, procedureVersion.procedureId))
+		.where(
+			sql`${procedure.status} <> 'obsolete'
+				AND ${procedureVersion.versionNumber} = (SELECT max(v.version_number) FROM procedure_version v WHERE v.procedure_id = ${procedure.id})
+				AND EXISTS (SELECT 1 FROM json_each(${procedureVersion.content}, '$.outputs') o WHERE json_extract(o.value, '$.partId') = ${partId})`
+		)
+		.orderBy(procedure.id)
+		.all()
+);
 
 registerEntity(procedure, {
 	label: 'Procedure',

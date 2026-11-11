@@ -28,6 +28,22 @@ export function throttleAddress(ip: string | null | undefined): string {
 }
 
 /**
+ * Where a forwarded address first arrived with trust off. Behind a proxy that setup looks like it works,
+ * while everyone shares one address and so one sign-in limit, and nothing else would say so. Any client
+ * can send the header too, so the socket address is named and the header's own value never is.
+ */
+export const ignoredForward: { seenFrom: string | null } = { seenFrom: null };
+
+function noteIgnoredForward(socket: string | null): void {
+	ignoredForward.seenFrom = socket ?? 'unknown';
+	console.warn(
+		`X-Forwarded-For arrived from ${ignoredForward.seenFrom}, and OPAL ignores it because OPAL_TRUST_PROXY is not set. ` +
+			'If that address is a proxy, set OPAL_TRUST_PROXY=1 and restart: until then everyone behind it counts as one address and shares one sign-in limit. ' +
+			'If it is not a proxy, a client sent the header itself. This warning appears once.'
+	);
+}
+
+/**
  * The client address. The socket address, unless a trusted proxy is configured: any client
  * can send x-forwarded-for, so otherwise it would let a client pick its own throttle key.
  * With a trusted proxy the address is counted from the right: each proxy appends the address
@@ -37,7 +53,10 @@ export function throttleAddress(ip: string | null | undefined): string {
  */
 export function clientIp(c: Context): string | null {
 	const socket = (c.env as { ip?: string | null } | undefined)?.ip ?? null;
-	if (!trustProxy()) return socket;
+	if (!trustProxy()) {
+		if (!ignoredForward.seenFrom && c.req.header('x-forwarded-for')) noteIgnoredForward(socket);
+		return socket;
+	}
 	const chain = (c.req.header('x-forwarded-for') ?? '')
 		.split(',')
 		.map((a) => a.trim())

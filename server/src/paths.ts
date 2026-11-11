@@ -14,3 +14,6 @@ export function dataDir(): string {
 
 /** The live database file. The demo switch points OPAL_DB_FILE at the demo file. */
 export const dbPath = () => process.env.OPAL_DB_FILE ?? join(dataDir(), 'opal.db');
+
+/** The demo database is a sibling of the real one: `demo.opal.db`. */
+export const DEMO_PREFIX = 'demo.';

@@ -6,7 +6,9 @@ import {
 	burnVerify,
 	hashPassword,
 	hashToken,
+	dailyThrottle,
 	loginThrottle,
+	refuseIfHashQueueFull,
 	takeLockedGuess,
 	usernameThrottle,
 	withHashSlot,
@@ -17,10 +19,11 @@ import {
 	validatePasswordStrength,
 	verifyPassword
 } from '../auth/tokens.ts';
-import { throttleAddress } from '../auth/client-ip.ts';
+import { ignoredForward, throttleAddress, trustProxy } from '../auth/client-ip.ts';
 import { setupHostAllowed } from '../auth/host-guard.ts';
 import { signPayload, verifyPayload } from '../auth/signing.ts';
 import { checkSetupCode, clearSetupCode, setupCodeRequired } from '../services/auth/setup-code.ts';
+import { CLAIM_LINK_TTL_MS, claimToken, fromThisStart } from '../services/auth/claim.ts';
 import type { Ctx } from '../context.ts';
 import type { Db } from '../db/client.ts';
 import { personRefs } from '../services/org/people.ts';
@@ -119,15 +122,28 @@ const passkeyInfo = (r: typeof passkeyCredential.$inferSelect) => ({
 	transports: r.transports
 });
 
+/** The largest unit that says how long: 30 seconds, 5 minutes, 24 hours. Rounded up, so coming back then works. */
+function spellWait(ms: number): string {
+	const seconds = Math.max(1, Math.ceil(ms / 1000));
+	const [n, unit] =
+		seconds < 60 ? [seconds, 'second'] : seconds < 3600 ? [Math.ceil(seconds / 60), 'minute'] : [Math.ceil(seconds / 3600), 'hour'];
+	return `${n} ${unit}${n === 1 ? '' : 's'}`;
+}
+
+/** A day is long enough to need another way in. Nobody else can restart the server, so saying this helps only the person it should. */
+const DAY_LIMIT_WAY_OUT = ' An administrator can reset your password, and restarting OPAL clears this limit.';
+
 // ---------------------------------------------------------------- settings view
 
 const settingsView = (s: SignInSettings) => ({
+	ignoredForwardFrom: trustProxy() ? null : ignoredForward.seenFrom,
 	passwordLoginEnabled: s.passwordLoginEnabled,
 	passkeysEnabled: s.passkeysEnabled,
 	oidcEnabled: s.oidcEnabled,
 	oidcIssuer: s.oidcIssuer,
 	oidcClientId: s.oidcClientId,
 	hasClientSecret: !!s.oidcClientSecret,
+	clientSecretUnreadable: s.oidcClientSecretUnreadable,
 	oidcScopes: s.oidcScopes,
 	oidcProviderName: s.oidcProviderName,
 	oidcGroupsClaim: s.oidcGroupsClaim,
@@ -199,36 +215,42 @@ export const authImpls = [
 		if (!readSettings(ctx.db).passwordLoginEnabled) {
 			throw new OpalError(403, 'forbidden', 'Password sign-in is disabled');
 		}
+		// A full queue checks nothing, so it is not a failed attempt and leaves no trace in the limits below.
+		refuseIfHashQueueFull();
 		const username = input.username.trim().toLowerCase();
 		const address = throttleAddress(ctx.request?.ip);
 		const key = `${address}:${username}`;
 		const nameKey = `name:${username}`;
-		const tooMany = () => new OpalError(429, 'too_many_attempts', 'Too many failed attempts. Try again later.');
-		if (loginThrottle.blocked(key)) throw tooMany();
+		const tooMany = (waitMs: number, wayOut = '') =>
+			new OpalError(429, 'too_many_attempts', `Too many failed attempts. Try again in ${spellWait(waitMs)}.${wayOut}`);
+		if (loginThrottle.blocked(key)) throw tooMany(loginThrottle.retryAfter(key));
 		const u = ctx.db.select().from(user).where(eq(user.username, username)).get();
-		// Over the name's limit, strangers share one guess per interval. An address this person has
-		// signed in from keeps only its own limit, so guessing cannot lock them out of it.
-		if (usernameThrottle.blocked(nameKey) && !(u && hasSignedInFrom(ctx.db, u.id, address)) && !takeLockedGuess(nameKey)) {
-			throw tooMany();
+		// Strangers have a limit per day, and over the name's limit they take turns by address at one
+		// guess per interval. An address this person has signed in from keeps only its own limit, so
+		// guessing cannot lock them out of it, and what it got wrong does not follow them after signing out.
+		const stranger = !(u && hasSignedInFrom(ctx.db, u.id, address));
+		if (stranger) {
+			if (dailyThrottle.blocked(key)) throw tooMany(dailyThrottle.retryAfter(key), DAY_LIMIT_WAY_OUT);
+			if (usernameThrottle.blocked(nameKey)) {
+				const waitMs = takeLockedGuess(nameKey, address);
+				if (waitMs) throw tooMany(waitMs);
+			}
 		}
 		// Count the attempt before the hash runs, so requests sent at once cannot all pass the check.
 		loginThrottle.fail(key);
+		if (stranger) dailyThrottle.fail(key);
 		usernameThrottle.fail(nameKey);
 		const ok = await withHashSlot(async () => {
 			const good = u?.isActive ? await verifyPassword(u.passwordHash, input.password) : false;
 			if (!u || !u.isActive || !u.passwordHash) await burnVerify(input.password);
 			return good;
-		}).catch((e) => {
-			// A full queue checked nothing, so it is not a failed attempt.
-			loginThrottle.release(key);
-			usernameThrottle.release(nameKey);
-			throw e;
 		});
 		if (!u || !ok) {
 			// One message for unknown user, wrong password, inactive and passwordless accounts.
 			throw new OpalError(401, 'invalid_credentials', 'Invalid username or password');
 		}
 		loginThrottle.reset(key);
+		dailyThrottle.reset(key);
 		usernameThrottle.release(nameKey);
 		return ctx.write!(() => {
 			startSession(ctx, u, 'password');
@@ -435,10 +457,7 @@ export const authImpls = [
 		if (!u.isActive || u.passwordHash) {
 			throw new OpalError(400, 'not_claimable', 'This account already has a password; no claim link is needed');
 		}
-		return {
-			token: signPayload({ kind: 'account-claim', uid: u.id, born: u.createdAt, rev: u.updatedAt }, CLAIM_LINK_TTL_MS),
-			expiresAt: addMs(CLAIM_LINK_TTL_MS)
-		};
+		return { token: claimToken(u), expiresAt: addMs(CLAIM_LINK_TTL_MS) };
 	}),
 
 	// ------------------------------------------------------------ settings
@@ -547,14 +566,18 @@ export const authImpls = [
 	})
 ] as Impl[];
 
-const CLAIM_LINK_TTL_MS = 7 * 86_400_000;
-
 /** The account a claim link names, while it is still unclaimed. */
 function claimable(ctx: Ctx, token: string): UserRow | undefined {
 	const payload = verifyPayload(token);
-	if (!payload || payload.kind !== 'account-claim' || typeof payload.uid !== 'number') return undefined;
+	if (!payload || typeof payload.uid !== 'number') return undefined;
+	const printed = payload.kind === 'printed-claim';
+	if (!printed && payload.kind !== 'account-claim') return undefined;
+	// A password is no use where passwords are off, and setting one must not start a session past that.
+	if (!readSettings(ctx.db).passwordLoginEnabled) return undefined;
+	if (printed && (!fromThisStart(payload.start) || !setupHostAllowed(ctx.request?.host))) return undefined;
 	const u = ctx.db.select().from(user).where(eq(user.id, payload.uid)).get();
 	if (!u || !u.isActive || u.passwordHash) return undefined;
+	if (printed && u.oidcSubject) return undefined;
 	// A user id is reused after a factory reset, and a password reset puts an account back in the
 	// passwordless state. createdAt names the account instance; updatedAt moves on every reset,
 	// so a link only works for the account state it was issued against.

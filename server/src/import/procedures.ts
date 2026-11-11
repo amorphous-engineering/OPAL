@@ -2,7 +2,7 @@
  * master_procedure, procedure_step, step_dependency, step_image, kit, step_kit,
  * procedure_output, procedure_version.
  */
-import { KIT_USAGES, PROCEDURE_TYPES, type ProcedureSnapshot, type ProcedureCallout } from '@opal/shared';
+import { CALLOUT_KINDS, canonicalDesignator, KIT_USAGES, PROCEDURE_TYPES, type ProcedureSnapshot, type ProcedureCallout, zProcedureSnapshot } from '@opal/shared';
 import {
 	kitItem,
 	procedure,
@@ -14,7 +14,8 @@ import {
 } from '../db/schema/index.ts';
 import { type LegacyContent, snapshotFromLegacy } from '../services/procedures/snapshot.ts';
 import { effectiveSignoffs } from '../services/procedures/signoffs.ts';
-import { type BlobMap } from './attachments.ts';
+import { type BlobMap, INLINE_LINK } from './attachments.ts';
+import { captureFieldsFrom } from './capture-fields.ts';
 import {
 	type ImportCtx,
 	type Row,
@@ -25,6 +26,7 @@ import {
 	keep,
 	legacyQty,
 	num,
+	numberBook,
 	oneOf,
 	readTable,
 	ref,
@@ -35,7 +37,29 @@ import {
 	warn
 } from './context.ts';
 
-const INLINE_LINK = /\/api\/attachments\/(\d+)\/download/g;
+/** Far above any step id AUTOINCREMENT will reach, so it never names a later draft step. */
+const NO_LIVE_STEP = 1_000_000_000;
+
+/**
+ * Versions published before 1.3.2 hold each step's order, number and level, with no id and no
+ * parent, and no procedure name. A published version never changes, so 1.x upgrades left them so.
+ * A step takes the id of the live step at its order, so versions of one procedure still line up in
+ * a diff. A step removed since takes an id from its order. The parent comes from the levels.
+ */
+function withStepKeys(content: LegacyContent, name: string, liveAt: Map<number, number> | undefined): LegacyContent {
+	const named = { ...content, procedure_name: content.procedure_name ?? name };
+	if (content.steps.every((s) => s.id != null)) return named;
+	const open: { level: number; id: number }[] = [];
+	const steps = [...content.steps].sort((a, b) => a.order - b.order).map((s) => {
+		const id = liveAt?.get(s.order) ?? NO_LIVE_STEP + s.order;
+		const level = s.level ?? 0;
+		while (open.length && open.at(-1)!.level >= level) open.pop();
+		const parent = open.at(-1)?.id ?? null;
+		open.push({ level, id });
+		return { ...s, id, parent_step_id: parent };
+	});
+	return { ...named, steps };
+}
 
 /** A snapshot must not depend on an attachment row: inline links become blob links. */
 function freezeLinks(text: string | null, blobs: BlobMap): string | null {
@@ -43,6 +67,23 @@ function freezeLinks(text: string | null, blobs: BlobMap): string | null {
 	return text.replace(INLINE_LINK, (whole, id) => {
 		const b = blobs.get(Number(id));
 		return b ? `/api/blobs/${b.sha256}` : whole;
+	});
+}
+
+/** The kinds OPAL 2 has. A warning is a caution, and the kind the text was written under stays in the text. */
+function calloutsFrom(c: ImportCtx, value: unknown, where: string): ProcedureCallout[] | null {
+	const list = json<unknown>(value);
+	if (!Array.isArray(list)) return null;
+	return list.flatMap((raw: unknown, i) => {
+		const x = (raw && typeof raw === 'object' ? raw : {}) as { kind?: unknown; text?: unknown };
+		if (typeof x.text !== 'string' || !x.text) {
+			warn(c, `${where}: callout ${i + 1} has no text, left out`);
+			return [];
+		}
+		if ((CALLOUT_KINDS as readonly unknown[]).includes(x.kind)) return [{ kind: x.kind as ProcedureCallout['kind'], text: x.text }];
+		const kind = String(x.kind).toLowerCase() === 'warning' ? ('caution' as const) : ('info' as const);
+		warn(c, `${where}: callout ${i + 1} of kind ${JSON.stringify(x.kind)} reads as ${kind}`);
+		return [{ kind, text: kind === 'info' ? `${String(x.kind)}: ${x.text}` : x.text }];
 	});
 }
 
@@ -62,14 +103,18 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	const versionIds = new Set(versions.map((v) => Number(v.id)));
 	const typeOf = new Map<number, 'op' | 'build'>();
 	const numberOf = new Map<number, string>();
+	const nameOf = new Map<number, string>();
+	const templateNumber = numberBook(c, 'master_procedure', canonicalDesignator);
 	const procRows = masters.map((r) => {
 		const id = Number(r.id);
 		const procedureType = oneOf(c, r.procedure_type, PROCEDURE_TYPES, 'op', `master_procedure ${id} procedure_type`);
 		typeOf.set(id, procedureType);
-		numberOf.set(id, String(r.template_number));
+		const number = templateNumber(id, String(r.template_number));
+		numberOf.set(id, number);
+		nameOf.set(id, String(r.name));
 		return {
 			id,
-			templateNumber: String(r.template_number),
+			templateNumber: number,
 			projectId: c.projectId,
 			name: String(r.name),
 			description: str(r.description),
@@ -83,7 +128,7 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	track(c, 'procedure', insertRows(c, 'master_procedure', procedure, procRows));
 
 	// ---- steps
-	const steps = readTable(c, 'procedure_step', ['id', 'procedure_id', 'parent_step_id', 'order', 'step_number', 'level', 'title', 'instructions', 'required_data_schema', 'is_contingency', 'requires_signoff', 'signoffs', 'estimated_duration_minutes', 'required_role', 'callouts', 'strict_sequence', 'workcenter_id', 'created_at', 'updated_at'], '"order"');
+	const steps = readTable(c, 'procedure_step', ['id', 'procedure_id', 'parent_step_id', 'order', 'step_number', 'level', 'title', 'instructions', 'required_data_schema', 'is_contingency', 'requires_signoff', 'signoffs', 'estimated_duration_minutes', 'required_role', 'callouts', 'strict_sequence', 'workcenter_id', 'created_at', 'updated_at'], 'order');
 	const live = steps.filter((s) => c.ids.procedure!.has(Number(s.procedure_id)));
 	const hasKids = new Set(live.map((s) => num(s.parent_step_id)).filter((x): x is number => x !== null));
 	const sibling = new Map<string, number>();
@@ -101,8 +146,6 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 		const stored = Array.isArray(explicit)
 			? explicit.map((x) => ({ role: x.role ?? null }))
 			: kids ? (requires ? [{ role }] : []) : requires ? [{ role }, { role: null }] : [{ role }];
-		const schema = json<{ fields?: unknown[] }>(r.required_data_schema);
-		const callouts = json<ProcedureCallout[]>(r.callouts);
 		return {
 			id,
 			procedureId: Number(r.procedure_id),
@@ -111,10 +154,10 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 			isContingency: contingency,
 			title: String(r.title),
 			instructions: str(r.instructions),
-			dataSchema: schema?.fields?.length ? schema : null,
+			dataSchema: captureFieldsFrom(c, r.required_data_schema, `procedure_step ${id}`),
 			signoffs: effectiveSignoffs(stored, kids).map((s) => ({ role: s.role })),
 			estimatedDurationMinutes: num(r.estimated_duration_minutes),
-			callouts: Array.isArray(callouts) ? callouts.map((x) => ({ kind: x.kind, text: x.text })) : [],
+			callouts: calloutsFrom(c, r.callouts, `procedure_step ${id}`) ?? [],
 			strictSequence: bool(r.strict_sequence),
 			workcenterId: ref(c, 'workcenter', r.workcenter_id, `procedure_step ${id} workcenter_id`),
 			createdAt: tsReq(r.created_at),
@@ -199,6 +242,13 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 	}));
 
 	// ---- published versions, with attachment ids turned into blob hashes
+	const stepsOf = new Map<number, Map<number, number>>();
+	for (const r of live) {
+		const pid = Number(r.procedure_id);
+		const at = stepsOf.get(pid) ?? new Map<number, number>();
+		if (!at.has(Number(r.order))) at.set(Number(r.order), Number(r.id));
+		stepsOf.set(pid, at);
+	}
 	const blobOf = (attachmentId: number) => blobs.get(attachmentId) ?? null;
 	const versionRows = versions.flatMap((r) => {
 		const id = Number(r.id);
@@ -212,8 +262,20 @@ export function importProcedures(c: ImportCtx, blobs: BlobMap): void {
 			fail(c, 'procedure_version', id, 'content is not readable');
 			return [];
 		}
-		const snap: ProcedureSnapshot = snapshotFromLegacy(content, { templateNumber: numberOf.get(pid)!, projectId: c.projectId, procedureType: typeOf.get(pid)! }, blobOf);
+		const full = withStepKeys(content, nameOf.get(pid)!, stepsOf.get(pid));
+		const readable = {
+			...full,
+			steps: full.steps.map((s) => ({
+				...s,
+				required_data_schema: captureFieldsFrom(c, s.required_data_schema, `procedure_version ${id}, step ${s.step_number}`),
+				callouts: s.callouts == null ? s.callouts : calloutsFrom(c, s.callouts, `procedure_version ${id}, step ${s.step_number}`)
+			}))
+		};
+		const snap: ProcedureSnapshot = snapshotFromLegacy(readable, { templateNumber: numberOf.get(pid)!, projectId: c.projectId, procedureType: typeOf.get(pid)! }, blobOf);
 		for (const s of snap.steps) s.instructions = freezeLinks(s.instructions, blobs);
+		// Kept either way: the record is the point. It would not open, so a person has to know and accept that.
+		const check = zProcedureSnapshot.safeParse(snap);
+		if (!check.success) fail(c, 'procedure_version', id, `will not open in OPAL 2: ${check.error.issues[0]!.path.join('.')}: ${check.error.issues[0]!.message}`);
 		for (const li of content.steps.flatMap((s) => s.images ?? [])) {
 			if (!blobs.has(li.attachment_id)) warn(c, `procedure_version ${id}: image attachment ${li.attachment_id} has no file, image dropped`);
 		}

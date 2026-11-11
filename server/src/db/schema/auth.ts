@@ -73,6 +73,8 @@ export const AUTH_SETTING_KEYS = [
 	'oidc_redirect_base_url'
 ] as const;
 export type AuthSettingKey = (typeof AUTH_SETTING_KEYS)[number];
+/** Sealed in the database, never in the audit log. */
+export const SECRET_AUTH_SETTINGS: readonly AuthSettingKey[] = ['oidc_client_secret'];
 
 export const authSetting = sqliteTable('auth_setting', {
 	id: id(),

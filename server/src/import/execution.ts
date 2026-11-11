@@ -23,7 +23,7 @@
  * - inventory_production with a work order -> execution_output (the plan); the stock move
  *   of a consumption or production gets execution_id and step_execution_id.
  */
-import { EXECUTION_PRIORITIES, EXECUTION_STATUSES, type ProcedureSnapshot } from '@opal/shared';
+import { canonicalDesignator, EXECUTION_PRIORITIES, EXECUTION_STATUSES, type ProcedureSnapshot } from '@opal/shared';
 import { eq, inArray } from 'drizzle-orm';
 import {
 	adhocStep,
@@ -40,6 +40,7 @@ import {
 } from '../db/schema/index.ts';
 import { slotLabel } from '../services/procedures/signoffs.ts';
 import { effectiveSignoffs } from '../services/procedures/signoffs.ts';
+import { captureFieldsFrom } from './capture-fields.ts';
 import {
 	type ImportCtx,
 	type Row,
@@ -49,6 +50,7 @@ import {
 	json,
 	keepLegacyRow,
 	legacyQty,
+	numberBook,
 	num,
 	readTable,
 	ref,
@@ -61,8 +63,22 @@ import {
 import type { InventoryLinks } from './inventory.ts';
 
 type Status = 'pending' | 'awaiting_signoff' | 'completed' | 'skipped';
+const STEP_STATUSES = ['pending', 'in_progress', 'on_hold', 'completed', 'awaiting_signoff', 'signed_off', 'skipped'];
 interface Slot {
 	role: string | null;
+}
+
+/**
+ * What someone recorded on a completed step, always as an object, because a work order does not open
+ * otherwise. What does not read as one is kept under a key of its own and said so, never dropped.
+ */
+function capturedData(c: ImportCtx, id: number, value: unknown): Record<string, unknown> | null {
+	if (value === null || value === undefined || value === '') return null;
+	const parsed = json<unknown>(value);
+	if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+	const key = parsed === null ? 'unreadable_text' : 'value';
+	warn(c, `step_execution ${id}: captured data ${JSON.stringify(value).slice(0, 80)} is not a set of fields, kept under "${key}"`);
+	return { [key]: parsed === null ? String(value) : parsed };
 }
 
 export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
@@ -75,6 +91,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 	// ---- executions
 	const usedWo = new Set(instances.map((i) => str(i.work_order_number)).filter((x): x is string => !!x));
 	let woMax = Math.max(0, ...[...usedWo].map((w) => Number(/^WO-(\d+)$/.exec(w)?.[1] ?? 0)));
+	const woNumber = numberBook(c, 'procedure_instance', canonicalDesignator);
 	const execRows = instances.flatMap((r) => {
 		const id = Number(r.id);
 		if (!c.ids.procedure!.has(Number(r.procedure_id)) || !c.ids.procedure_version!.has(Number(r.version_id))) {
@@ -87,13 +104,15 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			warn(c, `procedure_instance ${id}: no work order number, given ${wo}`);
 		}
 		// 1.x could abort a work order. Here that record reads as closed short.
-		const legacy = String(r.status) === 'aborted' ? 'closed_short' : String(r.status);
+		const aborted = String(r.status) === 'aborted';
+		if (aborted) warn(c, `procedure_instance ${id}: aborted in 1.x, reads as closed short`);
+		const legacy = aborted ? 'closed_short' : String(r.status);
 		const status = (EXECUTION_STATUSES as readonly string[]).includes(legacy) ? (legacy as (typeof EXECUTION_STATUSES)[number]) : 'cut';
 		if (status !== legacy) warn(c, `procedure_instance ${id}: status "${String(r.status)}" is not valid, used "cut"`);
 		const p = Number(r.priority);
 		return [{
 			id,
-			woNumber: wo,
+			woNumber: woNumber(id, wo),
 			projectId: c.projectId,
 			procedureId: Number(r.procedure_id),
 			versionId: Number(r.version_id),
@@ -103,7 +122,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			targetCompletionAt: ts(r.target_completion_at),
 			startedAt: ts(r.started_at),
 			completedAt: ts(r.completed_at),
-			closeReason: null,
+			closeReason: aborted ? 'Aborted in OPAL 1.x' : null,
 			createdById: ref(c, 'user', r.started_by_id, `procedure_instance ${id} started_by_id`),
 			createdAt: tsReq(r.created_at),
 			updatedAt: tsReq(r.updated_at)
@@ -139,6 +158,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 		const have = signsByStep.get(id) ?? [];
 		const signed = new Set(have.map((s) => Number(s.slot)));
 		const legacy = String(r.status);
+		if (!STEP_STATUSES.includes(legacy)) warn(c, `step_execution ${id}: status "${legacy}" is not in OPAL 2, reads as pending`);
 		const at = ts(r.signed_off_at) ?? ts(r.completed_at) ?? tsReq(r.updated_at);
 		const by = ref(c, 'user', r.signed_off_by_id ?? r.completed_by_id, `step_execution ${id} signer`);
 		const synth = (slot: number) => {
@@ -166,7 +186,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 		id: Number(r.id),
 		executionId: Number(r.instance_id),
 		status,
-		dataCaptured: json<Record<string, unknown>>(r.data_captured),
+		dataCaptured: capturedData(c, Number(r.id), r.data_captured),
 		skipReason: null,
 		startedAt: ts(r.started_at),
 		completedAt: ts(r.completed_at) ?? ts(r.signed_off_at),
@@ -238,7 +258,7 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			number: String(r.step_number_str),
 			title: String(r.title ?? ''),
 			instructions: str(r.instructions),
-			dataSchema: json(r.required_data_schema),
+			dataSchema: captureFieldsFrom(c, r.required_data_schema, `step_execution ${id}`),
 			signoffs: slots,
 			createdById: null,
 			createdAt: tsReq(r.created_at)

@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test';
-import { verifyPassword } from '../../src/auth/tokens.ts';
+import { describe, expect, spyOn, test } from 'bun:test';
+import { hashPassword, verifyPassword } from '../../src/auth/tokens.ts';
 import { apiToken, auditLog, session } from '../../src/db/schema/index.ts';
 import { harness } from './helpers.ts';
 
@@ -127,6 +127,16 @@ describe('auth', () => {
 		expect(await verifyPassword(LEGACY_HASH, 'kestrel-demo')).toBe(true);
 		expect(await verifyPassword(LEGACY_HASH, 'wrong')).toBe(false);
 		expect(await verifyPassword('not-a-hash', 'x')).toBe(false);
+	});
+
+	test('a password is hashed with argon2id at the full default cost', async () => {
+		const hash = spyOn(Bun.password, 'hash');
+		try {
+			await hashPassword('correct-horse-battery');
+			expect(hash.mock.calls).toEqual([['correct-horse-battery', { algorithm: 'argon2id' }]]);
+		} finally {
+			hash.mockRestore();
+		}
 	});
 
 	test('audit rows never contain a hash', async () => {

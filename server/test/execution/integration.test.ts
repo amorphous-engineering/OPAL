@@ -67,6 +67,19 @@ describe('report', () => {
 		expect(r.chartDatasets[0].points).toHaveLength(1);
 	});
 
+	test('a struck data point stays out of the report chart', async () => {
+		const t = await setup();
+		const e = await t.cut(await t.published(['Read']));
+		await t.complete(e.id, '1');
+		const sid = await t.stepOf(e.id, '1');
+		const ds = await dataset(t, [{ name: 'p', type: 'number', chart: true }]);
+		await t.ok('POST', `/datasets/${ds.id}/points`, { values: { p: 3 }, stepExecutionId: sid });
+		const bad = await t.ok('POST', `/datasets/${ds.id}/points`, { values: { p: 900 }, stepExecutionId: sid });
+		await t.ok('POST', `/datasets/${ds.id}/points/${bad.id}/strike`, { reason: 'Probe was unplugged' });
+		const r = await t.ok('GET', `/executions/${e.id}/report`);
+		expect(r.chartDatasets[0].points.map((p: any) => p.values.p)).toEqual([3]);
+	});
+
 	test('the QR code links to the execution page', async () => {
 		const t = await setup();
 		const e = await t.cut(await t.published(['A']));

@@ -37,6 +37,7 @@ export const partsImpls = [
 	implement(p.activate, (ctx, i) => lifecycle.activate(ctx, i.id, i.cause)),
 	implement(p.obsolete, (ctx, i) => lifecycle.obsolete(ctx, i.id, i.cause)),
 	implement(p.reinstate, (ctx, i) => lifecycle.reinstate(ctx, i.id, i.reason)),
+	implement(p.revise, (ctx, i) => parts.revise(ctx, i)),
 	implement(p.variants.create, (ctx, i) => parts.createVariant(ctx, i)),
 	implement(p.bom.list, (ctx, i) => bom.listLines(ctx, i.id)),
 	implement(p.bom.tree, (ctx, i) => bom.tree(ctx, i.id, i.depth)),

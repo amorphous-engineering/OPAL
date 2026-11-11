@@ -17,6 +17,9 @@
 	import { RISK_REFERENCE_TYPES, type Risk, type RiskReference } from '@opal/shared';
 
 	let { risk }: { risk: Risk } = $props();
+	// Finished paper takes nothing new, and lines stand once a person accepted the risk.
+	const canAdd = $derived(risk.disposition !== 'realized' && risk.disposition !== 'closed');
+	const canRemove = $derived(canAdd && risk.disposition !== 'accepted');
 
 	let adding = $state(false);
 	let type = $state<(typeof RISK_REFERENCE_TYPES)[number]>('opal');
@@ -78,7 +81,9 @@
 {#if risk.references.length}
 	<Section title="References" count={risk.references.length}>
 		{#snippet actions()}
-			<ActionLink onclick={() => (adding = !adding)}>{adding ? 'DONE' : '+ ADD'}</ActionLink>
+			{#if canAdd}<ActionLink onclick={() => (adding = !adding)}
+					>{adding ? 'DONE' : '+ ADD'}</ActionLink
+				>{/if}
 		{/snippet}
 		<DataTable rows={risk.references} {columns} key={(r) => r.id} emptyLabel="References">
 			{#snippet cell(r, col)}
@@ -88,7 +93,7 @@
 					{r.value}
 				{:else if col.key === 'notes'}
 					{#if r.notes}{r.notes}{:else}<span class="text-quiet">—</span>{/if}
-				{:else}
+				{:else if canRemove}
 					<ActionLink
 						disabled={busy}
 						onclick={() =>
@@ -106,7 +111,7 @@
 	<div>
 		<EmptyLine
 			label="References"
-			onadd={() => (adding = !adding)}
+			onadd={canAdd ? () => (adding = !adding) : undefined}
 			addLabel={adding ? 'DONE' : '+ ADD'}
 		/>
 		{#if adding}<div class="border border-t-0 border-border bg-card">

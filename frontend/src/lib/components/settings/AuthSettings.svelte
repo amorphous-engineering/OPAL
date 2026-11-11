@@ -144,6 +144,14 @@
 				<Switch id="passkeys" bind:checked={passkeys} />
 				<Label for="passkeys">Passkeys</Label>
 			</div>
+			{#if saved.ignoredForwardFrom}
+				<p class="text-error">
+					<span class="font-mono">{saved.ignoredForwardFrom}</span> sent X-Forwarded-For, and OPAL ignores
+					it because OPAL_TRUST_PROXY is not set. If that address is your proxy, set OPAL_TRUST_PROXY=1
+					and restart: until then everyone behind it counts as one address and shares one sign-in limit.
+					If it is not a proxy, a client sent the header itself.
+				</p>
+			{/if}
 		</div>
 	</Section>
 
@@ -175,8 +183,18 @@
 					type="password"
 					bind:value={clientSecret}
 					autocomplete="new-password"
-					placeholder={saved.hasClientSecret ? 'Stored. Blank keeps it.' : 'None (public client)'}
+					placeholder={saved.clientSecretUnreadable
+						? 'Stored, but unreadable. Enter it again.'
+						: saved.hasClientSecret
+							? 'Stored. Blank keeps it.'
+							: 'None (public client)'}
 				/>
+				{#if saved.clientSecretUnreadable}
+					<p class="text-error">
+						The stored secret cannot be read with this server's key. Enter it again, or restore the
+						key from a backup.
+					</p>
+				{/if}
 				{#if saved.hasClientSecret}
 					<div class="flex items-center gap-2">
 						<Switch id="clear-secret" size="sm" bind:checked={clearSecret} />

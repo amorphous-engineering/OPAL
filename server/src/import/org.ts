@@ -1,6 +1,4 @@
 /** Users, profiles, tokens, passkeys, roles, workcenters, settings and the project. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { AVATAR_TYPES, now } from '@opal/shared';
 import {
@@ -17,7 +15,9 @@ import {
 	workcenter
 } from '../db/schema/index.ts';
 import { humanUsernameBase, isPluginUsername } from '../auth/tokens.ts';
+import { SYSTEM_ROLES } from '../services/org/roles.ts';
 import { AUTH_SETTING_KEYS } from '../db/schema/auth.ts';
+import { sourceFile, storeByHash } from './files.ts';
 import {
 	type ImportCtx,
 	bool,
@@ -92,17 +92,14 @@ export function importPeople(c: ImportCtx): void {
 			let mime: string | null = null;
 			let source = str(r.avatar_source);
 			if (r.avatar_filename && source !== 'removed') {
-				const path = join(c.attachmentsDir, 'avatars', String(r.avatar_filename));
-				if (existsSync(path)) {
-					const bytes = readFileSync(path);
-					hash = createHash('sha256').update(bytes).digest('hex');
-					mime = sniffMime(bytes) ?? str(r.avatar_mime);
-					mkdirSync(c.avatarsDir, { recursive: true });
-					const out = join(c.avatarsDir, hash);
-					if (!existsSync(out)) writeFileSync(out, bytes);
+				const file = sourceFile(join(c.attachmentsDir, 'avatars'), r.avatar_filename);
+				if ('missing' in file) warn(c, `user ${id}: avatar file ${String(r.avatar_filename)} is missing, avatar cleared`);
+				else if ('refused' in file) fail(c, 'user', id, `avatar: ${file.refused}`);
+				else {
+					const stored = storeByHash(file.path, c.avatarsDir, c.createdFiles);
+					hash = stored.sha256;
+					mime = sniffMime(stored.head) ?? str(r.avatar_mime);
 					source ??= 'upload';
-				} else {
-					warn(c, `user ${id}: avatar file ${String(r.avatar_filename)} is missing, avatar cleared`);
 				}
 			}
 			return {
@@ -150,6 +147,8 @@ export function importPeople(c: ImportCtx): void {
 	})));
 }
 
+const GATES_NEW_IN_OPAL_2 = ['execution.skipRequired', 'execution.closeShort'];
+
 /** role, user_role, role_gate. A soft-deleted role is left out with its grants. */
 export function importRoles(c: ImportCtx): void {
 	const roles = readTable(c, 'role', ['id', 'name', 'description', 'key', 'is_system', 'created_at', 'updated_at', 'deleted_at']);
@@ -189,16 +188,49 @@ export function importRoles(c: ImportCtx): void {
 	insertRows(c, 'role_gate', roleGate, gates
 		.filter((r) => c.ids.role!.has(Number(r.role_id)) || (warn(c, `role_gate ${Number(r.id)}: role is not imported, gate skipped`), false))
 		.map((r) => ({ id: Number(r.id), roleId: Number(r.role_id), gate: String(r.gate) })));
+
+	// Gates 1.x did not have. Without these only an administrator could close short or skip a required
+	// step. The gates it had stay as its administrators left them.
+	let added = 0;
+	for (const r of live.filter((x) => c.ids.role!.has(Number(x.id)))) {
+		const defaults = SYSTEM_ROLES[String(r.key)]?.[2] ?? [];
+		for (const gate of defaults.filter((g) => GATES_NEW_IN_OPAL_2.includes(g))) {
+			added += c.d.insert(roleGate).values({ roleId: Number(r.id), gate }).onConflictDoNothing().returning({ id: roleGate.id }).all().length;
+		}
+	}
+	derived(c, 'role_gate_new_in_opal_2', added);
 }
 
-/** app_setting: sign-in keys go to auth_setting, the rest stays in app_setting. */
+export const NO_ONSHAPE = 'the Onshape integration does not carry over to OPAL 2';
+
+/** The project configuration without its Onshape section. Anything else stays as it was. */
+function withoutOnshape(c: ImportCtx, value: string | null): string | null {
+	const cfg = json<Record<string, unknown>>(value);
+	if (!cfg || typeof cfg !== 'object' || !('onshape' in cfg)) return value;
+	const documents = (cfg.onshape as { documents?: unknown } | null)?.documents;
+	const { onshape: _gone, ...rest } = cfg;
+	if (Array.isArray(documents) && documents.length) {
+		c.report.notImported.push({ table: 'project_config (onshape)', rows: documents.length, note: `${NO_ONSHAPE}: linked documents` });
+	}
+	return JSON.stringify(rest);
+}
+
+/** app_setting: sign-in keys go to auth_setting, Onshape keys stay behind, the rest stays in app_setting. */
 export function importSettings(c: ImportCtx): void {
 	const rows = readTable(c, 'app_setting', ['key', 'value', 'created_at', 'updated_at'], 'key');
 	const authKeys: readonly string[] = AUTH_SETTING_KEYS;
 	let auth = 0;
 	let app = 0;
+	// Onshape API keys and webhook secrets have no use here, so they do not move into a new file.
+	const onshape = rows.filter((r) => String(r.key).startsWith('onshape_'));
+	if (onshape.length) {
+		c.report.tables.app_setting!.leftOut = onshape.length;
+		c.report.onshapeKeys = onshape.filter((r) => str(r.value) && /_(key|secret|token)$/.test(String(r.key))).map((r) => String(r.key));
+		c.report.notImported.push({ table: 'app_setting (onshape_*)', rows: onshape.length, note: `${NO_ONSHAPE}: ${onshape.map((r) => String(r.key)).join(', ')}` });
+	}
 	for (const r of rows) {
-		const base = { key: String(r.key), value: str(r.value), createdAt: tsReq(r.created_at), updatedAt: tsReq(r.updated_at) };
+		if (String(r.key).startsWith('onshape_')) continue;
+		const base = { key: String(r.key), value: r.key === 'project_config' ? withoutOnshape(c, str(r.value)) : str(r.value), createdAt: tsReq(r.created_at), updatedAt: tsReq(r.updated_at) };
 		try {
 			if (authKeys.includes(base.key)) {
 				c.d.insert(authSetting).values(base).run();

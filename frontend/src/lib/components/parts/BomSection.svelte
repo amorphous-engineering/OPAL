@@ -36,6 +36,8 @@
 	}: { detail: PartDetail; view?: 'lines' | 'tree'; editing?: boolean } = $props();
 	const part = $derived(detail.part);
 	const lines = $derived(detail.bom);
+	// Only the server knows what exists of a part. With copies, the BOM is pen.
+	const canEdit = $derived(editing && !detail.bomLockedBy);
 
 	let adding = $state(false);
 	let picked = $state<PartRef | null>(null);
@@ -59,7 +61,7 @@
 	];
 
 	// Row tools exist only in edit mode.
-	const columns = $derived(editing ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
+	const columns = $derived(canEdit ? allColumns : allColumns.filter((c) => c.key !== 'actions'));
 
 	function startEdit(l: BomLine) {
 		editId = l.id;
@@ -188,10 +190,27 @@
 	</form>
 {/snippet}
 
+{#snippet editNote()}
+	{#if editing && detail.bomLockedBy}
+		<p class="px-3 py-2 text-sm text-muted-foreground">
+			Locked by {detail.bomLockedBy}. REVISE files a copy with a new number.
+		</p>
+	{:else if canEdit}
+		{#each detail.publishedKits as k (k.procedureId)}
+			<p class="px-3 py-2 text-sm text-muted-foreground">
+				<a href={`/procedures/${k.procedureId}`} class="text-info hover:underline"
+					>{k.templateNumber}</a
+				>
+				v{k.versionNumber} keeps the kit it was published with.
+			</p>
+		{/each}
+	{/if}
+{/snippet}
+
 {#if view === 'lines'}
 	{#if lines.length}
 		<Section title="BOM" count={lines.length}>
-			{#snippet actions()}{#if editing}{@render addAction()}{/if}{/snippet}
+			{#snippet actions()}{#if canEdit}{@render addAction()}{/if}{/snippet}
 			<DataTable
 				rows={lines}
 				{columns}
@@ -250,12 +269,14 @@
 					{/if}
 				{/snippet}
 			</DataTable>
-			{#if editing && adding}{@render addForm()}{/if}
+			{#if canEdit && adding}{@render addForm()}{/if}
+			{@render editNote()}
 		</Section>
 	{:else if detail.expects.bom}
 		<div>
-			<EmptyLine label="BOM" onadd={editing ? () => (adding = true) : undefined} />
-			{#if editing && adding}{@render addForm()}{/if}
+			<EmptyLine label="BOM" onadd={canEdit ? () => (adding = true) : undefined} />
+			{#if canEdit && adding}{@render addForm()}{/if}
+			{@render editNote()}
 		</div>
 	{/if}
 {:else if hasDepth}

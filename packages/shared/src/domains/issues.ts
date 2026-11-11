@@ -16,6 +16,11 @@ export const DISPOSITION_TYPES = [
 	'return_to_supplier',
 	'no_defect'
 ] as const;
+/**
+ * What a signed disposition can read as: every type above, and `other`, which 1.x offered until 1.3.2.
+ * A person signs one of the types above. An imported signature keeps what it said.
+ */
+export const RECORDED_DISPOSITION_TYPES = [...DISPOSITION_TYPES, 'other'] as const;
 /** What an undispositioned issue holds. */
 export const CONTAINMENTS = ['advisory', 'step', 'op', 'wo'] as const;
 /** Widening moves up this ladder freely. Narrowing releases a hold and needs a note. */
@@ -73,7 +78,9 @@ export const zLinkedRisk = z.object({
 	riskId: z.number().int(),
 	riskNumber: z.string(),
 	title: z.string(),
-	relation: z.enum(['mitigation', 'research', 'realized'])
+	relation: z.enum(['mitigation', 'research', 'realized']),
+	/** The risk's state lets this line come off. The realized pointer is not a line, so never. */
+	canUnlink: z.boolean()
 });
 export type LinkedRisk = z.infer<typeof zLinkedRisk>;
 
@@ -120,7 +127,7 @@ export const zIssue = z.object({
 	expectedBenefit: z.string().nullable(),
 	rootCause: z.string().nullable(),
 	correctiveAction: z.string().nullable(),
-	dispositionType: z.enum(DISPOSITION_TYPES).nullable(),
+	dispositionType: z.enum(RECORDED_DISPOSITION_TYPES).nullable(),
 	dispositionRationale: z.string().nullable(),
 	dispositionedAt: zTimestamp.nullable(),
 	dispositionedBy: zUserRef.nullable(),

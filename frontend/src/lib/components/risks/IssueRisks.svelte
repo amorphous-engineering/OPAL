@@ -20,7 +20,8 @@
 
 	async function searchRisks(q: string): Promise<PickerOption[]> {
 		const linked = new Set(issue.risks.map((r) => r.riskId));
-		const r = await opal.risks.list({ q, limit: 20, sort: 'score', dir: 'desc' });
+		// Live risks: a realized or closed one takes no new line.
+		const r = await opal.risks.list({ q, active: true, limit: 20, sort: 'score', dir: 'desc' });
 		return r.items
 			.filter((x) => !linked.has(x.id))
 			.map((x) => ({ value: x.id, label: x.riskNumber, sub: x.title }));
@@ -82,7 +83,7 @@
 					<span class="ml-auto font-mono text-xs tracking-wider text-muted-foreground uppercase"
 						>{stateLabel(r.relation)}</span
 					>
-					{#if !readonly && r.relation !== 'realized'}
+					{#if !readonly && r.canUnlink}
 						<button
 							type="button"
 							class="font-mono text-xs tracking-wider text-info uppercase hover:underline"

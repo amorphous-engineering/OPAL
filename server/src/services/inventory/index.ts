@@ -8,9 +8,9 @@
  *   createStockRecord, linkComponents   execution: reserve an OPAL number, record genealogy
  *   calibrationReport, expiringStock, lowStockParts   the overview
  */
-import { eq, sql } from 'drizzle-orm';
-import { stockRecord } from '../../db/schema/index.ts';
-import { registerPartReference } from '../parts/references.ts';
+import { and, eq, sql } from 'drizzle-orm';
+import { execution, executionOutput, stockMove, stockRecord } from '../../db/schema/index.ts';
+import { registerPartCopies, registerPartReference } from '../parts/references.ts';
 export * from './ledger.ts';
 export * from './records.ts';
 export * from './moves.ts';
@@ -27,4 +27,25 @@ registerPartReference({
 	locksUnit: true,
 	count: (ctx, id) =>
 		ctx.db.select({ n: sql<number>`count(*)` }).from(stockRecord).where(eq(stockRecord.partId, id)).get()?.n ?? 0
+});
+
+/**
+ * Cutting a build reserves a record for what it will make. If the order is voided and nothing ever
+ * moved on the record, it holds the place of something that was never made.
+ */
+const placeholderOfVoidedOrder = sql`(
+	EXISTS (SELECT 1 FROM ${executionOutput} o JOIN ${execution} e ON e.id = o.execution_id WHERE o.stock_id = ${stockRecord.id} AND e.status = 'void')
+	AND NOT EXISTS (SELECT 1 FROM ${executionOutput} o JOIN ${execution} e ON e.id = o.execution_id WHERE o.stock_id = ${stockRecord.id} AND e.status <> 'void')
+	AND NOT EXISTS (SELECT 1 FROM ${stockMove} m WHERE m.stock_id = ${stockRecord.id})
+)`;
+
+// A record is never deleted, so this also counts stock that has since been consumed.
+registerPartCopies({
+	label: ['stock record', 'stock records'],
+	count: (ctx, id) =>
+		ctx.db
+			.select({ n: sql<number>`count(*)` })
+			.from(stockRecord)
+			.where(and(eq(stockRecord.partId, id), sql`NOT ${placeholderOfVoidedOrder}`))
+			.get()?.n ?? 0
 });

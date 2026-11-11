@@ -14,6 +14,7 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import type { Ctx } from '../../context.ts';
 import { bomLine, part } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
+import { copiesOf } from './references.ts';
 
 const assembly = alias(part, 'assembly');
 const component = alias(part, 'component');
@@ -69,6 +70,18 @@ function lineView(ctx: Pick<Ctx, 'db'>, id: number): BomLine {
 	return line;
 }
 
+/**
+ * A BOM is pencil until copies exist. Copies were built to it, so from then on a change is a new
+ * part (`revise`), and the old BOM stays true of them. An obsolete part is retired as it stands.
+ */
+function requireBomOpen(ctx: Pick<Ctx, 'db'>, row: typeof part.$inferSelect): void {
+	if (row.state === 'obsolete') throw conflict('wrong_state', `${row.internalPn} is obsolete, so its BOM no longer changes`);
+	const copies = copiesOf(ctx, row.id);
+	if (copies) {
+		throw conflict('bom_locked', `${row.internalPn} has ${copies}, so its BOM no longer changes. Revise the part to file a copy with a new number.`);
+	}
+}
+
 function positiveQty(value: string): number {
 	const q = parseQty(value);
 	if (q <= 0) throw new OpalError(422, 'invalid_input', 'Invalid input', { quantity: 'must be above zero' });
@@ -104,6 +117,7 @@ export function addLine(
 ): BomLine {
 	const asm = requirePart(ctx, input.assemblyId, 'Assembly part');
 	const comp = requirePart(ctx, input.componentId, 'Component part');
+	requireBomOpen(ctx, asm);
 	if (asm.id === comp.id) {
 		throw new OpalError(422, 'invalid_input', 'A part cannot be a component of itself', {
 			componentId: 'must differ from the assembly'
@@ -137,6 +151,7 @@ export function updateLine(
 ): BomLine {
 	const row = ctx.db.select().from(bomLine).where(eq(bomLine.id, input.lineId)).get();
 	if (!row) throw notFound('BOM line');
+	requireBomOpen(ctx, requirePart(ctx, row.assemblyId, 'Part'));
 	const patch: Partial<typeof bomLine.$inferInsert> = {};
 	if (input.quantity !== undefined) patch.quantity = positiveQty(input.quantity);
 	if (input.referenceDesignator !== undefined) patch.referenceDesignator = input.referenceDesignator?.trim() || null;
@@ -148,6 +163,7 @@ export function updateLine(
 export function removeLine(ctx: Ctx, lineId: number): void {
 	const row = ctx.db.select().from(bomLine).where(eq(bomLine.id, lineId)).get();
 	if (!row) throw notFound('BOM line');
+	requireBomOpen(ctx, requirePart(ctx, row.assemblyId, 'Part'));
 	remove(ctx, bomLine, lineId);
 }
 

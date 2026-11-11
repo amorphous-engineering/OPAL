@@ -5,6 +5,8 @@ import type { Database } from 'bun:sqlite';
 import { QTY_SCALE } from '@opal/shared';
 import type { Db } from '../db/client.ts';
 import { legacyRow } from '../db/schema/legacy.ts';
+import { numbersFor } from '../services/org/project.ts';
+import type { BridgeReport } from './bridge.ts';
 
 export type Row = Record<string, unknown>;
 
@@ -13,6 +15,18 @@ export interface TableReport {
 	imported: number;
 	/** Legacy columns that have no home in the new schema. */
 	droppedColumns: string[];
+	/** Rows left out on purpose. Listed under notImported, so they are not failures. */
+	leftOut?: number;
+}
+
+/** One table of the source file as it was, and what became of its rows. */
+export interface SourceTableLine {
+	table: string;
+	/** Rows in the file, before anything ran. */
+	rows: number;
+	outcome: string;
+	/** Rows nothing explains: read, but neither imported, failed nor left out. Should be 0. */
+	unaccounted: number;
 }
 
 export interface StockDifference {
@@ -28,8 +42,19 @@ export interface StockDifference {
 export interface ImportReport {
 	source: string;
 	dest: string;
+	/** The revision of the source file, before the bridge. */
 	alembicVersion: string;
 	at: string;
+	/** How a released 1.x database was brought forward. Null when it needed nothing. */
+	bridge: BridgeReport | null;
+	/** Every table of the source file, as it was. */
+	sourceTables: SourceTableLine[];
+	/** Where the project configuration came from when it was not in the database. */
+	projectFile: string | null;
+	/** Active people with no way to sign in yet. They set a password from a claim link. */
+	noSignIn: { id: number; username: string; isAdmin: boolean }[];
+	/** Onshape credentials with a value, left in the source file. Names only: never their values. */
+	onshapeKeys: string[];
 	/** Per legacy table: rows read and rows written to its main new table. */
 	tables: Record<string, TableReport>;
 	/** Rows written to tables that have no legacy twin. */
@@ -44,8 +69,14 @@ export interface ImportReport {
 	stockDifferences: StockDifference[];
 	/** Purchase lines whose legacy received quantity had no receive moves; a holding stock record took the gap. */
 	receiptGaps: { purchaseLineId: number; reference: string; partNumber: string; quantity: number; opalNumber: string }[];
+	/** Numbers that had to change because another record has the same one, at any width. */
+	renumbered: { table: string; id: number; from: string; to: string }[];
 	/** Rows with values outside the new enums, and what they became. */
 	warnings: string[];
+	/** Why the result was not put in place. Null when it was. */
+	refused: string | null;
+	/** A person said to go ahead past the failed rows. */
+	acceptedFailures: boolean;
 	failedRows: { table: string; id: number; reason: string }[];
 }
 
@@ -56,6 +87,12 @@ export interface ImportOptions {
 	blobsDir?: string;
 	/** Where avatar files go. Default: `<destination folder>/avatars`. */
 	avatarsDir?: string;
+	/** The 1.x `opal.project.yaml`, for databases that do not hold their project configuration. */
+	projectFile?: string;
+	/** Go ahead although rows failed or are not accounted for. Without it the result is not kept. */
+	acceptFailedRows?: boolean;
+	/** Called as the import moves on. Throwing stops it, and the import cleans up as for any failure. */
+	onProgress?: (what: string) => void;
 }
 
 export interface ResolvedOptions {
@@ -64,6 +101,9 @@ export interface ResolvedOptions {
 	avatarsDir: string;
 	/** False when the destination has no legacy_audit and legacy_row tables. Their rows are then lost. */
 	legacyTables: boolean;
+	/** Files the import adds are listed here, so a failed one can remove them. */
+	createdFiles?: string[];
+	onProgress?: (what: string) => void;
 }
 
 export interface ImportCtx {
@@ -74,6 +114,9 @@ export interface ImportCtx {
 	attachmentsDir: string;
 	blobsDir: string;
 	avatarsDir: string;
+	/** Files this import added to the blob and avatar folders. */
+	createdFiles: string[];
+	progress: (what: string) => void;
 	/** Ids that exist in the destination, per new table. Filled as tables are written. */
 	ids: Record<string, Set<number>>;
 	projectId: number;
@@ -85,6 +128,11 @@ export function emptyReport(source: string, dest: string, version: string, at: s
 		dest,
 		alembicVersion: version,
 		at,
+		bridge: null,
+		sourceTables: [],
+		projectFile: null,
+		noSignIn: [],
+		onshapeKeys: [],
 		tables: {},
 		derived: {},
 		notImported: [],
@@ -92,7 +140,10 @@ export function emptyReport(source: string, dest: string, version: string, at: s
 		placeholderPns: [],
 		stockDifferences: [],
 		receiptGaps: [],
+		renumbered: [],
 		warnings: [],
+		refused: null,
+		acceptedFailures: false,
 		failedRows: []
 	};
 }
@@ -170,14 +221,100 @@ export function chunks<T>(rows: T[], size: number): T[][] {
 	return out;
 }
 
+/**
+ * Hands out one number per record. 1.x let people type or repeat some of these, and two records that
+ * differ only in width are one number here, so the second would be dropped or would stop every later
+ * start. The first by id keeps its number. A later one gets the same number marked as a duplicate, so
+ * it still reads as what people called it. `scope` is what else makes a number unique, such as a revision.
+ */
+export function numberBook(c: ImportCtx, table: string, canonical: (v: string) => string): (id: number, value: string, scope?: unknown) => string {
+	const taken = new Set<string>();
+	return (id, value, scope = '') => {
+		const stored = canonical(value);
+		const key = (v: string) => `${v}\0${String(scope)}`;
+		let chosen = value;
+		if (taken.has(key(stored))) {
+			let n = 2;
+			while (taken.has(key(`${stored}-DUP${n}`))) n++;
+			chosen = `${stored}-DUP${n}`;
+			// The report is read by people, so it shows the number as they will see it.
+			c.report.renumbered.push({ table, id, from: value, to: numbersFor(c.d).display(chosen) });
+		}
+		taken.add(key(canonical(chosen)));
+		return chosen;
+	};
+}
+
 // ---------------------------------------------------------------- reading
+
+/**
+ * A name read from a legacy file, ready for SQL. The file is not trusted, and no release of 1.x made
+ * a name with anything else in it, so anything else is refused.
+ */
+export function ident(name: string): string {
+	if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`The database has something named ${JSON.stringify(name)}, which no OPAL 1.x made. It was not imported, and the file was not changed.`);
+	return `"${name}"`;
+}
+
+/** Every name in the file, checked before any of them is used. */
+export function assertPlainNames(src: Database): void {
+	const schema = src.query('SELECT type, name FROM sqlite_master').all() as { type: string; name: string }[];
+	for (const { type, name } of schema) {
+		ident(name);
+		if (type === 'table' || type === 'view') columns(src, name).forEach(ident);
+	}
+}
 
 export function tableExists(src: Database, name: string): boolean {
 	return !!src.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
 }
 
 export function columns(src: Database, table: string): string[] {
-	return (src.query(`PRAGMA table_info("${table}")`).all() as Row[]).map((r) => String(r.name));
+	return (src.query(`PRAGMA table_info(${ident(table)})`).all() as Row[]).map((r) => String(r.name));
+}
+
+/** Columns whose values the importers convert, and which would otherwise turn to nothing without a word. */
+const CONVERTED: Record<string, { qty?: string[]; date?: string[]; json?: string[] }> = {
+	part: { qty: ['reorder_point'], json: ['metadata'] },
+	purchase: { date: ['target_date'] },
+	purchase_line: { qty: ['qty_ordered', 'qty_received', 'unit_cost'] },
+	purchase_expense: { qty: ['quantity', 'unit_cost', 'total_cost'] },
+	inventory_record: { qty: ['quantity'], date: ['expiration_date'] },
+	inventory_consumption: { qty: ['quantity'] },
+	inventory_production: { qty: ['quantity'] },
+	stock_transfer: { qty: ['quantity'] },
+	test_template: { qty: ['min_value', 'max_value'] },
+	kit: { qty: ['quantity_required'] },
+	step_kit: { qty: ['quantity_required'] },
+	procedure_output: { qty: ['quantity_produced'] },
+	procedure_step: { json: ['required_data_schema', 'signoffs', 'callouts'] },
+	procedure_instance: { json: ['participants'] },
+	step_execution: { json: ['required_data_schema', 'signoffs'] },
+	dataset: { json: ['schema'] },
+	data_point: { json: ['values'] }
+};
+
+const shown = (v: unknown) => {
+	const s = String(v);
+	return JSON.stringify(s.length > 80 ? `${s.slice(0, 80)}...` : s);
+};
+
+/** Says so when a value will not survive being read. The row still imports, and the old file keeps the value. */
+function noteUnreadable(c: ImportCtx, table: string, rows: Row[]): void {
+	const rules = CONVERTED[table];
+	if (!rules) return;
+	for (const r of rows) {
+		const where = (col: string) => `${table} ${String(r.id ?? '')} ${col}`;
+		for (const col of rules.qty ?? []) {
+			if (r[col] != null && !Number.isFinite(Number(r[col]))) warn(c, `${where(col)}: ${shown(r[col])} is not a number, left empty`);
+		}
+		for (const col of rules.date ?? []) {
+			if (r[col] != null && r[col] !== '' && dateOnly(r[col]) === null) warn(c, `${where(col)}: ${shown(r[col])} is not a date, left empty`);
+		}
+		for (const col of rules.json ?? []) {
+			if (typeof r[col] === 'string' && r[col] !== '' && json(r[col]) === null && r[col].trim() !== 'null') warn(c, `${where(col)}: ${shown(r[col])} is not readable, left empty`);
+		}
+	}
 }
 
 /**
@@ -189,12 +326,17 @@ export function readTable(c: ImportCtx, table: string, used: readonly string[], 
 		c.report.tables[table] = { read: 0, imported: 0, droppedColumns: [] };
 		return [];
 	}
-	const rows = c.src.query(`SELECT * FROM "${table}" ORDER BY ${order}`).all() as Row[];
+	const rows = c.src.query(`SELECT * FROM ${ident(table)} ORDER BY ${ident(order)}`).all() as Row[];
+	const have = columns(c.src, table);
 	c.report.tables[table] = {
 		read: rows.length,
 		imported: 0,
-		droppedColumns: columns(c.src, table).filter((col) => !used.includes(col))
+		droppedColumns: have.filter((col) => !used.includes(col))
 	};
+	// A database nobody expected: without this its values would quietly read as empty.
+	const missing = used.filter((col) => !have.includes(col));
+	if (rows.length && missing.length) warn(c, `${table}: ${missing.join(', ')} not in this database, read as empty`);
+	noteUnreadable(c, table, rows);
 	return rows;
 }
 
@@ -231,6 +373,18 @@ export function keepLegacyRow(c: ImportCtx, table: string, row: Row, reason: str
 		})
 		.run();
 	c.report.derived.legacy_row = (c.report.derived.legacy_row ?? 0) + 1;
+}
+
+/** A row with no home in the new schema, so it is not imported. It stays in legacy_row, which no page reads yet. */
+export function leaveInLegacyRow(c: ImportCtx, table: string, row: Row, reason: string): void {
+	keepLegacyRow(c, table, row, reason);
+	if (!c.legacyTables) return;
+	const t = c.report.tables[table];
+	if (t) t.leftOut = (t.leftOut ?? 0) + 1;
+	const name = `${table} (legacy_row)`;
+	const line = c.report.notImported.find((n) => n.table === name);
+	if (line) line.rows++;
+	else c.report.notImported.push({ table: name, rows: 1, note: 'no home in OPAL 2, each row kept with its reason in the legacy_row table' });
 }
 
 /**

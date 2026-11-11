@@ -41,7 +41,11 @@ const exec = (s) => execs.find((e) => e.status === s)?.id;
 // `fields` is what this state legitimately asks for on open. Anything above it fails.
 const pages = [
 	['held issue', `/issues/${issue('IT-0001')}`, { fields: 1, note: 'comment line' }],
-	['done issue', `/issues/${issue('IT-0004')}`, { fields: 1, note: 'comment line', edit: 0 }],
+	[
+		'done issue',
+		`/issues/${issues.find((i) => i.status === 'closed')?.id}`,
+		{ fields: 1, note: 'comment line', edit: 0 }
+	],
 	['accepted risk', `/risks/${risks.find((r) => r.acceptedAt)?.id}`, { fields: 0 }],
 	[
 		'baselined requirement',

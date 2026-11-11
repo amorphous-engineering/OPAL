@@ -4,7 +4,7 @@
  * counter of procedures, and the issue seams (`issueHooks`).
  */
 import type { ExecutionRef, RedlineOp, StepOption } from '@opal/shared';
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import { actorUserId } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
@@ -15,6 +15,7 @@ import {
 	executionOutput,
 	executionParticipant,
 	procedure,
+	procedureVersion,
 	signoff,
 	stepExecution,
 	stepNote,
@@ -24,7 +25,7 @@ import { type HoldChange, issueHooks } from '../issues/hooks.ts';
 import { blockedExecutionIds } from './blocked.ts';
 import { rowsHeldBy } from './holds.ts';
 import { registerWorkcenterWork } from '../org/workcenters.ts';
-import { registerPartReference } from '../parts/references.ts';
+import { registerPartCopies, registerPartReference } from '../parts/references.ts';
 import { notify, publish, registerEntity, registerSearchable } from '../platform/index.ts';
 import { setExecutionCounter } from '../procedures/index.ts';
 import { registerOverviewSection } from '../reports/overview.ts';
@@ -35,6 +36,24 @@ import { isActive, isTerminal, loadModel, opRowOf, progress } from './model.ts';
 import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 
 // ---------------------------------------------------------------- parts, entities, search
+
+// A cut work order is a copy on its way. One voided before it started never made anything, and the
+// stock record it reserved does not count either (see the stock source in the inventory area).
+registerPartCopies({
+	label: ['work order', 'work orders'],
+	count: (ctx, partId) =>
+		ctx.db
+			.select({ n: sql<number>`count(*)` })
+			.from(execution)
+			.innerJoin(procedureVersion, eq(procedureVersion.id, execution.versionId))
+			.where(
+				and(
+					ne(execution.status, 'void'),
+					sql`EXISTS (SELECT 1 FROM json_each(${procedureVersion.content}, '$.outputs') o WHERE json_extract(o.value, '$.partId') = ${partId})`
+				)
+			)
+			.get()?.n ?? 0
+});
 
 registerPartReference({
 	name: 'execution_outputs',

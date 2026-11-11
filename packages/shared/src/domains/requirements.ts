@@ -233,6 +233,15 @@ export const zRequirementAllocation = z.object({
 	againstRevision: z.number().int(),
 	/** Verified or waived against an older revision than the one in force. */
 	outdated: z.boolean(),
+	/** How the same part closed on the revision this one supersedes. Dossier only; read from that row. */
+	previous: z
+		.object({
+			revision: z.number().int(),
+			status: z.enum(REQUIREMENT_ALLOCATION_STATUSES),
+			verifiedAt: zTimestamp.nullable(),
+			verifiedBy: z.string().nullable()
+		})
+		.nullable(),
 	withdrawals: z.array(zRequirementWithdrawal)
 });
 export type RequirementAllocation = z.infer<typeof zRequirementAllocation>;
@@ -607,7 +616,7 @@ export const requirements = {
 		method: 'POST',
 		path: '/requirements/:id/baseline',
 		summary:
-			'Baseline one requirement and record a baseline event. Refused with the list of blockers when it is not ready.',
+			'Baseline one requirement and record a baseline event. Refused with the list of blockers when it is not ready. A revision takes over from the one it supersedes: each allocated part gets a new open link, unless marked not applicable, and live children move to it and go stale.',
 		input: z.object({ id: zId }),
 		output: zRequirement,
 		access: 'signed-in',
@@ -692,7 +701,7 @@ export const requirements = {
 		name: 'requirements.forPart',
 		method: 'GET',
 		path: '/requirements/parts/:partId',
-		summary: 'Requirements linked to a part.',
+		summary: 'Requirements linked to a part, one row per requirement: the link on its newest revision.',
 		input: z.object({ partId: zId }),
 		output: z.array(zRequirementPartRequirement),
 		access: 'signed-in',
@@ -702,7 +711,8 @@ export const requirements = {
 		name: 'requirements.assign',
 		method: 'POST',
 		path: '/requirements/parts/:partId',
-		summary: 'Link a requirement to a part by REQ number. The current revision is linked.',
+		summary:
+			'Link a requirement to a part by REQ number. The current revision is linked. Refused while a live revision holds a link for that part.',
 		input: z.object({
 			partId: zId,
 			reqNumber: z.string().max(MAX_SHORT).trim().min(1),

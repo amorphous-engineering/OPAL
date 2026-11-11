@@ -29,11 +29,14 @@ export interface SupervisorOptions {
 	exit?: (code: number) => void;
 }
 
-/** Command for the server child: the compiled binary re-runs itself; dev runs cli.ts under bun. */
-export function defaultChildCommand(args: string[], compiled = isCompiled()): string[] {
-	if (compiled) return [process.execPath, 'serve', ...args];
-	return [process.execPath, new URL('../cli.ts', import.meta.url).pathname, 'serve', ...args];
+/** This program again with these arguments: the compiled binary re-runs itself; dev runs cli.ts under bun. */
+export function selfCommand(args: string[], compiled = isCompiled()): string[] {
+	if (compiled) return [process.execPath, ...args];
+	return [process.execPath, new URL('../cli.ts', import.meta.url).pathname, ...args];
 }
+
+/** Command for the server child. */
+export const defaultChildCommand = (args: string[], compiled = isCompiled()): string[] => selfCommand(['serve', ...args], compiled);
 
 export class Supervisor {
 	readonly child: Child;

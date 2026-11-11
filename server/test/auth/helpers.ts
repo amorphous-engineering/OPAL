@@ -1,38 +1,18 @@
 /** Shared setup for the auth tests: a database with the auth tables, an app, a fake OIDC provider. */
-import { Database } from 'bun:sqlite';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from 'jose';
 import type { Hono } from 'hono';
 import { createApp } from '../../src/app.ts';
 import type { Ctx } from '../../src/context.ts';
 import type { Db } from '../../src/db/client.ts';
-import * as authSchema from '../../src/db/schema/auth.ts';
-import * as schema from '../../src/db/schema/index.ts';
-import { user } from '../../src/db/schema/index.ts';
+import { authSetting, user } from '../../src/db/schema/index.ts';
 import { resetDiscoveryCache } from '../../src/services/auth/oidc.ts';
 import { insert } from '../../src/write.ts';
+import { openTestDb } from '../helpers/db.ts';
 
 process.env.OPAL_AUTH_SECRET = 'test-secret-for-signing';
 // Never read the machine's real OIDC or sign-in environment.
 for (const k of Object.keys(process.env)) {
 	if (/^OPAL_(OIDC_|PASSWORD_LOGIN|PASSKEY)/.test(k)) delete process.env[k];
-}
-
-const everything = { ...schema, ...authSchema };
-let ddl: string[] | undefined;
-
-/** Like openTestDb, plus the auth schema file, which the lead has not added to the index yet. */
-export async function openAuthDb(): Promise<Db> {
-	if (!ddl) {
-		const empty = await generateSQLiteDrizzleJson({});
-		const current = await generateSQLiteDrizzleJson(everything);
-		ddl = await generateSQLiteMigration(empty, current);
-	}
-	const sqlite = new Database(':memory:', { strict: true });
-	sqlite.run('PRAGMA foreign_keys = ON');
-	for (const stmt of ddl) sqlite.run(stmt);
-	return drizzle(sqlite, { schema: everything }) as unknown as Db;
 }
 
 export const ADMIN = { username: 'Abby', name: 'Abby', password: 'correct-horse-battery' };
@@ -47,7 +27,7 @@ export interface Harness {
 }
 
 export async function harness(): Promise<Harness> {
-	const db = await openAuthDb();
+	const db = await openTestDb();
 	const app = createApp({ db });
 	const call: Harness['call'] = async (method, path, body, headers = {}) =>
 		app.request(`http://opal.test/api${path}`, {
@@ -193,9 +173,9 @@ export function configureOidc(h: Harness, p: FakeProvider, over: Record<string, 
 	const ts = new Date().toISOString();
 	for (const [key, value] of Object.entries(rows)) {
 		h.db
-			.insert(authSchema.authSetting)
+			.insert(authSetting)
 			.values({ key, value, createdAt: ts, updatedAt: ts })
-			.onConflictDoUpdate({ target: authSchema.authSetting.key, set: { value } })
+			.onConflictDoUpdate({ target: authSetting.key, set: { value } })
 			.run();
 	}
 	resetDiscoveryCache();

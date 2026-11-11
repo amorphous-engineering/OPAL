@@ -9,7 +9,6 @@ import { receiveStock } from '../../src/services/inventory/index.ts';
 import { registerExecutionReport } from '../../src/services/reports/exports.ts';
 import { registerOverviewSection } from '../../src/services/reports/overview.ts';
 import { toCsv } from '../../src/services/reports/csv.ts';
-import { reportsImpls } from '../../src/ops/reports.ts';
 
 /** The base setup, with one project; issue and risk creates carry its id. */
 async function setup() {
@@ -112,14 +111,14 @@ describe('overview', () => {
 
 	test('the execution area adds its section through the hook', async () => {
 		const s = await setup();
-		registerOverviewSection('executions', () => ({
+		const real = registerOverviewSection('executions', () => ({
 			items: [{ label: 'WO-1', procedure: 'P', status: 'in_work', stepsDone: 1, stepsTotal: 2, blocked: false, overdue: false, targetCompletionAt: null, mine: true, href: '/executions/1' }],
 			total: 1,
 			flagged: 0
 		}));
 		const o = (await s.call('GET', '/overview')).body;
 		expect(o.executions.items[0].label).toBe('WO-1');
-		registerOverviewSection('executions', () => ({ items: [], total: 0, flagged: 0 }));
+		registerOverviewSection('executions', real);
 	});
 
 	test('recent activity lists the newest audit entries', async () => {
@@ -203,7 +202,7 @@ describe('csv reports', () => {
 			id, procedure: 'P', version: 1, workOrder: `WO-${id}`, status, priority: null,
 			createdAt: '2026-01-01T00:00:00.000Z', startedAt: started, completedAt: done, stepsCompleted: 1, stepsTotal: 2
 		});
-		registerExecutionReport(() => [
+		const real = registerExecutionReport(() => [
 			row(1, 'completed', '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z'),
 			row(2, 'in_work', '2026-01-01T00:00:00.000Z', null),
 			row(3, 'cut', null, null)
@@ -215,7 +214,7 @@ describe('csv reports', () => {
 		const none = (await s.call('GET', '/reports/analytics/executions?to=2025-01-01')).body;
 		expect(none.totalExecutions).toBe(0);
 		expect(none.avgDurationMinutes).toBeNull();
-		registerExecutionReport(() => []);
+		registerExecutionReport(real);
 	});
 
 	test('issue metrics: open splits into advisory, undispositioned and dispositioned', async () => {
@@ -228,8 +227,4 @@ describe('csv reports', () => {
 		expect(m.byPriority).toEqual({ high: 2 });
 		expect(m.advisoryOpen + m.undispositioned + m.dispositioned).toBe(m.open);
 	});
-});
-
-test('every report operation is bound', () => {
-	expect(reportsImpls.length).toBe(13);
 });

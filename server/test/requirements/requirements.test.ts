@@ -491,12 +491,14 @@ describe('tree and dossier', () => {
 	});
 
 	test('a row whose parent is no longer current shows as an orphan root', async () => {
-		const { req, call, baseline } = await setup();
+		const { req, call, baseline, db } = await setup();
 		const parent = await req();
 		const child = await req({ parentId: parent.id });
 		await baseline(parent.id);
 		const rev2 = (await call('POST', `/requirements/${parent.id}/revise`)).body;
 		await baseline(rev2.id);
+		// A row a revision did not carry: one from before children followed their parent.
+		db.update(requirement).set({ parentId: parent.id }).where(eq(requirement.id, child.id)).run();
 		const row = (await call('GET', '/requirements/tree')).body.items.find((i: any) => i.id === child.id);
 		expect(row).toMatchObject({ parentId: null, orphan: true });
 	});
@@ -750,6 +752,416 @@ describe('withdrawing a verification', () => {
 		const rev2 = (await call('POST', `/requirements/${r.id}/revise`)).body;
 		await baseline(rev2.id);
 		expect((await call('POST', `${path}/withdraw-verification`, { reason: 'late' })).status).toBe(409);
+	});
+});
+
+describe('a revision that baselines takes over from the one it supersedes', () => {
+	const NEW_TEXT = 'The engine shall sustain a chamber pressure of 25 bar ± 1 bar.';
+
+	/** A baselined requirement with `Bracket` allocated, then a new revision in draft. */
+	async function revising(status: 'open' | 'verified' | 'waived' | 'not_applicable' = 'verified') {
+		const s = await setup();
+		const r1 = await s.req();
+		const p = s.mkPart('Bracket', 'P-1');
+		const link = (await s.call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber, notes: 'load path' })).body;
+		await s.baseline(r1.id);
+		if (status === 'verified') await s.call('POST', `/requirements/allocations/${link.id}/verify`, {});
+		else if (status !== 'open') await s.call('PATCH', `/requirements/allocations/${link.id}`, { status });
+		const r2 = (await s.call('POST', `/requirements/${r1.id}/revise`)).body;
+		await s.call('PATCH', `/requirements/${r2.id}`, { statement: NEW_TEXT });
+		return { ...s, r1, r2, p, link };
+	}
+	const linkOf = (db: any, requirementId: number) =>
+		db.select().from(partRequirement).where(eq(partRequirement.requirementId, requirementId)).all();
+
+	describe('part allocations', () => {
+		test('a part verified against the old text starts open on the new revision, keeps its notes, and can be verified again', async () => {
+			const { call, baseline, r2, p, admin } = await revising();
+			await baseline(r2.id);
+			const rows = (await call('GET', `/requirements/parts/${p.id}`)).body;
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ requirementId: r2.id, revision: 2, status: 'open', notes: 'load path', verifiedAt: null, verifiedBy: null });
+			const v = await call('POST', `/requirements/allocations/${rows[0].id}/verify`, {});
+			expect(v.status).toBe(200);
+			expect(v.body).toMatchObject({ status: 'verified', revision: 2, verifiedBy: { id: admin.id } });
+			expect((await call('GET', `/requirements/${r2.id}/dossier`)).body.verification).toBe('verified');
+		});
+
+		test('the verification on the superseded revision stays as the evidence for that text', async () => {
+			const { call, baseline, db, r1, r2, link, admin } = await revising();
+			const before = linkOf(db, r1.id)[0];
+			await baseline(r2.id);
+			expect(linkOf(db, r1.id)).toEqual([before]);
+			const old = (await call('GET', `/requirements/${r1.id}/dossier`)).body;
+			expect(old.verification).toBe('verified');
+			expect(old.allocations).toHaveLength(1);
+			expect(old.allocations[0]).toMatchObject({ id: link.id, againstRevision: 1, status: 'verified', outdated: false, previous: null });
+			expect((await call('POST', `/requirements/allocations/${link.id}/verify`, {})).status).toBe(409);
+			expect(before.verifiedById).toBe(admin.id);
+		});
+
+		test('the new allocation says how the part closed on the prior revision, read from that revision', async () => {
+			const { call, baseline, r2 } = await revising();
+			await baseline(r2.id);
+			const d = (await call('GET', `/requirements/${r2.id}/dossier`)).body;
+			expect(d.allocations).toHaveLength(1);
+			expect(d.allocations[0]).toMatchObject({ againstRevision: 2, status: 'open', outdated: false });
+			expect(d.allocations[0].previous).toMatchObject({ revision: 1, status: 'verified', verifiedBy: 'ABBY' });
+			expect(d.allocations[0].previous.verifiedAt).toBeTruthy();
+			expect(d.verification).toBe('open');
+		});
+
+		test('a waiver does not carry either: the part starts open', async () => {
+			const { call, baseline, r2, p } = await revising('waived');
+			await baseline(r2.id);
+			expect((await call('GET', `/requirements/parts/${p.id}`)).body[0]).toMatchObject({ revision: 2, status: 'open' });
+			expect((await call('GET', `/requirements/${r2.id}/dossier`)).body.allocations[0].previous).toMatchObject({ revision: 1, status: 'waived', verifiedBy: null });
+		});
+
+		test('a link marked not applicable stays behind, and the part can still be allocated by hand', async () => {
+			const { call, baseline, db, r1, r2, p } = await revising('not_applicable');
+			await baseline(r2.id);
+			expect(linkOf(db, r2.id)).toEqual([]);
+			expect((await call('GET', `/requirements/${r2.id}/dossier`)).body.verification).toBe('unallocated');
+			expect((await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber })).status).toBe(200);
+		});
+
+		test('a carried allocation is written through the audit, by the baseline operation', async () => {
+			const { baseline, db, r2, admin } = await revising();
+			await baseline(r2.id);
+			const created = db.select().from(auditLog).where(eq(auditLog.entity, 'part_requirement')).all().filter((x) => x.action === 'create').at(-1)!;
+			expect(created.op).toBe('requirements.baseline');
+			expect(created.actorUserId).toBe(admin.id);
+			expect((created.after as any).requirementId).toBe(r2.id);
+		});
+
+		test('a batch baseline carries allocations the same way', async () => {
+			const { call, db, r2 } = await revising();
+			expect((await call('POST', '/requirements/baseline-batch', { ids: [r2.id] })).status).toBe(200);
+			expect(linkOf(db, r2.id).map((l: any) => l.status)).toEqual(['open']);
+		});
+
+		test('the second revision to baseline carries from the first, not from further back', async () => {
+			const { call, baseline, db, r2 } = await revising();
+			await baseline(r2.id);
+			const r3 = (await call('POST', `/requirements/${r2.id}/revise`)).body;
+			await baseline(r3.id);
+			expect(linkOf(db, r3.id)).toHaveLength(1);
+			expect((await call('GET', `/requirements/${r3.id}/dossier`)).body.allocations[0].previous).toBeNull();
+		});
+
+		test('a person can remove a carried allocation, and it stays gone from the new revision', async () => {
+			const { call, baseline, db, r1, r2, p } = await revising();
+			await baseline(r2.id);
+			const carried = (await call('GET', `/requirements/parts/${p.id}`)).body[0];
+			expect((await call('DELETE', `/requirements/allocations/${carried.id}`)).status).toBe(200);
+			expect((await call('GET', `/requirements/${r2.id}/dossier`)).body.verification).toBe('unallocated');
+			expect(linkOf(db, r1.id)).toHaveLength(1);
+			const left = (await call('GET', `/requirements/parts/${p.id}`)).body;
+			expect(left.map((x: any) => [x.revision, x.lifecycleState])).toEqual([[1, 'superseded']]);
+		});
+	});
+
+	describe('views count a part once', () => {
+		test('the tree, the summary and the part page each see the part once, as open, until it is verified again', async () => {
+			const { call, baseline, r2, p } = await revising();
+			await baseline(r2.id);
+			const item = (await call('GET', '/requirements/tree')).body.items.find((i: any) => i.id === r2.id);
+			expect(item.parts).toEqual([{ partId: p.id, name: 'Bracket', status: 'open' }]);
+			expect(item.verification).toBe('open');
+			const s = (await call('GET', '/requirements/summary')).body;
+			expect(s.total).toBe(1);
+			expect(s.verification).toMatchObject({ open: 1, verified: 0 });
+			expect(s.coverage).toMatchObject({ leaves: 1, leavesAllocated: 1 });
+			const [link] = (await call('GET', `/requirements/parts/${p.id}`)).body;
+			await call('POST', `/requirements/allocations/${link.id}/verify`, {});
+			expect((await call('GET', '/requirements/summary')).body.verification).toMatchObject({ open: 0, verified: 1 });
+		});
+
+		test('a part counts as one requirement among what references it, across revisions', async () => {
+			const { call, baseline, r2, p } = await revising();
+			await baseline(r2.id);
+			expect((await call('GET', `/parts/${p.id}/detail`)).body.references.requirement_allocations).toBe(1);
+		});
+	});
+
+	describe('a draft revision changes nothing until it baselines', () => {
+		test('the baseline in force keeps its allocation, which a person can still verify and which does not carry as verified', async () => {
+			const { call, baseline, db, r1, r2, link } = await revising('open');
+			expect(linkOf(db, r2.id)).toEqual([]);
+			expect((await call('GET', `/requirements/${r1.id}`)).body.allocationCount).toBe(1);
+			expect((await call('POST', `/requirements/allocations/${link.id}/verify`, {})).status).toBe(200);
+			await baseline(r2.id);
+			expect(linkOf(db, r1.id)[0].status).toBe('verified');
+			expect(linkOf(db, r2.id)[0].status).toBe('open');
+		});
+
+		test('the draft shows the allocations of the baseline in force, and a draft with no links of its own can be deleted', async () => {
+			const { call, db, r1, r2, p } = await revising();
+			const d = (await call('GET', `/requirements/${r2.id}/dossier`)).body;
+			expect(d.allocations).toHaveLength(1);
+			expect(d.allocations[0]).toMatchObject({ againstRevision: 1, outdated: true, previous: null });
+			expect(d.canDelete).toBe(true);
+			expect((await call('DELETE', `/requirements/${r2.id}`)).status).toBe(200);
+			expect((await call('GET', `/requirements/${r1.id}/dossier`)).body.verification).toBe('verified');
+			expect(linkOf(db, r1.id)).toHaveLength(1);
+			expect((await call('GET', `/requirements/parts/${p.id}`)).body[0]).toMatchObject({ requirementId: r1.id, status: 'verified' });
+		});
+
+		test('a part allocated during the draft stands on the draft, not on the baseline in force, and is not doubled at baseline', async () => {
+			const { call, baseline, mkPart, db, r1, r2 } = await revising();
+			const q = mkPart('Valve', 'P-2');
+			const added = await call('POST', `/requirements/parts/${q.id}`, { reqNumber: r1.reqNumber });
+			expect(added.body).toMatchObject({ requirementId: r2.id, revision: 2 });
+			const inForce = (await call('GET', `/requirements/${r1.id}/dossier`)).body;
+			expect(inForce.allocations.map((a: any) => a.partName)).toEqual(['Bracket']);
+			expect(inForce.verification).toBe('verified');
+			const draft = (await call('GET', `/requirements/${r2.id}/dossier`)).body;
+			expect(draft.allocations.map((a: any) => [a.partName, a.againstRevision])).toEqual([['Bracket', 1], ['Valve', 2]]);
+			expect((await call('GET', '/requirements/queue')).body.items.find((i: any) => i.id === r2.id).parts).toEqual(['Bracket', 'Valve']);
+			await baseline(r2.id);
+			expect(linkOf(db, r2.id)).toHaveLength(2);
+			expect((await call('GET', `/requirements/${r2.id}/dossier`)).body.allocations.map((a: any) => a.partName)).toEqual(['Bracket', 'Valve']);
+		});
+
+		test('a part on the baseline in force cannot be allocated a second time through the draft', async () => {
+			const { call, db, r1, r2, p } = await revising();
+			const res = await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber });
+			expect(res.status).toBe(409);
+			expect(res.body.error).toBe('duplicate');
+			expect(linkOf(db, r2.id)).toEqual([]);
+		});
+
+		test('the summary counts both live rows but rolls up coverage and verification once while the next revision is in draft', async () => {
+			const { call } = await revising();
+			const s = (await call('GET', '/requirements/summary')).body;
+			expect(s.total).toBe(2);
+			expect(s.byState).toEqual({ baselined: 1, draft: 1 });
+			expect(s.verification).toMatchObject({ verified: 1, open: 0 });
+			expect(s.coverage).toMatchObject({ leaves: 1, leavesAllocated: 1, withVerificationMethod: 2 });
+		});
+
+		test('a cancelled draft revision carries nothing, and the part stays on the baseline in force', async () => {
+			const { call, db, r1, r2, link } = await revising('open');
+			await call('POST', `/requirements/${r2.id}/cancel`, { reason: 'wrong direction' });
+			expect(linkOf(db, r2.id)).toEqual([]);
+			expect((await call('GET', `/requirements/${r1.id}`)).body.lifecycleState).toBe('baselined');
+			expect((await call('POST', `/requirements/allocations/${link.id}/verify`, {})).status).toBe(200);
+		});
+	});
+
+	describe('a cancelled draft revision', () => {
+		async function struck() {
+			const s = await revising('open');
+			await s.call('POST', `/requirements/${s.r2.id}/cancel`, { reason: 'wrong direction' });
+			return s;
+		}
+
+		test('leaves the baseline in force as the current revision of its number', async () => {
+			const { call, r1 } = await struck();
+			const current = await call('GET', `/requirements/number/${r1.reqNumber}`);
+			expect(current.body).toMatchObject({ id: r1.id, revision: 1, lifecycleState: 'baselined' });
+		});
+
+		test('leaves the number open to new allocations, on the baseline in force', async () => {
+			const { call, mkPart, r1, p } = await struck();
+			const other = mkPart('Flange', 'P-2');
+			const added = await call('POST', `/requirements/parts/${other.id}`, { reqNumber: r1.reqNumber });
+			expect(added.status).toBe(200);
+			expect(added.body.requirementId).toBe(r1.id);
+			const again = await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber });
+			expect(again.status).toBe(409);
+			expect(again.body.error).toBe('duplicate');
+		});
+
+		test('lets the baseline in force be revised again, and keeps its own revision number', async () => {
+			const { call, r1, r2 } = await struck();
+			const r3 = await call('POST', `/requirements/${r1.id}/revise`);
+			expect(r3.status).toBe(200);
+			expect(r3.body).toMatchObject({ revision: 3, lifecycleState: 'draft', supersedesId: r1.id });
+			expect((await call('GET', `/requirements/${r2.id}`)).body).toMatchObject({ revision: 2, lifecycleState: 'cancelled', cancelReason: 'wrong direction' });
+			expect((await call('GET', `/requirements/${r1.id}/revisions`)).body.map((x: any) => x.revision)).toEqual([1, 2, 3]);
+		});
+
+		test('hands over to the next revision from the baseline in force, not from the struck text', async () => {
+			const { call, db, baseline, r1, r2, p } = await struck();
+			const r3 = (await call('POST', `/requirements/${r1.id}/revise`)).body;
+			expect(r3.statement).toBe(r1.statement);
+			await baseline(r3.id);
+			expect((await call('GET', `/requirements/${r1.id}`)).body.lifecycleState).toBe('superseded');
+			expect((await call('GET', `/requirements/${r2.id}`)).body.lifecycleState).toBe('cancelled');
+			expect(linkOf(db, r2.id)).toEqual([]);
+			expect(linkOf(db, r3.id).map((l: any) => l.partId)).toEqual([p.id]);
+			expect((await call('GET', `/requirements/number/${r1.reqNumber}`)).body.id).toBe(r3.id);
+			expect((await call('GET', `/requirements/${r3.id}/dossier`)).body.predecessorRevision).toBe(1);
+		});
+
+		test('does not free a second open revision', async () => {
+			const { call, r1 } = await struck();
+			expect((await call('POST', `/requirements/${r1.id}/revise`)).status).toBe(200);
+			const second = await call('POST', `/requirements/${r1.id}/revise`);
+			expect(second.status).toBe(409);
+			expect(second.body.error).toBe('requirement_state');
+		});
+
+		test('does not revive a number whose every revision is cancelled', async () => {
+			const { call, mkPart, r1, r2 } = await struck();
+			await call('POST', `/requirements/${r1.id}/cancel`, { reason: 'dropped' });
+			expect((await call('GET', `/requirements/number/${r1.reqNumber}`)).body.id).toBe(r2.id);
+			const other = mkPart('Flange', 'P-2');
+			expect((await call('POST', `/requirements/parts/${other.id}`, { reqNumber: r1.reqNumber })).status).toBe(409);
+			expect((await call('POST', `/requirements/${r1.id}/revise`)).status).toBe(409);
+		});
+	});
+
+	describe('a baseline with a revision open', () => {
+		test('cannot be cancelled until the open revision is', async () => {
+			const { call, db, r1, r2, p } = await revising('open');
+			const refused = await call('POST', `/requirements/${r1.id}/cancel`, { reason: 'dropped' });
+			expect(refused.status).toBe(409);
+			expect(refused.body.error).toBe('requirement_state');
+			expect((await call('GET', `/requirements/${r1.id}`)).body.lifecycleState).toBe('baselined');
+			expect(linkOf(db, r1.id).map((l: any) => l.partId)).toEqual([p.id]);
+
+			expect((await call('POST', `/requirements/${r2.id}/cancel`, { reason: 'wrong direction' })).status).toBe(200);
+			expect((await call('POST', `/requirements/${r1.id}/cancel`, { reason: 'dropped' })).status).toBe(200);
+		});
+	});
+
+	describe('a revision superseded before allocations carried', () => {
+		/** The state an older database holds: the link only on the superseded row. */
+		async function older() {
+			const s = await revising();
+			await s.baseline(s.r2.id);
+			s.db.delete(partRequirement).where(eq(partRequirement.requirementId, s.r2.id)).run();
+			return s;
+		}
+
+		test('a person can allocate the part again, and verify it against the current revision', async () => {
+			const { call, r1, r2, p, link } = await older();
+			const again = await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r1.reqNumber });
+			expect(again.status).toBe(200);
+			expect(again.body).toMatchObject({ requirementId: r2.id, status: 'open' });
+			expect((await call('POST', `/requirements/allocations/${again.body.id}/verify`, {})).status).toBe(200);
+			expect((await call('GET', `/requirements/parts/${p.id}`)).body.map((x: any) => x.requirementId)).toEqual([r2.id]);
+			expect((await call('GET', `/requirements/${r1.id}/dossier`)).body.allocations.map((a: any) => a.id)).toEqual([link.id]);
+		});
+
+		test('the part page shows the old link as superseded, and the current revision does not claim it', async () => {
+			const { call, r1, r2, p } = await older();
+			expect((await call('GET', `/requirements/parts/${p.id}`)).body[0]).toMatchObject({ requirementId: r1.id, lifecycleState: 'superseded', status: 'verified' });
+			const d = (await call('GET', `/requirements/${r2.id}/dossier`)).body;
+			expect(d.allocations).toEqual([]);
+			expect(d.verification).toBe('unallocated');
+		});
+	});
+
+	describe('children', () => {
+		async function withChild() {
+			const s = await setup();
+			const parent = await s.req();
+			const child = await s.req({ parentId: parent.id });
+			await s.baseline(parent.id);
+			const rev2 = (await s.call('POST', `/requirements/${parent.id}/revise`)).body;
+			return { ...s, parent, child, rev2 };
+		}
+
+		test('a child stays where it is while the parent revision is a draft', async () => {
+			const { call, child, parent } = await withChild();
+			expect((await call('GET', `/requirements/${child.id}`)).body).toMatchObject({ parentId: parent.id, stale: false });
+		});
+
+		test('a child moves to the new revision and stays stale, and the tree nests it there', async () => {
+			const { call, baseline, child, rev2 } = await withChild();
+			await baseline(rev2.id);
+			expect((await call('GET', `/requirements/${child.id}`)).body).toMatchObject({ parentId: rev2.id, stale: true });
+			const row = (await call('GET', '/requirements/tree')).body.items.find((i: any) => i.id === child.id);
+			expect(row).toMatchObject({ parentId: rev2.id, orphan: false, stale: true });
+			const d = (await call('GET', `/requirements/${rev2.id}/dossier`)).body;
+			expect(d.children.map((c: any) => [c.id, c.stale])).toEqual([[child.id, true]]);
+			expect((await call('GET', `/requirements/${child.id}/dossier`)).body.parentChain.map((p: any) => p.id)).toEqual([rev2.id]);
+		});
+
+		test('the move is audited on the child, by the baseline operation', async () => {
+			const { baseline, db, child, parent, rev2 } = await withChild();
+			await baseline(rev2.id);
+			const row = db.select().from(auditLog).where(eq(auditLog.entity, 'requirement')).all().filter((x) => x.entityId === child.id).at(-1)!;
+			expect(row.op).toBe('requirements.baseline');
+			expect(row.before).toMatchObject({ parentId: parent.id, stale: false });
+			expect(row.after).toMatchObject({ parentId: rev2.id, stale: true });
+		});
+
+		test('a person clears the flag by re-affirming or editing, not the move itself', async () => {
+			const { call, baseline, req, parent, child, rev2 } = await withChild();
+			const other = await req({ parentId: parent.id, title: 'Other child' });
+			await baseline(rev2.id);
+			expect((await call('POST', `/requirements/${child.id}/reaffirm`)).body).toMatchObject({ parentId: rev2.id, stale: false });
+			expect((await call('PATCH', `/requirements/${other.id}`, { rationale: 'Re-derived against rev 2.' })).body).toMatchObject({ parentId: rev2.id, stale: false });
+		});
+
+		test('a baselined child and its draft revision both follow; a superseded or cancelled child keeps the parent it had', async () => {
+			const { call, req, baseline, parent, rev2 } = await withChild();
+			const old = await req({ parentId: parent.id, title: 'Superseded child' });
+			await baseline(old.id);
+			const newer = (await call('POST', `/requirements/${old.id}/revise`)).body;
+			await baseline(newer.id);
+			const inDraft = (await call('POST', `/requirements/${newer.id}/revise`)).body;
+			const struck = await req({ parentId: parent.id, title: 'Struck child' });
+			await call('POST', `/requirements/${struck.id}/cancel`, { reason: 'dropped' });
+			await baseline(rev2.id);
+			const got = async (id: number) => (await call('GET', `/requirements/${id}`)).body;
+			expect(await got(newer.id)).toMatchObject({ parentId: rev2.id, stale: true, lifecycleState: 'baselined' });
+			expect(await got(inDraft.id)).toMatchObject({ parentId: rev2.id, stale: true, lifecycleState: 'draft' });
+			expect(await got(old.id)).toMatchObject({ parentId: parent.id, stale: false, lifecycleState: 'superseded' });
+			expect(await got(struck.id)).toMatchObject({ parentId: parent.id, stale: false, lifecycleState: 'cancelled' });
+		});
+
+		test('a baseline event does not report a parent change because the parent was later revised', async () => {
+			const { call, baseline, child, rev2 } = await withChild();
+			await baseline(child.id);
+			const next = (await call('POST', `/requirements/${child.id}/revise`)).body;
+			await call('PATCH', `/requirements/${next.id}`, { statement: NEW_TEXT });
+			await baseline(next.id);
+			const event = (await call('GET', '/requirements/baselines')).body[0];
+			await baseline(rev2.id);
+			expect((await call('GET', `/requirements/${next.id}`)).body.parentId).toBe(rev2.id);
+			expect((await call('GET', `/requirements/baselines/${event.id}`)).body.items[0].changed).toEqual(['statement']);
+		});
+
+		test('a real change of parent is still reported on the event', async () => {
+			const { call, baseline, req, child } = await withChild();
+			const other = await req({ title: 'Other parent' });
+			await baseline(child.id);
+			const next = (await call('POST', `/requirements/${child.id}/revise`)).body;
+			await call('PATCH', `/requirements/${next.id}`, { parentId: other.id });
+			await baseline(next.id);
+			const event = (await call('GET', '/requirements/baselines')).body[0];
+			expect((await call('GET', `/requirements/baselines/${event.id}`)).body.items[0].changed).toEqual(['parent']);
+		});
+
+		test('a revision cannot be parented under its own number or anything that flows from it', async () => {
+			const { call, req, baseline, child, parent, rev2 } = await withChild();
+			expect((await call('PATCH', `/requirements/${rev2.id}`, { parentId: parent.id })).status).toBe(422);
+			expect((await call('PATCH', `/requirements/${rev2.id}`, { parentId: child.id })).status).toBe(422);
+			const leaf = await req({ parentId: child.id, title: 'Leaf' });
+			expect((await call('PATCH', `/requirements/${rev2.id}`, { parentId: leaf.id })).status).toBe(422);
+			await baseline(rev2.id);
+			expect((await call('GET', `/requirements/${rev2.id}`)).body.parentId).toBeNull();
+		});
+
+		test('a child cannot be parented under a number whose draft revision already sits below it', async () => {
+			const { call, req, baseline, parent } = await setup().then(async (s) => {
+				const parent = await s.req();
+				await s.baseline(parent.id);
+				return { ...s, parent };
+			});
+			const c = await req({ title: 'Would close the loop' });
+			const rev2 = (await call('POST', `/requirements/${parent.id}/revise`)).body;
+			expect((await call('PATCH', `/requirements/${rev2.id}`, { parentId: c.id })).status).toBe(200);
+			expect((await call('PATCH', `/requirements/${c.id}`, { parentId: parent.id })).status).toBe(422);
+			await baseline(rev2.id);
+			expect((await call('GET', `/requirements/${c.id}`)).body.parentId).toBeNull();
+		});
 	});
 });
 
@@ -1052,5 +1464,15 @@ describe('cancelling and recording verification are a person\'s acts', () => {
 			expect((await call('POST', `${path}/verify`, { notes: 'late' })).status).toBe(409);
 			expect((await call('DELETE', path)).status).toBe(409);
 		}
+	});
+});
+
+describe('a cancelled requirement is finished paper', () => {
+	test('it takes no new allocation', async () => {
+		const { req, call, mkPart } = await setup();
+		const r = await req();
+		const p = mkPart('Bracket', 'P-1');
+		await call('POST', `/requirements/${r.id}/cancel`, { reason: 'dropped' });
+		expect((await call('POST', `/requirements/parts/${p.id}`, { reqNumber: r.reqNumber })).status).toBe(409);
 	});
 });

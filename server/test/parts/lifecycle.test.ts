@@ -46,6 +46,16 @@ describe('part lifecycle', () => {
 		expect(res.status).toBe(409);
 	});
 
+	test('an obsolete part changes only by being reinstated', async () => {
+		const { api, create, activate } = await setup();
+		const p = await create({ name: 'Old' });
+		await activate(p.id);
+		await api('POST', `/parts/${p.id}/obsolete`, { cause: 'superseded' });
+		expect((await api('PATCH', `/parts/${p.id}`, { name: 'New' })).status).toBe(409);
+		expect((await api('POST', `/parts/${p.id}/reinstate`, { reason: 'still needed' })).status).toBe(200);
+		expect((await api('PATCH', `/parts/${p.id}`, { name: 'New' })).status).toBe(200);
+	});
+
 	test('an active part keeps its tier but other fields stay editable', async () => {
 		const { api, create, activate } = await setup();
 		const p = await create({ name: 'Locked' });

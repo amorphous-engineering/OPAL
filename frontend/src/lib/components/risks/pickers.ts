@@ -2,7 +2,12 @@
 import { opal } from '#lib/api.js';
 import type { PickerOption } from '#lib/components/opal/index.js';
 
-export async function searchIssues(q: string): Promise<PickerOption[]> {
+export async function searchIssues(
+	q: string,
+	{ skipVoid = false }: { skipVoid?: boolean } = {}
+): Promise<PickerOption[]> {
 	const r = await opal.issues.list({ q, limit: 20, dir: 'desc' });
-	return r.items.map((i) => ({ value: i.id, label: i.issueNumber, sub: i.title }));
+	return r.items
+		.filter((i) => !skipVoid || i.status !== 'void')
+		.map((i) => ({ value: i.id, label: i.issueNumber, sub: i.title }));
 }

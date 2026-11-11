@@ -67,9 +67,19 @@ OPAL serves plain HTTP. Passwords and session cookies cross the network in clear
 | Variable | Effect |
 |---|---|
 | `OPAL_PUBLIC_URL` | The URL people use, for example `https://opal.example.com`. Links, OAuth metadata and the `Secure` cookie flag follow it, and its host joins the allowed hosts. With an `https` URL cookies are `Secure`, so reach OPAL by that URL only. |
-| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Set it only when the proxy overwrites them. `X-Forwarded-Host` has to match what the browser's address bar shows, port included, so on a non-standard port use nginx's `$http_host`, not `$host`. The client address is the last `X-Forwarded-For` entry. |
+| `OPAL_TRUST_PROXY=1` | Believe `X-Forwarded-For`, `-Proto` and `-Host`. Behind a proxy you need this: without it everyone behind the proxy counts as one address and shares one [sign-in limit](#sign-in-limits), so OPAL warns once in its log and under **Settings**, **Sign-in**. Set it only when the proxy overwrites these headers. `X-Forwarded-Host` has to match what the browser's address bar shows, port included, so on a non-standard port use nginx's `$http_host`, not `$host`. The client address is the last `X-Forwarded-For` entry. |
 | `OPAL_TRUST_PROXY_HOPS` | With `OPAL_TRUST_PROXY`, the number of proxies in the chain (default 1). The client address is counted that many entries from the right. |
 | `OPAL_ALLOWED_HOSTS` | Comma-separated host names (`opal.lan,192.168.1.20:8080`). When this or `OPAL_PUBLIC_URL` is set, a request for any other `Host` gets 421. `localhost` and the loopback addresses are always allowed. |
+
+### Sign-in limits
+
+Wrong passwords are limited per person and address: 10 in 5 minutes, and 30 in a day from an address where that person has no live session. Past 50 wrong tries at a name in 15 minutes, addresses where that person has no live session take turns. Passkeys and single sign-on have none of these limits.
+
+Past the limit in a day, even the right password is refused for as long as the message says, up to 24 hours. To get in sooner:
+
+- Use a passkey, single sign-on, or another address.
+- Ask an administrator to reset your password under **Users** and issue a claim link. The link signs you in.
+- Restart OPAL: **Restart** on the control page, stop and start `opal serve`, or `systemctl --user restart opal` for the [systemd unit](contrib/opal.service). This clears every limit for every address. A sole administrator cannot reset their own password, so this or another address is their way in.
 
 ### Limits
 
@@ -84,7 +94,28 @@ These environment variables set what the server accepts. The defaults suit a tea
 
 ### Plugins
 
-An admin can install a plugin from a public GitHub repository. **Installing a plugin gives it shell-level access to the server.** Its API token is limited to the permissions in its manifest, but the process runs as the same user as OPAL with no sandbox, so it can read the data folder, including the database. Install only plugins you would trust with a login on that machine.
+An admin can install a plugin from a public GitHub repository. Its API token is limited to the permissions in its manifest. What the process itself can do depends on where OPAL runs:
+
+| OPAL runs on | What limits the plugin process | What the plugin can read and write |
+|---|---|---|
+| Linux, as a normal user, with Landlock (kernel 5.13 or later, on by default in most current distributions) | Landlock and a seccomp filter. It runs as the same OS user. | Its own `plugin-data/<id>`, read and write. Its own code and system files such as `/usr`, read only. Not the database, the auth secret, the key to stored secrets, the rest of the data folder, other plugins or your home folder. |
+| Linux, as root | A separate OS user for each plugin (no account to create) and the filter, plus Landlock when the kernel has it. | The same. The data folder and its plugin folders become passable by any user (mode 0711), and stay so; what they hold stays owner-only. The data folder must sit where any user can pass through its parent folders (`/var/lib/opal`, not `/root`), or plugins do not start. |
+| Linux without Landlock (older kernels, some containers), as a normal user | Nothing. | **Shell-level access.** Everything OPAL can read, including the database and the key to stored secrets. |
+| Linux, as root inside a container whose user IDs are mapped to a limited range (an unprivileged LXD container; Docker with user namespace remapping or rootless Podman work the same way) | Plugins do not start. Their user IDs do not exist there. | Nothing. Run OPAL as a normal user in the container instead. |
+| macOS, Windows | Nothing. | **Shell-level access.** Everything OPAL can read, including the database and the key to stored secrets. |
+
+The plugin page shows which applies under **Confinement**, from what the server checked when that plugin started. The plugins list marks a plugin that runs unconfined, and the plugin's log and the server log say so at each start. `none` means shell-level access. Where confinement is possible but a check fails, the plugin does not start and both logs say why. Set `OPAL_PLUGIN_CONFINEMENT=required` to refuse also where the system offers nothing, or `off` to run every plugin as the OPAL user.
+
+**Confinement limits the damage from a plugin. It does not make an untrusted plugin safe.** Even when confined, a plugin can:
+
+- open any network connection, including to other programs and other plugins on this computer, and to anything your network lets this computer reach;
+- use every permission and secret you gave it;
+- use up memory, CPU and disk;
+- see other processes' command lines and read world-readable system files;
+- learn the size and times of a file in the data folder if it knows the name;
+- on a kernel before 6.12, as the same OS user, send signals to OPAL and your other processes, which can stop them.
+
+Install only plugins you would trust with a login on that machine. Wherever the page says `none`, that is exactly what you are giving them.
 
 Set `OPAL_PLUGINS=0` to turn plugins off on a server. Nothing starts, and OPAL refuses to preview, install, configure, enable or restart one.
 
@@ -100,13 +131,38 @@ OPAL links a sign-in to an existing account by email only when the provider send
 
 ### Coming from 1.x
 
-This beta cannot import a 1.x database yet. If it finds one in the data folder it stops and leaves the file alone. Keep using 1.x for that data, or set `OPAL_DATA_DIR` to an empty folder to try this version beside it. The installer replaces the `opal` program and keeps the previous one, and the [quickstart](QUICKSTART.md#if-you-already-use-opal-1x) shows how to go back. 1.x extensions and the Onshape integration do not carry over.
+The first start imports a 1.x database found in the data folder, from any release from 1.2.2 through 1.4.0-beta.3. The original file is not changed and stays beside the new one as `opal.legacy.db`. `import-report.txt` lists every table in the old file, what moved and what did not. `opal import <file>` does the same for a database somewhere else. If any row would be lost, nothing changes: OPAL stops, the old file stays where it was, and the report names each row. Fix the cause and start again, or run `opal import <file> --accept-failed-rows` to go on without those rows. Stop 1.x first: the installer replaces the `opal` program and keeps the previous one. 1.x extensions and the Onshape integration do not carry over, and the report lists what they held. The [quickstart](QUICKSTART.md#if-you-already-use-opal-1x) covers passwords, `opal.project.yaml` and how to go back.
 
 ### Back up and roll back
 
-OPAL has no scheduled backups. To back up, stop OPAL and copy the whole data folder.
+`opal backup <folder>` writes a backup into a new subfolder of `<folder>`, named by the time. OPAL can keep running and keeps taking writes while it does. `--keep <n>` then removes this instance's older finished backups beyond the newest `n`, and removes nothing else. A folder can hold the backups of several instances. A backup from before this version names no instance, so `--keep` leaves it for you to delete. A restored instance, or a copy of a data folder, counts as the same instance as the backup it came from.
+
+A backup holds a copy of the database, the attachments and avatars the database names, installed plugins and their data, and the key files in the data folder. It leaves out the demo database, the `opal.pre-migration-*` copies and `opal.legacy.db`. A plugin's data is copied as it stands, not from one moment as the database is. A key or secret set by an environment variable, such as `OPAL_AUTH_SECRET`, is not in the backup, so keep it somewhere else. Neither is a plugin installed from a local folder.
+
+The command checks the copy before it names the backup finished: SQLite's integrity check on the database, and that every attachment file is present and matches its hash. It also checks that the stored secrets in the copy open with the keys in the copy. If any do not, it names them and warns that they will need entering again after a restore, and the backup still finishes, because your records are all in it. If a check fails it prints what failed, exits non-zero, removes the unfinished copy and leaves older backups alone. An attachment file that is missing from the data folder, or no longer matches its hash, is damage to the live data. The backup leaves it out, names it in a warning and in its manifest, and finishes, so one bad file does not stop the backup of every other record. While any file is left out, `--keep` removes no older backup, because an older one may hold the good copy. Put the file back from there. A restore of such a backup lacks the same files and says so. A missing avatar only warns. A backup that was interrupted stays as a folder ending in `.partial`. It is never counted, restored or removed for you, so delete it yourself.
+
+**A backup contains secrets.** It holds password hashes, the key files and everything in your records, so its folder and files are owner-only. Treat it like the data folder itself. If you set `OPAL_SECRETS_KEY`, that key is not in the backup, so keep it separately. **A backup on the same disk is not a backup.** Copy it to another machine, or point `<folder>` at another disk.
+
+`opal restore <backup-folder>` restores into the data folder (`OPAL_DATA_DIR`, or the default). It refuses a folder that already has a database or anything else in it, and there is no flag to override that. It refuses a backup that is incomplete or changed since it was written, one whose manifest names anything but regular files, and one made by a newer version than the program restoring it. While it runs, and if it stops partway, OPAL will not start on that folder. Run the same command again to finish: a different backup is refused. If something else writes to the folder during a restore, it stops without replacing anything. Anything recorded after the backup was taken is not in it.
+
+`contrib/` has systemd user units: `opal.service` runs `opal serve`, and `opal-backup.timer` backs up nightly and keeps 14. The [quickstart](QUICKSTART.md#back-up-your-data) shows how to install them.
 
 Before an update changes the database, OPAL copies it to `opal.pre-migration-<time>.db` in the data folder and keeps the newest three. The [quickstart](QUICKSTART.md#go-back-after-a-bad-update) shows how to go back.
+
+### Stored secrets and their key
+
+OPAL encrypts the single sign-on client secret and plugin secrets in the database. A copy of `opal.db` on its own does not reveal them. Onshape settings and API keys from a 1.x database are not kept: OPAL does not use them, and it removes them at the first start of this version.
+
+The key is `.opal_secrets_key` in the data folder, made the first time a secret is saved. To keep it away from the data, set `OPAL_SECRETS_KEY` to at least 32 characters, for example from `openssl rand -hex 32`, and keep that value in your backups or password manager. A copy of the data folder is otherwise a copy of the database and its key together, so treat it as sensitive. The key does not protect against someone who can read the whole folder on the server, including a plugin. On Windows, file modes do not restrict the key file, so use the folder's own permissions.
+
+- **Restored without the key:** OPAL starts and your records are all there. The secrets cannot be read, so OPAL names them in its log and shows them as unreadable in Settings. Single sign-on and any plugin holding one of them stop working until you enter them again in Settings or restore the key. Restore the key first if you can: a secret entered in the meantime uses a new key, and has to be entered again once the old key is back. If nobody can sign in, set `OPAL_OIDC_CLIENT_SECRET` to the secret from your provider and restart.
+- **Changing the key:** stop OPAL and any backup, including a backup timer, and run `opal secrets rotate`, with the same environment OPAL runs with. A backup running across a rotation can end up with a key that does not open its secrets, and says so when it finishes. It changes nothing if it cannot read the stored secrets. Back up again afterward, because an older backup needs its older key. With `OPAL_SECRETS_KEY`, move the old value to `OPAL_SECRETS_KEY_PREVIOUS`, set a new `OPAL_SECRETS_KEY`, start OPAL once, then remove `OPAL_SECRETS_KEY_PREVIOUS`. If you think a key has leaked, change the secrets at the provider or plugin as well.
+- **Moving from the file to the variable:** set `OPAL_SECRETS_KEY`, start OPAL once, then delete `.opal_secrets_key`.
+- **Moving from the variable to the file:** rename `OPAL_SECRETS_KEY` to `OPAL_SECRETS_KEY_PREVIOUS`, start OPAL once, then remove `OPAL_SECRETS_KEY_PREVIOUS`.
+- **Factory reset:** deletes the file with the database and makes a new key for the next secret. `OPAL_SECRETS_KEY` stays as you set it.
+- **Secrets set by environment variable:** `OPAL_OIDC_CLIENT_SECRET` stays in the environment and is never written to the database. A secret saved in Settings takes its place.
+
+**Older files in the data folder still hold secrets in plaintext.** The copy taken when you first upgrade to this version keeps them, because an older version cannot read an encrypted value. OPAL names these `opal.pre-migration-*.db` files at each start. Delete them when you no longer need to go back that far. `opal.legacy.db`, left by a 1.x import, holds them too, along with any Onshape API keys, as do any backups made before this version.
 
 ## Connect Claude Code (MCP)
 

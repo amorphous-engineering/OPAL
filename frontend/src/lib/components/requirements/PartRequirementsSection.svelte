@@ -80,6 +80,10 @@
 	const verify = (r: Link) =>
 		run(() => opal.requirements.verifyLink({ id: r.id }), `${r.reqNumber} verified`);
 
+	/** Finished paper: the server refuses changes to its allocations. */
+	const finished = (r: Link) =>
+		r.lifecycleState === 'superseded' || r.lifecycleState === 'cancelled';
+
 	const flags = $derived({
 		tbd: rows.filter((r) => r.tbd).length,
 		tbr: rows.filter((r) => r.tbr).length,
@@ -89,6 +93,7 @@
 	const columns: Column<Link>[] = [
 		{ key: 'reqNumber', label: 'Req', width: '7rem', mono: true },
 		{ key: 'title', label: 'Title' },
+		{ key: 'revision', label: 'Rev', width: '3rem', mono: true, align: 'right' },
 		{ key: 'state', label: 'State', width: '6.5rem' },
 		{ key: 'status', label: 'Allocation', width: '7rem' },
 		{ key: 'actions', label: '', width: '8rem', align: 'right' }
@@ -148,15 +153,23 @@
 					{#if r.tbd}<State value="tbd" tone="warn" label="TBD" class="ml-2" />{/if}
 					{#if r.tbr}<State value="tbr" tone="warn" label="TBR" class="ml-2" />{/if}
 					{#if r.stale}<State value="stale" tone="warn" label="STALE" class="ml-2" />{/if}
+				{:else if col.key === 'revision'}
+					{r.revision}
 				{:else if col.key === 'state'}
 					<span class="font-mono text-xs text-muted-foreground">{stateLabel(r.lifecycleState)}</span
 					>
 				{:else if col.key === 'status'}
 					<State
 						value={r.status}
-						tone={r.status === 'verified' ? 'ok' : r.status === 'open' ? 'default' : 'muted'}
+						tone={finished(r)
+							? 'muted'
+							: r.status === 'verified'
+								? 'ok'
+								: r.status === 'open'
+									? 'default'
+									: 'muted'}
 					/>
-				{:else}
+				{:else if !finished(r)}
 					<span class="flex justify-end gap-3">
 						{#if r.status !== 'verified'}<ActionLink onclick={() => verify(r)}>VERIFY</ActionLink
 							>{/if}

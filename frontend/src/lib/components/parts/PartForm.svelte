@@ -43,7 +43,8 @@
 		tier: initialTier = null,
 		variantOf = null,
 		nextNumber = null,
-		unitLocked = false
+		unitLocked = false,
+		identityLocked = false
 	}: {
 		schema: PartSchema;
 		part?: Part | null;
@@ -55,6 +56,7 @@
 		nextNumber?: string | null;
 		/** Stock or purchase order lines count in this unit. */
 		unitLocked?: boolean;
+		identityLocked?: boolean;
 	} = $props();
 	// The form is mounted once per page (keyed by part), so props seed local state on purpose.
 	const p0 = untrack(() => part);
@@ -286,7 +288,7 @@
 					<FormField label="Name" for="pf-name" required>
 						<Input id="pf-name" bind:value={name} required />
 					</FormField>
-				{:else if draft}
+				{:else if draft && !identityLocked}
 					<FormField label="Tier" required>
 						{#if schema.tiers.length > 5}
 							<NativeSelect.Root

@@ -2,9 +2,10 @@
  * Read models for the requirements screens: tree, dossier, queue, baseline events, summary.
  * Pure queries and shaping, no writes. The client never re-derives these facts.
  *
- * Part links point at a specific revision row. A revision chain shares one req_number, so every
- * view groups links by number: a requirement's parts survive a revise, and a link made against
- * an older revision is reported as such (`againstRevision`) instead of vanishing.
+ * Part links point at a specific revision row, and each row answers for its own. A baselining
+ * revision gets its own links (lifecycle.ts), so the superseded row keeps its evidence and nothing
+ * counts twice. Until then a draft revision also shows the links of the baseline in force, each
+ * reported as made against that revision (`againstRevision`).
  */
 import type {
 	RequirementAllocation as Allocation,
@@ -32,12 +33,11 @@ import {
 	user
 } from '../../db/schema/index.ts';
 import { projectRefs } from '../org/projects.ts'; // added by projects
-import { EDITABLE, isMutable, type RequirementRow } from './lifecycle.ts';
+import { EDITABLE, isMutable, LIVE, type RequirementRow } from './lifecycle.ts';
 import { lintRow } from './lint.ts';
 import { readiness, readyRows } from './readiness.ts';
 import { redlineSegments } from './redline.ts';
 
-const LIVE = ['draft', 'preliminary', 'baselined'] as const;
 const SATISFIED: RequirementAllocationStatus[] = ['verified', 'waived'];
 const DAY = 86_400_000;
 
@@ -100,8 +100,8 @@ export function withdrawalsByLink(ctx: Pick<Ctx, 'db'>, ids?: number[]): Map<num
 	return out;
 }
 
-/** Every link of a requirement, keyed by req_number. */
-export function allocationsByNumber(ctx: Pick<Ctx, 'db'>): Map<string, Allocation[]> {
+/** Every link, keyed by the revision row it was made against. */
+function linksByRow(ctx: Pick<Ctx, 'db'>): Map<number, Allocation[]> {
 	const rows = ctx.db
 		.select({ pr: partRequirement, part, req: requirement, verifier: user.name })
 		.from(partRequirement)
@@ -111,9 +111,9 @@ export function allocationsByNumber(ctx: Pick<Ctx, 'db'>): Map<string, Allocatio
 		.orderBy(asc(part.name), asc(partRequirement.id))
 		.all();
 	const withdrawals = withdrawalsByLink(ctx);
-	const out = new Map<string, Allocation[]>();
+	const out = new Map<number, Allocation[]>();
 	for (const { pr, part: p, req, verifier } of rows) {
-		const list = out.get(req.reqNumber) ?? [];
+		const list = out.get(req.id) ?? [];
 		list.push({
 			id: pr.id,
 			partId: p.id,
@@ -125,11 +125,33 @@ export function allocationsByNumber(ctx: Pick<Ctx, 'db'>): Map<string, Allocatio
 			verifiedBy: verifier,
 			againstRevision: req.revision,
 			outdated: false,
+			previous: null,
 			withdrawals: withdrawals.get(pr.id) ?? []
 		});
-		out.set(req.reqNumber, list);
+		out.set(req.id, list);
 	}
 	return out;
+}
+
+/** Reads the allocations a revision answers for. See the note at the top of this file. */
+function allocationReader(ctx: Pick<Ctx, 'db'>): (r: RequirementRow) => Allocation[] {
+	const byRow = linksByRow(ctx);
+	const inForce = new Set(
+		ctx.db
+			.select({ id: requirement.id })
+			.from(requirement)
+			.where(eq(requirement.lifecycleState, 'baselined'))
+			.all()
+			.map((x) => x.id)
+	);
+	return (r) => {
+		const own = byRow.get(r.id) ?? [];
+		if (!isMutable(r) || r.supersedesId === null || !inForce.has(r.supersedesId)) return own;
+		const held = new Set(own.map((a) => a.partId));
+		return [...own, ...(byRow.get(r.supersedesId) ?? []).filter((a) => !held.has(a.partId))].sort(
+			(a, b) => (a.partName < b.partName ? -1 : a.partName > b.partName ? 1 : a.id - b.id)
+		);
+	};
 }
 
 function liveRows(ctx: Pick<Ctx, 'db'>, projectId?: number): RequirementRow[] {
@@ -154,10 +176,10 @@ const get = (ctx: Pick<Ctx, 'db'>, id: number) =>
 export function tree(ctx: Ctx, projectId?: number): RequirementTree {
 	const rows = liveRows(ctx, projectId);
 	const ids = new Set(rows.map((r) => r.id));
-	const alloc = allocationsByNumber(ctx);
+	const allocationsOf = allocationReader(ctx);
 	const projects = projectRefs(ctx.db, rows.map((r) => r.projectId)); // added by projects
 	const items = rows.map((r) => {
-		const allocations = alloc.get(r.reqNumber) ?? [];
+		const allocations = allocationsOf(r);
 		return {
 			id: r.id,
 			reqNumber: r.reqNumber,
@@ -208,15 +230,30 @@ export function dossier(ctx: Ctx, r: RequirementRow): RequirementDossier {
 		.where(eq(requirement.reqNumber, r.reqNumber))
 		.orderBy(asc(requirement.revision))
 		.all();
-	const own = (allocationsByNumber(ctx).get(r.reqNumber) ?? []).map((a) => ({
-		...a,
-		outdated: isOutdated(a, r.revision)
-	}));
+	const predecessor = r.supersedesId !== null ? get(ctx, r.supersedesId) : undefined;
+	const allocationsOf = allocationReader(ctx);
+	const closedBefore = predecessor
+		? allocationsOf(predecessor).filter((a) => SATISFIED.includes(a.status))
+		: [];
+	const own = allocationsOf(r).map((a) => {
+		const before = a.againstRevision === r.revision && closedBefore.find((p) => p.partId === a.partId);
+		return {
+			...a,
+			outdated: isOutdated(a, r.revision),
+			previous: before
+				? {
+						revision: before.againstRevision,
+						status: before.status,
+						verifiedAt: before.verifiedAt,
+						verifiedBy: before.verifiedBy
+					}
+				: null
+		};
+	});
 	const userName = (id: number | null) =>
 		id === null
 			? null
 			: (ctx.db.select({ name: user.name }).from(user).where(eq(user.id, id)).get()?.name ?? null);
-	const predecessor = r.supersedesId !== null ? get(ctx, r.supersedesId) : undefined;
 	const byRevision = new Map(revisions.map((x) => [x.id, x.revision]));
 	const events = revisions.length
 		? ctx.db
@@ -290,7 +327,8 @@ export function dossier(ctx: Ctx, r: RequirementRow): RequirementDossier {
 		})),
 		readiness: mutable ? readiness(ctx, r) : null,
 		lint: mutable ? lintRow(r) : [],
-		canDelete: mutable && !children.length && !own.length
+		// What the server checks: links on this row. A link shown from the baseline in force is not one.
+		canDelete: mutable && !children.length && !own.some((a) => a.againstRevision === r.revision)
 	};
 }
 
@@ -314,7 +352,7 @@ export function queueItems(ctx: Ctx, projectId?: number): RequirementQueueItem[]
 	if (!rows.length) return [];
 	const all = ctx.db.select().from(requirement).all();
 	const byId = new Map(all.map((r) => [r.id, r]));
-	const alloc = allocationsByNumber(ctx);
+	const allocationsOf = allocationReader(ctx);
 	const chainOf = (r: RequirementRow) => {
 		const out: RequirementQueueItem['chain'] = [];
 		const seen = new Set([r.id]);
@@ -345,7 +383,7 @@ export function queueItems(ctx: Ctx, projectId?: number): RequirementQueueItem[]
 			verificationMethod: r.verificationMethod,
 			stale: r.stale,
 			childrenCount: all.filter((c) => c.parentId === r.id).length,
-			parts: (alloc.get(r.reqNumber) ?? []).map((a) => a.partName),
+			parts: allocationsOf(r).map((a) => a.partName),
 			chain: chainOf(r),
 			warnings: readiness(ctx, r)
 				.checks.filter((c) => c.severity === 'warning' && !c.passed && c.detail)
@@ -395,6 +433,9 @@ export function eventSummaries(ctx: Ctx, eventId?: number, projectId?: number): 
 	});
 }
 
+const parentNumber = (ctx: Pick<Ctx, 'db'>, r: RequirementRow) =>
+	r.parentId === null ? null : (get(ctx, r.parentId)?.reqNumber ?? null);
+
 /** The locked set, each item with what it changed against its predecessor. */
 export function eventDetail(ctx: Ctx, summary: RequirementEventSummary): RequirementEventDetail {
 	const rows = ctx.db
@@ -412,7 +453,8 @@ export function eventDetail(ctx: Ctx, summary: RequirementEventSummary): Require
 				if ((prev[f] ?? '') !== (r[f] ?? '')) changed.push(f);
 			}
 			if (prev.verificationMethod !== r.verificationMethod) changed.push('verification_method');
-			if (prev.parentId !== r.parentId) changed.push('parent');
+			// By number: children follow a parent's revisions, and the rows were not re-parented together.
+			if (parentNumber(ctx, prev) !== parentNumber(ctx, r)) changed.push('parent');
 		}
 		return {
 			id: r.id,
@@ -498,9 +540,14 @@ export function oldBlockLintDrafts(ctx: Pick<Ctx, 'db'>, olderThanDays = 7, at =
 export function summary(ctx: Ctx, projectId?: number): RequirementSummary {
 	const all = liveRows(ctx, projectId);
 	const rows = all.filter((r) => (LIVE as readonly string[]).includes(r.lifecycleState));
-	const alloc = allocationsByNumber(ctx);
+	const allocationsOf = allocationReader(ctx);
 	const byState: Record<string, number> = {};
 	for (const r of all) byState[r.lifecycleState] = (byState[r.lifecycleState] ?? 0) + 1;
+
+	// A draft of the next revision is a live row but not a second requirement to allocate or verify:
+	// the baseline in force answers for it.
+	const inForce = new Set(rows.filter((r) => r.lifecycleState === 'baselined').map((r) => r.id));
+	const counted = rows.filter((r) => r.supersedesId === null || !inForce.has(r.supersedesId));
 
 	const parents = new Set(rows.map((r) => r.parentId).filter((x): x is number => x !== null));
 	const verification: Record<RequirementVerificationStatus, number> = {
@@ -510,16 +557,16 @@ export function summary(ctx: Ctx, projectId?: number): RequirementSummary {
 		unallocated: 0,
 		not_applicable: 0
 	};
-	for (const r of rows) verification[verificationStatus(alloc.get(r.reqNumber) ?? [], r.revision)]++;
+	for (const r of counted) verification[verificationStatus(allocationsOf(r), r.revision)]++;
 
 	const ref = (r: RequirementRow) => ({ id: r.id, reqNumber: r.reqNumber, title: r.title });
-	const leaves = rows.filter((r) => !parents.has(r.id));
+	const leaves = counted.filter((r) => !parents.has(r.id));
 	return {
 		total: rows.length,
 		byState,
 		coverage: {
 			leaves: leaves.length,
-			leavesAllocated: leaves.filter((r) => (alloc.get(r.reqNumber) ?? []).length).length,
+			leavesAllocated: leaves.filter((r) => allocationsOf(r).length).length,
 			withVerificationMethod: rows.filter((r) => r.verificationMethod).length
 		},
 		verification,

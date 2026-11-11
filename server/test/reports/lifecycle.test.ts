@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { now } from '@opal/shared';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../src/app.ts';
+import { KEY_FILE } from '../../src/auth/sealed.ts';
 import type { Actor } from '../../src/context.ts';
+import type { Db } from '../../src/db/client.ts';
 import { openSchemaDb } from '../../src/db/dev-schema.ts';
-import { auditLog, part, user } from '../../src/db/schema/index.ts';
+import { auditLog, authSetting, part, user } from '../../src/db/schema/index.ts';
 import { serialized } from '../../src/registry.ts';
-import { writeSetting } from '../../src/services/auth/settings.ts';
+import { readSettings, writeSetting } from '../../src/services/auth/settings.ts';
 import { forgetLifecycle } from '../../src/services/reports/lifecycle.ts';
 
 let dir: string;
@@ -173,6 +175,61 @@ describe('demo sign-in', () => {
 		await t.call('POST', '/settings/demo/enter');
 		await t.settled();
 		expect(JSON.stringify(t.db.select().from(auditLog).all())).not.toContain('real-oidc-secret-value');
+	});
+
+	describe('with the key in a file', () => {
+		const pinned = process.env.OPAL_SECRETS_KEY;
+		beforeEach(() => {
+			delete process.env.OPAL_SECRETS_KEY;
+		});
+		afterEach(() => {
+			if (pinned) process.env.OPAL_SECRETS_KEY = pinned;
+		});
+		const ctx = (db: Db) => ({ db, actor: { kind: 'system' }, op: 't' }) as any;
+
+		test('the demo opens the real secret with the real key, and makes no key of its own', async () => {
+			const t = await boot();
+			writeSetting(ctx(t.db), 'oidc_client_secret', 'real-oidc-secret-value');
+			const key = readFileSync(join(dir, KEY_FILE), 'utf8');
+			await t.call('POST', '/settings/demo/enter');
+			await t.settled();
+			expect(readSettings(t.db).oidcClientSecret).toBe('real-oidc-secret-value');
+			expect(readSettings(t.db).oidcClientSecretUnreadable).toBe(false);
+			// A secret saved during the demo goes in the demo database, under the same key.
+			writeSetting(ctx(t.db), 'oidc_client_secret', 'typed-in-the-demo');
+			expect(readSettings(t.db).oidcClientSecret).toBe('typed-in-the-demo');
+			expect(existsSync(join(process.env.OPAL_DATA_DIR!, KEY_FILE))).toBe(false);
+			expect(readFileSync(join(dir, KEY_FILE), 'utf8')).toBe(key);
+			for (const f of ['demo.opal.db', 'demo.opal.db-wal']) {
+				if (existsSync(join(dir, f))) expect(readFileSync(join(dir, f)).toString('latin1')).not.toContain('real-oidc-secret-value');
+			}
+			await t.call('POST', '/settings/demo/exit');
+			await t.settled();
+			expect(readSettings(t.db).oidcClientSecret).toBe('real-oidc-secret-value');
+		});
+
+		test('a secret no key opens stays out of the demo', async () => {
+			const t = await boot();
+			writeSetting(ctx(t.db), 'oidc_client_secret', 'real-oidc-secret-value');
+			rmSync(join(dir, KEY_FILE));
+			const res = await t.call('POST', '/settings/demo/enter');
+			expect(res.status).toBe(200);
+			await t.settled();
+			expect(t.db.select().from(authSetting).all().map((r) => r.key)).not.toContain('oidc_client_secret');
+		});
+
+		test('a factory reset removes the key with the secrets, and the new organization gets a new one', async () => {
+			const t = await boot();
+			writeSetting(ctx(t.db), 'oidc_client_secret', 'erased-with-the-organization');
+			const key = readFileSync(join(dir, KEY_FILE), 'utf8');
+			expect((await t.call('POST', '/settings/factory-reset', { confirm: 'RESET' })).status).toBe(200);
+			await t.settled();
+			expect(existsSync(join(dir, KEY_FILE))).toBe(false);
+			expect(readSettings(t.db).oidcClientSecret).toBe('');
+			writeSetting(ctx(t.db), 'oidc_client_secret', 'new-organization');
+			expect(readFileSync(join(dir, KEY_FILE), 'utf8')).not.toBe(key);
+			expect(readSettings(t.db).oidcClientSecret).toBe('new-organization');
+		});
 	});
 
 	test('plugins cannot be installed or enabled while the demo is active', async () => {

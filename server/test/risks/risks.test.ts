@@ -932,3 +932,52 @@ describe('risk history is the trace of a changed posture', () => {
 		expect(h[0].changes).toContainEqual({ field: 'residualProbability', from: null, to: 2 });
 	});
 });
+
+describe('a risk keeps its lines once it is committed', () => {
+	const linkAndRef = async (t: Awaited<ReturnType<typeof setup>>, id: number) => {
+		const i = await t.mkIssue('Evidence');
+		await t.call('POST', `/risks/${id}/issues`, { issueId: i.id, role: 'research' });
+		const body = (await t.call('POST', `/risks/${id}/references`, { type: 'work_order', value: 'WO-1' })).body;
+		return { issueId: i.id, referenceId: body.references[0].id };
+	};
+
+	test('an open risk adds and removes links and references', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		const { issueId, referenceId } = await linkAndRef(t, r.id);
+		expect((await t.call('DELETE', `/risks/${r.id}/issues/${issueId}`)).status).toBe(200);
+		expect((await t.call('DELETE', `/risks/${r.id}/references/${referenceId}`)).status).toBe(200);
+	});
+
+	test('an accepted risk can add a line but not remove one', async () => {
+		const t = await setup();
+		const r = await ready(t);
+		const { issueId, referenceId } = await linkAndRef(t, r.id);
+		expect((await t.call('POST', `/risks/${r.id}/accept`, {})).status).toBe(200);
+		expect((await t.call('DELETE', `/risks/${r.id}/issues/${issueId}`)).status).toBe(409);
+		expect((await t.call('DELETE', `/risks/${r.id}/references/${referenceId}`)).status).toBe(409);
+		const more = await t.mkIssue('More');
+		expect((await t.call('POST', `/risks/${r.id}/issues`, { issueId: more.id, role: 'research' })).status).toBe(200);
+	});
+
+	test('a realized or closed risk takes no new lines and loses none', async () => {
+		for (const finish of ['realized', 'closed'] as const) {
+			const t = await setup();
+			const r = await t.mk();
+			const { issueId, referenceId } = await linkAndRef(t, r.id);
+			const happened = await t.mkIssue('It happened');
+			const done = await t.call(
+				'POST',
+				`/risks/${r.id}/disposition`,
+				finish === 'realized' ? { disposition: 'realized', realizedIssueId: happened.id } : { disposition: 'closed', note: 'no longer applies' }
+			);
+			expect(done.status).toBe(200);
+			expect((await t.call('DELETE', `/risks/${r.id}/issues/${issueId}`)).status).toBe(409);
+			expect((await t.call('DELETE', `/risks/${r.id}/references/${referenceId}`)).status).toBe(409);
+			const late = await t.mkIssue('Late');
+			expect((await t.call('POST', `/risks/${r.id}/issues`, { issueId: late.id })).status).toBe(409);
+			expect((await t.call('POST', `/risks/${r.id}/references`, { type: 'work_order', value: 'WO-2' })).status).toBe(409);
+			expect((await t.call('POST', `/risks/${r.id}/issues/spawn`, { role: 'mitigation', title: 'x' })).status).toBe(409);
+		}
+	});
+});

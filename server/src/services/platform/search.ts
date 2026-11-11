@@ -43,8 +43,11 @@ export interface Searchable<T extends AnyTable = AnyTable> {
 
 const searchables = new Map<string, Searchable>();
 
-export function registerSearchable<T extends AnyTable>(spec: Searchable<T>): void {
+/** Returns the one it replaced, so a test can put it back: module state outlives a test file. */
+export function registerSearchable<T extends AnyTable>(spec: Searchable<T>): Searchable | undefined {
+	const previous = searchables.get(spec.type);
 	searchables.set(spec.type, spec as unknown as Searchable);
+	return previous;
 }
 
 export function searchableTypes(): string[] {

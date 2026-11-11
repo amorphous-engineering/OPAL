@@ -48,13 +48,15 @@ No other record can own a file. A new record type gets files by declaring its ru
 |---|---|---|---|---|---|
 | Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
 | Pending, advisory | What is it, and who has it? | START WORK | Add comment, attachment | As above | VOID (reason required) |
-| In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee | VOID, while no disposition is signed |
+| In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off) | VOID, while no disposition is signed |
 | In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
 | Done | What happened, and who signed? | | Add comment, attachment | | REOPEN (needs `issue.approve`, reason required) |
 | Void | Why was this struck? | | Add comment | | |
 
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
+- A part link can be added while Pending or In work, because investigation is when another affected part turns up. It comes off only while Pending. In review, Done and Void take no new link.
+- A risk link also obeys the risk, from either page: a realized or closed risk takes no new line, and an accepted, realized or closed risk loses none. A void issue's risk links stay as they are, and a risk cannot link a void issue.
 - Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
@@ -96,9 +98,13 @@ No other record can own a file. A new record type gets files by declaring its ru
 |---|---|---|---|---|---|
 | Draft, Preliminary | Is this ready to baseline? | BASELINE, inert with the reason until ready | Lint results, flow-down | All fields, parent, allocations | DELETE (if unreferenced), CANCEL (reason required) |
 | Baselined | What is required, and is it verified? | REVISE | Record verification per allocation, which adds an entry with who and when | | CANCEL (reason required) |
-| Superseded, Cancelled | What replaced this, or why was it dropped? | Link to the current revision | | | |
+| Superseded, Cancelled | What replaced this, or why was it dropped? | Link to the current revision | Allocations as they stood | | |
 
 - A requirement with a baselined revision stays in its project, including through a draft of its next revision.
+- Cancelling a draft of the next revision leaves the baseline in force, and that baseline can be revised again. The cancelled draft stays on record under its revision number, and the next revision takes the next number. While a draft is open, the baselined revision links to it in place of REVISE, and cannot be cancelled until the draft is.
+- A draft of the next revision changes nothing. The baseline in force keeps its allocations and children until the draft baselines. The draft page shows those allocations read-only, marked with the revision they stand on.
+- When a revision baselines, the superseded revision's allocations stay as they stand, verifications included. Each part gets a new open allocation on the new revision with the same notes, and a person verifies it again. The new allocation shows how the part closed on the prior revision. An allocation marked not applicable does not carry.
+- When a revision baselines, live children move to it and show STALE until someone edits or re-affirms them. Superseded and cancelled children keep the parent they had.
 - A verification stays until someone takes it back with WITHDRAW VERIFICATION (a person, reason required). The allocation shows who verified, who withdrew, when and why.
 - A verified allocation cannot be removed, nor can one with a withdrawn verification. Mark it not applicable.
 - The notes of a verified allocation stay as verified. Withdraw the verification to change them.
@@ -116,19 +122,21 @@ No other record can own a file. A new record type gets files by declaring its ru
 - A score change never withdraws an acceptance as a side effect. Withdraw first, then change the score.
 - Realizing a risk is a commit, so it takes a person. An agent may prepare it by linking the issue. Realizing an accepted risk also needs a reason.
 - Reopening a closed risk that was accepted voids that acceptance, the same as withdrawing it. The stamps stay as the last acceptance, and accepting again is a new signature.
-- Whether a realized risk should be editable at all is the owner's call, not a standard's. NASA and DoD guidance hands a realized risk to the issue process and is silent on editing. This table locks it by default and leaves a deliberate way out.
+- A realized risk stays locked, with CORRECT RECORD as the deliberate way out. This is the owner's decision, not a standard's: NASA and DoD guidance hands a realized risk to the issue process and is silent on editing.
 
 ## Part
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Draft | What is this, and can it activate? | ACTIVATE, inert with blockers until ready | Print label | Everything, including tier and number | DELETE (if unreferenced) |
-| Active | What is it, where is it, what uses it? | | Print label, receive stock, order, variant | Description, category, reorder point, BOM | OBSOLETE (reason required) |
+| Active | What is it, where is it, what uses it? | | Print label, receive stock, order, variant, REVISE (reason required, once copies exist) | Description, category, reorder point, BOM until copies exist | OBSOLETE (reason required) |
 | Obsolete | What was this, and where was it used? | | Print label | | REINSTATE (reason required) |
 
 - The part tag with QR stays at the top. Stock, procedure use and consumption all show on the part page.
-- BOM changes on an active part are the one open question. See the sweep report.
-- The unit of measure stops changing once stock or a purchase order line counts in it. A different unit is a new part.
+- A BOM is pencil until copies exist: a stock record, a placed PO line, or a work order that outputs the part and was not voided. The stock record a voided work order reserved for its output is not a copy, so voiding the only cut unlocks the BOM. From then on the server refuses BOM changes. REVISE files a draft copy with the BOM under a new number, and the old part stays as it is, because its copies were built to it. Assemblies keep naming the old part until someone changes them.
+- A published procedure does not lock the BOM, because nothing exists yet. Its kit stays as published, and EDIT on the BOM says so.
+- The unit of measure stops changing once stock or a purchase order line counts in it, or once an assembly with copies names the part in its BOM. A different unit is a new part.
+- A draft part in the BOM of an assembly with copies keeps its number and tier.
 
 ## Stock record
 

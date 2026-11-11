@@ -5,6 +5,7 @@ import { notFound, type PluginDetail, type PluginSummary } from '@opal/shared';
 import type { Db } from '../../db/client.ts';
 import { plugin, pluginSetting, user } from '../../db/schema/index.ts';
 import { dataDir } from '../../paths.ts';
+import { isSealed, pluginSettingScope, readStored, seal } from '../../auth/sealed.ts';
 import { pluginsEnabled, runtime } from './runtime.ts';
 
 export type PluginRow = typeof plugin.$inferSelect;
@@ -13,7 +14,8 @@ export type PluginRow = typeof plugin.$inferSelect;
 export const pluginsRoot = () => join(dataDir(), 'plugins');
 export const pluginDir = (key: string, sha: string) => join(pluginsRoot(), key, sha);
 /** State the plugin keeps across updates (OPAL_PLUGIN_DATA). */
-export const pluginDataDir = (key: string) => join(dataDir(), 'plugin-data', key);
+export const pluginDataRoot = () => join(dataDir(), 'plugin-data');
+export const pluginDataDir = (key: string) => join(pluginDataRoot(), key);
 
 /** Folder the plugin runs from: a local source runs in place. */
 export function codeDir(row: PluginRow): string {
@@ -35,13 +37,33 @@ export function pluginOfUser(db: Db, userId: number): PluginRow | undefined {
 	return db.select().from(plugin).where(eq(plugin.userId, userId)).get();
 }
 
-/** Every stored value, secrets included: for the plugin process only. */
+type SettingRow = typeof pluginSetting.$inferSelect;
+
+export const sealSetting = (pluginKey: string, key: string, value: unknown) => seal(JSON.stringify(value), pluginSettingScope(pluginKey, key));
+
+/** What a stored setting stands for. `undefined` means a secret no key opens. */
+export function plainSetting(row: PluginRow, s: SettingRow): unknown {
+	if (!s.secret || !isSealed(s.value)) return s.value;
+	const text = readStored(s.value, pluginSettingScope(row.key, s.key));
+	return text === null ? undefined : JSON.parse(text);
+}
+
+/** Every stored value, secrets included: for the plugin process only. A secret no key opens is left out. */
 export function settingValues(db: Db, row: PluginRow): Record<string, unknown> {
 	const stored = db.select().from(pluginSetting).where(eq(pluginSetting.pluginId, row.id)).all();
 	const out: Record<string, unknown> = {};
 	for (const def of row.manifest.settings) if (def.default !== undefined) out[def.key] = def.default;
-	for (const s of stored) out[s.key] = s.value;
+	for (const s of stored) {
+		const plain = plainSetting(row, s);
+		if (plain !== undefined) out[s.key] = plain;
+	}
 	return out;
+}
+
+/** Keys of the secrets stored for a plugin that no key opens. */
+export function unreadableSettings(db: Db, row: PluginRow): string[] {
+	const stored = db.select().from(pluginSetting).where(eq(pluginSetting.pluginId, row.id)).all();
+	return stored.filter((s) => plainSetting(row, s) === undefined).map((s) => s.key);
 }
 
 export function settingRow(db: Db, pluginId: number, key: string) {
@@ -78,11 +100,15 @@ export function toDetail(db: Db, row: PluginRow): PluginDetail {
 		manifest: row.manifest,
 		settings: row.manifest.settings.map((def) => {
 			const s = byKey.get(def.key);
-			const isSecret = def.type === 'secret';
+			// A row stays secret after its manifest stops saying so: it was given as a secret.
+			const isSecret = def.type === 'secret' || !!s?.secret;
+			const plain = s ? plainSetting(row, s) : null;
 			return {
 				key: def.key,
-				value: isSecret ? null : (s?.value ?? def.default ?? null),
-				set: s?.value != null && s.value !== ''
+				value: isSecret ? null : (plain ?? def.default ?? null),
+				secret: isSecret,
+				set: plain != null && plain !== '',
+				unreadable: plain === undefined
 			};
 		}),
 		log: runtime().log(row.key),

@@ -9,6 +9,12 @@ export const PROCESS_TONES: Record<string, Tone> = {
 	stopped: 'muted'
 };
 
+export const CONFINEMENT_LABELS: Record<string, { text: string; tone: Tone }> = {
+	landlock: { text: 'own folder only (Landlock)', tone: 'ok' },
+	'separate-user': { text: 'own folder only (separate OS user)', tone: 'ok' },
+	none: { text: 'none: it can read the database', tone: 'warn' }
+};
+
 /** An API error as one line. A `missing_settings` refusal names the settings when the body lists them. */
 export function pluginError(e: unknown, fallback = 'Action failed'): string {
 	if (!(e instanceof ApiError)) return e instanceof Error ? e.message || fallback : fallback;

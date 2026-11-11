@@ -78,6 +78,20 @@
       "when": 1793948601564,
       "tag": "0010_majestic_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794030575779,
+      "tag": "0011_black_jamie_braddock",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794052941851,
+      "tag": "0012_far_ravenous",
+      "breakpoints": true
     }
   ]
 }

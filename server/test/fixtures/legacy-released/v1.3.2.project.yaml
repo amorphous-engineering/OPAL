@@ -1,0 +1,56 @@
+name: Project Kestrel
+description: LOX/ethanol pressure-fed sounding rocket — target altitude 10 km
+tiers:
+- level: 1
+  name: FLIGHT
+  code: F
+  description: Flight-critical hardware — full traceability required
+- level: 2
+  name: GROUND
+  code: G
+  description: Ground support equipment — test stands, fill systems, launch rail
+- level: 3
+  name: DEV
+  code: D
+  description: Development hardware, prototypes, consumables
+part_numbering:
+  prefix: KST
+  separator: '-'
+  sequence_digits: 4
+  format: '{prefix}{sep}{tier_code}{sep}{sequence}'
+categories:
+- Propulsion
+- Structures
+- Avionics
+- Recovery
+- Plumbing
+- Fasteners
+- GSE
+- Raw Material
+- Consumables
+requirements:
+- id: REQ-001
+  title: Structural Loads
+  description: All flight structures shall withstand 10g axial and 3g lateral load simultaneously with positive margin of safety.
+- id: REQ-002
+  title: Pressure Containment
+  description: All pressure vessels and pressurized lines shall be proof tested to 1.5x MEOP before flight use.
+- id: REQ-003
+  title: LOX Compatibility
+  description: All materials in contact with liquid oxygen shall be LOX-compatible per NASA MSFC-SPEC-106B.
+- id: REQ-004
+  title: Dual-Event Recovery
+  description: Recovery system shall use dual-event deployment (drogue at apogee, main at low altitude) with redundant altimeters.
+- id: REQ-005
+  title: Flight Data Logging
+  description: Flight computer shall log all sensor data (acceleration, rotation, pressure, GPS) at 50 Hz minimum.
+- id: REQ-006
+  title: Telemetry Link
+  description: Telemetry downlink shall maintain 6 dB link margin to 10 km slant range.
+- id: REQ-007
+  title: Pyro Electrical Isolation
+  description: Pyrotechnic firing circuits shall be electrically isolated from avionics power bus with independent arming switch.
+- id: REQ-008
+  title: Flight Hardware Traceability
+  description: All flight components shall be traceable to lot number or serial number via OPAL inventory system.
+cad_directories: []

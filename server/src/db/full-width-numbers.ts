@@ -56,7 +56,12 @@ export function storeNumbersAtFullWidth(db: Db, again = false): void {
 			for (const r of rows) {
 				if (r.v === null) continue;
 				const next = to(r.v);
-				if (next !== r.v) write(r.id, next);
+				if (next === r.v) continue;
+				try {
+					write(r.id, next);
+				} catch (e) {
+					throw new Error(`Could not store numbers at full width: ${r.v} (row ${r.id}) becomes ${next}, and another row already holds that. No number moved. ${e instanceof Error ? e.message : String(e)}`);
+				}
 			}
 		};
 

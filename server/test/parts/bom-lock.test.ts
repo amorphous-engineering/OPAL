@@ -1,0 +1,302 @@
+import { describe, expect, test } from 'bun:test';
+import { eq } from 'drizzle-orm';
+import { execution, procedure, procedureVersion, purchase, purchaseLine, stockMove, stockRecord } from '../../src/db/schema/index.ts';
+import { createTestProject } from '../helpers/project.ts';
+import { setup as executionSetup } from '../execution/helpers.ts';
+import { setup } from './helpers.ts';
+
+const TS = '2026-01-01T00:00:00.000Z';
+
+async function fixture() {
+	const s = await setup();
+	const asm = await s.create({ name: 'Assembly' });
+	const a = await s.create({ name: 'Comp A' });
+	const b = await s.create({ name: 'Comp B' });
+	const line = (await s.api('POST', `/parts/${asm.id}/bom`, { componentId: a.id, quantity: '2', referenceDesignator: 'U1' })).json;
+	await s.api('POST', `/parts/${asm.id}/activate`, {});
+	const projectId = createTestProject(s.db).id;
+	return { ...s, asm, a, b, line, projectId };
+}
+type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+function addStock(s: Fixture, partId: number) {
+	s.db.insert(stockRecord).values({ partId, opalNumber: 'OPAL-0000000001', location: 'BIN', createdAt: TS, updatedAt: TS }).run();
+}
+
+function addVersion(s: Fixture, partId: number, status: 'released' | 'obsolete' = 'released') {
+	const proc = s.db
+		.insert(procedure)
+		.values({ name: 'Build', templateNumber: 'T-0000000001', status, projectId: s.projectId, createdAt: TS, updatedAt: TS } as never)
+		.returning()
+		.get();
+	const version = s.db
+		.insert(procedureVersion)
+		.values({ procedureId: proc.id, versionNumber: 1, content: { outputs: [{ partId, quantity: '1' }], kit: [] } as never, createdAt: TS })
+		.returning()
+		.get();
+	return { proc, version };
+}
+
+function addOrder(s: Fixture, partId: number, orderedAt: string | null) {
+	const po = s.db
+		.insert(purchase)
+		.values({ reference: 'PO-0000000001', supplierName: 'Acme', status: orderedAt ? 'ordered' : 'draft', orderedAt, createdAt: TS, updatedAt: TS } as never)
+		.returning()
+		.get();
+	s.db.insert(purchaseLine).values({ purchaseId: po.id, partId, qtyOrdered: 10000, createdAt: TS, updatedAt: TS } as never).run();
+}
+
+async function expectLocked(s: Fixture) {
+	const add = await s.api('POST', `/parts/${s.asm.id}/bom`, { componentId: s.b.id });
+	const edit = await s.api('PATCH', `/bom/${s.line.id}`, { quantity: '3' });
+	const drop = await s.api('DELETE', `/bom/${s.line.id}`);
+	for (const r of [add, edit, drop]) {
+		expect(r.status).toBe(409);
+		expect(r.json.error).toBe('bom_locked');
+	}
+	const bom = (await s.api('GET', `/parts/${s.asm.id}/bom`)).json;
+	expect(bom).toHaveLength(1);
+	expect(bom[0].quantity).toBe('2');
+}
+
+describe('a BOM is pencil until copies of the part exist', () => {
+	test('an active part with no copies still has an editable BOM', async () => {
+		const s = await fixture();
+		expect((await s.api('PATCH', `/bom/${s.line.id}`, { quantity: '3' })).status).toBe(200);
+		expect((await s.api('POST', `/parts/${s.asm.id}/bom`, { componentId: s.b.id })).status).toBe(200);
+		expect((await s.api('GET', `/parts/${s.asm.id}/detail`)).json.bomLockedBy).toBeNull();
+	});
+
+	test('a stock record locks the BOM, and the page says what locked it', async () => {
+		const s = await fixture();
+		addStock(s, s.asm.id);
+		await expectLocked(s);
+		expect((await s.api('GET', `/parts/${s.asm.id}/detail`)).json.bomLockedBy).toBe('1 stock record');
+	});
+
+	test('a placed order locks the BOM and a draft order does not', async () => {
+		const s = await fixture();
+		addOrder(s, s.asm.id, null);
+		expect((await s.api('PATCH', `/bom/${s.line.id}`, { quantity: '3' })).status).toBe(200);
+		const t = await fixture();
+		addOrder(t, t.asm.id, TS);
+		await expectLocked(t);
+	});
+
+	test('a cut work order locks the BOM and a voided one does not, with no stock record involved', async () => {
+		const s = await fixture();
+		const { proc, version } = addVersion(s, s.asm.id);
+		s.db
+			.insert(execution)
+			.values({ procedureId: proc.id, versionId: version.id, woNumber: 'WO-0000000001', status: 'void', projectId: s.projectId, createdAt: TS, updatedAt: TS } as never)
+			.run();
+		expect((await s.api('GET', `/parts/${s.asm.id}/detail`)).json.bomLockedBy).toBeNull();
+		s.db.update(execution).set({ status: 'cut' }).run();
+		await expectLocked(s);
+	});
+
+	test('a published procedure does not lock the BOM, and the part says which kit stays as published', async () => {
+		const s = await fixture();
+		const { proc } = addVersion(s, s.asm.id);
+		expect((await s.api('PATCH', `/bom/${s.line.id}`, { quantity: '3' })).status).toBe(200);
+		const detail = (await s.api('GET', `/parts/${s.asm.id}/detail`)).json;
+		expect(detail.bomLockedBy).toBeNull();
+		expect(detail.publishedKits).toEqual([{ procedureId: proc.id, templateNumber: expect.any(String), name: 'Build', versionNumber: 1 }]);
+	});
+
+	test('an obsolete part keeps the BOM it was retired with', async () => {
+		const s = await fixture();
+		await s.api('POST', `/parts/${s.asm.id}/obsolete`, { cause: 'gone' });
+		expect((await s.api('PATCH', `/bom/${s.line.id}`, { quantity: '3' })).status).toBe(409);
+	});
+
+	test('stock of a component does not lock the assembly that uses it', async () => {
+		const s = await fixture();
+		addStock(s, s.a.id);
+		expect((await s.api('PATCH', `/bom/${s.line.id}`, { quantity: '3' })).status).toBe(200);
+	});
+});
+
+describe('revising a part with copies files a new form', () => {
+	test('the draft copies the BOM under a new number and the old part does not change', async () => {
+		const s = await fixture();
+		addStock(s, s.asm.id);
+		const res = await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'Wrong fastener' });
+		expect(res.status).toBe(200);
+		expect(res.json.state).toBe('draft');
+		expect(res.json.internalPn).not.toBe(s.asm.internalPn);
+		expect(res.json.name).toBe('Assembly');
+		const bom = (await s.api('GET', `/parts/${res.json.id}/bom`)).json;
+		expect(bom).toHaveLength(1);
+		expect(bom[0]).toMatchObject({ componentId: s.a.id, quantity: '2', referenceDesignator: 'U1' });
+		// Pencil on the copy, pen on the original.
+		expect((await s.api('PATCH', `/bom/${bom[0].id}`, { quantity: '3' })).status).toBe(200);
+		await expectLocked(s);
+		expect((await s.api('GET', `/parts/${s.asm.id}`)).json.state).toBe('active');
+	});
+
+	test('both parts show the revision, with who, when and why', async () => {
+		const s = await fixture();
+		addStock(s, s.asm.id);
+		const next = (await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'Wrong fastener' })).json;
+		const oldPart = (await s.api('GET', `/parts/${s.asm.id}/detail`)).json;
+		const newPart = (await s.api('GET', `/parts/${next.id}/detail`)).json;
+		expect(oldPart.revisedBy).toEqual([expect.objectContaining({ partId: next.id, internalPn: next.internalPn, state: 'draft', reason: 'Wrong fastener', createdAt: expect.any(String) })]);
+		expect(oldPart.revises).toBeNull();
+		expect(newPart.revises).toEqual(expect.objectContaining({ partId: s.asm.id, internalPn: s.asm.internalPn, state: 'active', reason: 'Wrong fastener' }));
+		expect(newPart.revisedBy).toEqual([]);
+	});
+
+	test('a revision needs a reason and an active part', async () => {
+		const s = await fixture();
+		expect((await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: '  ' })).status).toBe(422);
+		expect((await s.api('POST', `/parts/${s.a.id}/revise`, { reason: 'x' })).status).toBe(409);
+		await s.api('POST', `/parts/${s.asm.id}/obsolete`, { cause: 'gone' });
+		expect((await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'x' })).status).toBe(409);
+	});
+
+	test('assemblies keep naming the old part until someone changes them', async () => {
+		const s = await fixture();
+		const top = await s.create({ name: 'Top' });
+		await s.api('POST', `/parts/${top.id}/bom`, { componentId: s.asm.id });
+		addStock(s, s.asm.id);
+		await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'x' });
+		expect((await s.api('GET', `/parts/${top.id}/bom`)).json[0].componentId).toBe(s.asm.id);
+	});
+
+	test('a revision filed by mistake can be deleted once its draft is emptied, and its number stays taken', async () => {
+		const s = await fixture();
+		addStock(s, s.asm.id);
+		const next = (await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'oops' })).json;
+		const [line] = (await s.api('GET', `/parts/${next.id}/bom`)).json;
+		await s.api('DELETE', `/bom/${line.id}`);
+		expect((await s.api('DELETE', `/parts/${next.id}`)).status).toBe(200);
+		expect((await s.api('GET', `/parts/${s.asm.id}/detail`)).json.revisedBy).toEqual([]);
+		const again = (await s.api('POST', `/parts/${s.asm.id}/revise`, { reason: 'real' })).json;
+		expect(again.internalPn).not.toBe(next.internalPn);
+	});
+});
+
+describe('a voided build leaves nothing behind that locks the BOM', () => {
+	async function cuttable() {
+		const t = await executionSetup();
+		const asm = await t.ok('POST', '/parts', { name: 'Assembly', tier: 1 });
+		const comp = await t.ok('POST', '/parts', { name: 'Comp', tier: 3, trackingType: 'bulk' });
+		await t.ok('POST', `/parts/${comp.id}/activate`, { cause: 't' });
+		const line = await t.ok('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		await t.ok('POST', `/parts/${asm.id}/activate`, { cause: 't' });
+		const p = await t.proc('Build it', { procedureType: 'build' });
+		await t.step(p.id, 'Do it');
+		await t.ok('POST', `/procedures/${p.id}/outputs`, { partId: asm.id, quantity: '1' });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const lockedBy = async () => (await t.ok('GET', `/parts/${asm.id}/detail`)).bomLockedBy;
+		return { ...t, asm, line, procId: p.id, lockedBy };
+	}
+
+	test('cutting a build locks the BOM, and voiding the only cut unlocks it', async () => {
+		const t = await cuttable();
+		expect(await t.lockedBy()).toBeNull();
+		const wo = await t.cut(t.procId);
+		expect(await t.lockedBy()).toBe('1 stock record, 1 work order');
+		expect((await t.call('PATCH', `/bom/${t.line.id}`, { quantity: '3' })).status).toBe(409);
+
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		expect(await t.lockedBy()).toBeNull();
+		expect((await t.call('PATCH', `/bom/${t.line.id}`, { quantity: '3' })).status).toBe(200);
+	});
+
+	test('a voided cut does not unlock a BOM another cut still holds', async () => {
+		const t = await cuttable();
+		const first = await t.cut(t.procId);
+		await t.cut(t.procId);
+		expect((await t.call('POST', `/executions/${first.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		expect(await t.lockedBy()).toBe('1 stock record, 1 work order');
+		expect((await t.call('PATCH', `/bom/${t.line.id}`, { quantity: '3' })).status).toBe(409);
+	});
+
+	test('stock received beside a voided cut still locks the BOM', async () => {
+		const t = await cuttable();
+		const wo = await t.cut(t.procId);
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		await t.ok('POST', '/inventory', { partId: t.asm.id, quantity: '1', location: 'A1', enforceTierRules: false });
+		expect(await t.lockedBy()).toBe('1 stock record');
+	});
+
+	test('a record of a voided cut that someone put stock on is a copy', async () => {
+		const t = await cuttable();
+		const wo = await t.cut(t.procId);
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		const [record] = t.db.select().from(stockRecord).where(eq(stockRecord.partId, t.asm.id)).all();
+		t.db.insert(stockMove).values({ stockId: record!.id, kind: 'adjust', qty: 10000, reason: 'found', at: TS }).run();
+		expect(await t.lockedBy()).toBe('1 stock record');
+	});
+});
+
+describe('a locked BOM does not change meaning through its component', () => {
+	test('the unit of a component stops changing once an assembly using it has copies', async () => {
+		const s = await fixture();
+		// While the BOM is pencil, the component is too.
+		expect((await s.api('PATCH', `/parts/${s.a.id}`, { unitOfMeasure: 'g' })).status).toBe(200);
+		expect((await s.api('GET', `/parts/${s.a.id}/detail`)).json.unitLocked).toBe(false);
+
+		addStock(s, s.asm.id);
+		const refused = await s.api('PATCH', `/parts/${s.a.id}`, { unitOfMeasure: 'kg' });
+		expect(refused.status).toBe(409);
+		expect(refused.json.error).toBe('unit_locked');
+		expect(refused.json.message).toContain(s.asm.internalPn);
+		const bom = (await s.api('GET', `/parts/${s.asm.id}/bom`)).json;
+		expect([bom[0].quantity, bom[0].componentUom]).toEqual(['2', 'g']);
+		expect((await s.api('GET', `/parts/${s.a.id}/detail`)).json.unitLocked).toBe(true);
+	});
+
+	test('a component of an assembly without copies keeps its unit free', async () => {
+		const s = await fixture();
+		addStock(s, s.b.id);
+		expect((await s.api('PATCH', `/parts/${s.a.id}`, { unitOfMeasure: 'kg' })).status).toBe(200);
+	});
+
+	test('a voided build frees the unit of its components again', async () => {
+		const t = await executionSetup();
+		const asm = await t.ok('POST', '/parts', { name: 'Assembly', tier: 1 });
+		const comp = await t.ok('POST', '/parts', { name: 'Comp', tier: 3, trackingType: 'bulk' });
+		await t.ok('POST', `/parts/${comp.id}/activate`, { cause: 't' });
+		await t.ok('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		await t.ok('POST', `/parts/${asm.id}/activate`, { cause: 't' });
+		const p = await t.proc('Build it', { procedureType: 'build' });
+		await t.step(p.id, 'Do it');
+		await t.ok('POST', `/procedures/${p.id}/outputs`, { partId: asm.id, quantity: '1' });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const wo = await t.cut(p.id);
+		expect((await t.call('PATCH', `/parts/${comp.id}`, { unitOfMeasure: 'kg' })).status).toBe(409);
+		expect((await t.call('POST', `/executions/${wo.id}/void`, { reason: 'cut by mistake' })).status).toBe(200);
+		expect((await t.call('PATCH', `/parts/${comp.id}`, { unitOfMeasure: 'kg' })).status).toBe(200);
+	});
+
+	test('a draft component in a locked BOM keeps its number and tier', async () => {
+		const s = await setup();
+		const asm = await s.create({ name: 'Assembly' });
+		const comp = await s.create({ name: 'Draft comp', tier: 3 });
+		await s.api('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		await s.api('POST', `/parts/${asm.id}/activate`, {});
+		// Before any copy, a draft may still move.
+		expect((await s.api('GET', `/parts/${comp.id}/detail`)).json.identityLocked).toBe(false);
+
+		s.db.insert(stockRecord).values({ partId: asm.id, opalNumber: 'OPAL-0000000001', location: 'BIN', createdAt: TS, updatedAt: TS }).run();
+		const refused = await s.api('PATCH', `/parts/${comp.id}`, { tier: 2 });
+		expect(refused.status).toBe(409);
+		expect(refused.json.error).toBe('identity_locked');
+		const detail = (await s.api('GET', `/parts/${comp.id}/detail`)).json;
+		expect(detail.identityLocked).toBe(true);
+		expect(detail.part.internalPn).toBe(comp.internalPn);
+		expect(detail.part.tier).toBe(3);
+		expect((await s.api('GET', `/parts/${asm.id}/bom`)).json[0].componentPn).toBe(comp.internalPn);
+	});
+
+	test('a draft component in a BOM still in pencil can change tier', async () => {
+		const s = await setup();
+		const asm = await s.create({ name: 'Assembly' });
+		const comp = await s.create({ name: 'Draft comp', tier: 3 });
+		await s.api('POST', `/parts/${asm.id}/bom`, { componentId: comp.id, quantity: '2' });
+		expect((await s.api('PATCH', `/parts/${comp.id}`, { tier: 2 })).status).toBe(200);
+	});
+});
