@@ -10,7 +10,7 @@
  * Nothing else blocks.
  */
 import { type RequirementLifecycleState, conflict, now } from '@opal/shared';
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, gt, inArray, ne } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
 import { partRequirement, requirement } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
@@ -141,6 +141,22 @@ export function reviseRow(ctx: Ctx, r: RequirementRow): RequirementRow {
 export function cancelRow(ctx: Ctx, r: RequirementRow, reason: string): RequirementRow {
 	if (r.lifecycleState === 'superseded' || r.lifecycleState === 'cancelled') {
 		throw refuse(`cannot cancel from terminal state '${r.lifecycleState}'`);
+	}
+	// The open revision would supersede a struck row and carry its allocations and children forward
+	// from it, so the draft goes first.
+	const open = ctx.db
+		.select({ revision: requirement.revision })
+		.from(requirement)
+		.where(
+			and(
+				eq(requirement.reqNumber, r.reqNumber),
+				gt(requirement.revision, r.revision),
+				ne(requirement.lifecycleState, 'cancelled')
+			)
+		)
+		.get();
+	if (open) {
+		throw refuse(`${r.reqNumber} rev ${open.revision} is open: cancel that revision first`);
 	}
 	return update(ctx, requirement, r.id, {
 		lifecycleState: 'cancelled',

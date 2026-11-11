@@ -329,7 +329,12 @@
 	const moreItems = $derived<MoreItem[]>([
 		{ label: 'RE-AFFIRM', onselect: reaffirm, when: req.stale && !terminal },
 		{ label: 'DELETE', onselect: deleteIt, strike: true, when: mutable && req.canDelete },
-		{ label: 'CANCEL', onselect: cancelIt, strike: true, when: mutable || baselined }
+		{
+			label: 'CANCEL',
+			onselect: cancelIt,
+			strike: true,
+			when: mutable || (baselined && !openRevision)
+		}
 	]);
 </script>
 

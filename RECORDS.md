@@ -56,7 +56,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
 - A part link can be added while Pending or In work, because investigation is when another affected part turns up. It comes off only while Pending. In review, Done and Void take no new link.
-- A risk link also obeys the risk, from either page: a realized or closed risk takes no new line, and an accepted, realized or closed risk loses none.
+- A risk link also obeys the risk, from either page: a realized or closed risk takes no new line, and an accepted, realized or closed risk loses none. A void issue's risk links stay as they are, and a risk cannot link a void issue.
 - Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
@@ -101,7 +101,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 | Superseded, Cancelled | What replaced this, or why was it dropped? | Link to the current revision | Allocations as they stood | | |
 
 - A requirement with a baselined revision stays in its project, including through a draft of its next revision.
-- Cancelling a draft of the next revision leaves the baseline in force, and that baseline can be revised again. The cancelled draft stays on record under its revision number, and the next revision takes the next number. While a draft is open, the baselined revision links to it in place of REVISE.
+- Cancelling a draft of the next revision leaves the baseline in force, and that baseline can be revised again. The cancelled draft stays on record under its revision number, and the next revision takes the next number. While a draft is open, the baselined revision links to it in place of REVISE, and cannot be cancelled until the draft is.
 - A draft of the next revision changes nothing. The baseline in force keeps its allocations and children until the draft baselines. The draft page shows those allocations read-only, marked with the revision they stand on.
 - When a revision baselines, the superseded revision's allocations stay as they stand, verifications included. Each part gets a new open allocation on the new revision with the same notes, and a person verifies it again. The new allocation shows how the part closed on the prior revision. An allocation marked not applicable does not carry.
 - When a revision baselines, live children move to it and show STALE until someone edits or re-affirms them. Superseded and cancelled children keep the parent they had.

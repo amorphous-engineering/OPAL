@@ -64,3 +64,24 @@ describe('a risk link obeys the risk from the issue side too', () => {
 		expect((await t.call('DELETE', `/issues/${i.id}/links/${added.body.id}`)).status).toBe(409);
 	});
 });
+
+describe('a void issue takes only comments, from the risk side too', () => {
+	test('an open risk can neither link a void issue nor unlink one', async () => {
+		const t = await setup();
+		const r = await t.mk();
+		const kept = await t.mkIssue('Linked before the void');
+		expect((await t.call('POST', `/risks/${r.id}/issues`, { issueId: kept.id, role: 'research' })).status).toBe(200);
+		const late = await t.mkIssue('Never linked');
+		for (const i of [kept, late]) {
+			expect((await t.call('POST', `/issues/${i.id}/void`, { reason: 'raised by mistake' })).status).toBe(200);
+		}
+
+		const link = await t.call('POST', `/risks/${r.id}/issues`, { issueId: late.id, role: 'mitigation' });
+		expect(link.status).toBe(409);
+		expect(link.body.error).toBe('issue_state');
+		const unlink = await t.call('DELETE', `/risks/${r.id}/issues/${kept.id}`);
+		expect(unlink.status).toBe(409);
+		expect(unlink.body.error).toBe('issue_state');
+		expect((await t.call('GET', `/risks/${r.id}`)).body.linkedIssues.map((l: { issueId: number }) => l.issueId)).toEqual([kept.id]);
+	});
+});

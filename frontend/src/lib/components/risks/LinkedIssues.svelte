@@ -56,10 +56,10 @@
 		}
 	}
 
-	/** Issues already on the risk cannot be linked twice. */
+	/** Issues already on the risk cannot be linked twice, and a void issue takes no links. */
 	async function searchUnlinked(q: string) {
 		const linked = new Set(risk.linkedIssues.map((l) => l.issueId));
-		return (await searchIssues(q)).filter((o) => !linked.has(o.value));
+		return (await searchIssues(q, { skipVoid: true })).filter((o) => !linked.has(o.value));
 	}
 
 	const link = (issueId: number, number: string) =>
@@ -133,7 +133,7 @@
 					<span class="font-mono text-xs">{l.role.toUpperCase()}</span>
 				{:else if col.key === 'status'}
 					<State value={l.status} />
-				{:else if canRemove}
+				{:else if canRemove && l.status !== 'void'}
 					<ActionLink disabled={busy} onclick={() => unlink(l)}>UNLINK</ActionLink>
 				{/if}
 			{/snippet}

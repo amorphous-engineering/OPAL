@@ -21,9 +21,17 @@ function loadIssue(ctx: Ctx, id: number) {
 	return row;
 }
 
+/** The link shows on the issue too, and a void issue takes only comments. */
+function requireNotVoid(target: { issueNumber: string; status: string }) {
+	if (target.status === 'void') {
+		throw conflict('issue_state', `${target.issueNumber} is void, so its links stay as they are`);
+	}
+}
+
 export function linkIssue(ctx: Ctx, riskId: number, issueId: number, role: RiskIssueRole): Risk {
 	requireAddable(load(ctx, riskId));
 	const target = loadIssue(ctx, issueId);
+	requireNotVoid(target);
 	const dup = ctx.db
 		.select({ id: issueLink.id })
 		.from(issueLink)
@@ -74,6 +82,7 @@ export function unlinkIssue(ctx: Ctx, riskId: number, issueId: number): Risk {
 		.where(and(eq(issueLink.riskId, riskId), eq(issueLink.issueId, issueId)))
 		.get();
 	if (!link) throw notFound('Link');
+	requireNotVoid(loadIssue(ctx, issueId));
 	remove(ctx, issueLink, link.id);
 	return one(ctx, riskId);
 }

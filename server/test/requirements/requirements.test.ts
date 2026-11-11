@@ -1014,6 +1014,20 @@ describe('a revision that baselines takes over from the one it supersedes', () =
 		});
 	});
 
+	describe('a baseline with a revision open', () => {
+		test('cannot be cancelled until the open revision is', async () => {
+			const { call, db, r1, r2, p } = await revising('open');
+			const refused = await call('POST', `/requirements/${r1.id}/cancel`, { reason: 'dropped' });
+			expect(refused.status).toBe(409);
+			expect(refused.body.error).toBe('requirement_state');
+			expect((await call('GET', `/requirements/${r1.id}`)).body.lifecycleState).toBe('baselined');
+			expect(linkOf(db, r1.id).map((l: any) => l.partId)).toEqual([p.id]);
+
+			expect((await call('POST', `/requirements/${r2.id}/cancel`, { reason: 'wrong direction' })).status).toBe(200);
+			expect((await call('POST', `/requirements/${r1.id}/cancel`, { reason: 'dropped' })).status).toBe(200);
+		});
+	});
+
 	describe('a revision superseded before allocations carried', () => {
 		/** The state an older database holds: the link only on the superseded row. */
 		async function older() {
