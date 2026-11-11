@@ -90,7 +90,10 @@ const SNAPSHOT_ATTEMPTS = 3;
 
 export interface Counts {
 	databaseBytes: number;
+	/** Attachment files the backup holds. */
 	attachments: number;
+	/** Attachment files the database names that the backup could not hold, because they were missing or damaged. */
+	attachmentsLeftOut?: number;
 	avatars: number;
 	keyFiles: number;
 	pluginFiles: number;
@@ -106,6 +109,8 @@ interface Manifest {
 	counts: Counts;
 	/** Every file in the backup, by path with forward slashes, with its SHA-256. */
 	files: Record<string, string>;
+	/** Attachment files the database names that were missing or damaged in the data folder, so restore expects them absent. */
+	attachmentsLeftOut?: string[];
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
@@ -263,8 +268,16 @@ function secretsOpen(work: string, warnings: string[]): boolean {
 	}
 }
 
-/** Fills `work` and returns what the manifest records. Throws when the copy is not complete and sound. */
-function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 'counts' | 'files'> & { secretsOpen: boolean; instanceId: string | null } {
+/**
+ * Fills `work` and returns what the manifest records. Throws when the database copy is not sound. A
+ * missing or damaged attachment file is left out and named instead: it is damage to the live data, and
+ * stopping every later backup over it would put every other record at risk.
+ */
+function fill(
+	work: string,
+	source: string,
+	warnings: string[]
+): Pick<Manifest, 'counts' | 'files'> & { attachmentsLeftOut: string[]; secretsOpen: boolean; instanceId: string | null } {
 	const files: Record<string, string> = {};
 	const copyDb = join(work, DB_FILE);
 	const copy = (from: string, rel: string) => {
@@ -317,13 +330,20 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 	// Verify what is on the backup's disk, not what was meant to be written.
 	checkIntegrity(copyDb);
 	const damaged = blobs.filter((sha) => files[`blobs/${sha}`] !== undefined && files[`blobs/${sha}`] !== sha);
+	for (const sha of damaged) {
+		// A restore would bring the damage back under the name of the good file.
+		rmSync(join(work, 'blobs', sha));
+		delete files[`blobs/${sha}`];
+	}
+	const absent = blobs.filter((sha) => files[`blobs/${sha}`] === undefined && !damaged.includes(sha));
+	const replace = 'Replace them from an older backup. Until they are back, --keep removes no older backup.';
 	if (damaged.length) {
-		throw new Error(`${plural(damaged.length, 'attachment file')} in ${blobDir()} no longer match their hash, so they are damaged: ${list(damaged)}. Replace them from an older backup.`);
+		warnings.push(`${plural(damaged.length, 'attachment file')} in ${blobDir()} no longer match their hash, so they are damaged and this backup leaves them out: ${list(damaged)}. ${replace}`);
 	}
-	const absent = blobs.filter((sha) => files[`blobs/${sha}`] === undefined);
 	if (absent.length) {
-		throw new Error(`${plural(absent.length, 'attachment file')} the database needs are missing from ${blobDir()}: ${list(absent)}. Replace them from an older backup.`);
+		warnings.push(`${plural(absent.length, 'attachment file')} the database needs are missing from ${blobDir()}, so this backup does not have them either: ${list(absent)}. ${replace}`);
 	}
+	const attachmentsLeftOut = [...damaged, ...absent].sort();
 	// A lost photo reads the same in the restored instance as it does now, and blocks no record.
 	if (missingAvatars.length) warnings.push(`${plural(missingAvatars.length, 'avatar file')} named by a profile are missing from ${avatarDir()}, so the backup does not have them either: ${list(missingAvatars)}`);
 
@@ -378,11 +398,13 @@ function fill(work: string, source: string, warnings: string[]): Pick<Manifest, 
 	}
 	return {
 		files,
+		attachmentsLeftOut,
 		secretsOpen: opens,
 		instanceId,
 		counts: {
 			databaseBytes: statSync(copyDb).size,
-			attachments: blobs.length,
+			attachments: blobs.length - attachmentsLeftOut.length,
+			...(attachmentsLeftOut.length ? { attachmentsLeftOut: attachmentsLeftOut.length } : {}),
 			avatars: Object.keys(files).filter((f) => f.startsWith('avatars/')).length,
 			keyFiles,
 			pluginFiles
@@ -466,6 +488,8 @@ function prune(parent: string, keep: number, written: string, instanceId: string
 export interface BackupResult {
 	path: string;
 	counts: Counts;
+	/** Attachment files left out because they were missing or damaged. While there are any, `--keep` removes nothing. */
+	attachmentsLeftOut: string[];
 	/** Every stored secret in this backup opens with the keys in this backup. */
 	secretsOpen: boolean;
 	removed: string[];
@@ -475,7 +499,10 @@ export interface BackupResult {
 	warnings: string[];
 }
 
-/** Writes one complete backup under `parent`. Throws, leaving no finished folder and removing nothing, if it cannot. */
+/**
+ * Writes one backup under `parent`. It is complete except for attachment files that were already missing or
+ * damaged, which it names. Throws, leaving no finished folder and removing nothing, if it cannot.
+ */
 export function takeBackup(parent: string, opts: { keep?: number } = {}): BackupResult {
 	// Does not call hardenDataDir: a backup must not change the folder it reads.
 	const umask = process.platform === 'win32' ? undefined : process.umask(0o077);
@@ -492,11 +519,13 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 		let counts: Counts;
 		let opens: boolean;
 		let instanceId: string | null;
+		let leftOut: string[];
 		try {
 			const filled = fill(work, source, warnings);
 			counts = filled.counts;
 			opens = filled.secretsOpen;
 			instanceId = filled.instanceId;
+			leftOut = filled.attachmentsLeftOut;
 			const manifest: Manifest = {
 				format: FORMAT,
 				formatVersion: FORMAT_VERSION,
@@ -504,7 +533,8 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 				opalVersion: VERSION,
 				...(instanceId ? { instanceId } : {}),
 				counts,
-				files: filled.files
+				files: filled.files,
+				...(leftOut.length ? { attachmentsLeftOut: leftOut } : {})
 			};
 			const fd = openSync(join(work, MANIFEST), 'wx', 0o600);
 			try {
@@ -526,8 +556,12 @@ export function takeBackup(parent: string, opts: { keep?: number } = {}): Backup
 			}
 			throw e;
 		}
-		const { removed, leftAlone } = opts.keep === undefined ? { removed: [], leftAlone: 0 } : prune(parent, opts.keep, name, instanceId, warnings);
-		return { path: final, counts, secretsOpen: opens, removed, leftAlone, unfinished: backupFolders(parent).unfinished, warnings };
+		// An older backup may hold the only good copy of a file this one lacks.
+		const { removed, leftAlone } =
+			opts.keep === undefined || leftOut.length
+				? { removed: [], leftAlone: 0 }
+				: prune(parent, opts.keep, name, instanceId, warnings);
+		return { path: final, counts, attachmentsLeftOut: leftOut, secretsOpen: opens, removed, leftAlone, unfinished: backupFolders(parent).unfinished, warnings };
 	} finally {
 		if (umask !== undefined) process.umask(umask);
 	}
@@ -545,6 +579,10 @@ function readBackup(folder: string): Manifest {
 	const strange = Object.keys(manifest.files).filter((p) => !isSafePath(p));
 	if (strange.length) throw notABackup(folder, `its ${MANIFEST} names unexpected paths: ${list(strange)}`);
 	if (!manifest.files[DB_FILE]) throw notABackup(folder, `its ${MANIFEST} names no database`);
+	const leftOut = manifest.attachmentsLeftOut;
+	if (leftOut !== undefined && (!Array.isArray(leftOut) || !leftOut.every((x) => typeof x === 'string' && HASH.test(x)))) {
+		throw notABackup(folder, `its ${MANIFEST} lists attachments left out that are not file hashes`);
+	}
 	return manifest;
 }
 
@@ -562,7 +600,9 @@ export function verifyBackup(folder: string): Manifest {
 
 	const copyDb = join(folder, DB_FILE);
 	checkIntegrity(copyDb);
-	const unlisted = needs(copyDb).blobs.filter((sha) => !manifest.files[`blobs/${sha}`]);
+	// Files the backup said it left out are absent from the restored instance as they were from the live one.
+	const leftOut = new Set(manifest.attachmentsLeftOut ?? []);
+	const unlisted = needs(copyDb).blobs.filter((sha) => !manifest.files[`blobs/${sha}`] && !leftOut.has(sha));
 	if (unlisted.length) throw notABackup(folder, `the database needs ${plural(unlisted.length, 'attachment file')} it does not hold: ${list(unlisted)}`);
 
 	const sqlite = new Database(copyDb, { readonly: true });
@@ -614,6 +654,8 @@ export function assertNoUnfinishedRestore(): void {
 export interface RestoreResult {
 	path: string;
 	counts: Counts;
+	/** Attachment files the backup left out, so the restored instance lacks them too. */
+	attachmentsLeftOut: string[];
 	createdAt: string;
 	opalVersion: string;
 }
@@ -661,7 +703,13 @@ export function restoreBackup(folder: string, stages: { verifying?: () => void; 
 
 	const manifest = readBackup(folder);
 	const manifestHash = hashFile(join(folder, MANIFEST));
-	const result: RestoreResult = { path: target, counts: manifest.counts, createdAt: manifest.createdAt, opalVersion: manifest.opalVersion };
+	const result: RestoreResult = {
+		path: target,
+		counts: manifest.counts,
+		attachmentsLeftOut: manifest.attachmentsLeftOut ?? [],
+		createdAt: manifest.createdAt,
+		opalVersion: manifest.opalVersion
+	};
 	const removeMarker = () => {
 		unlinkSync(marker);
 		fsyncFolder(dir);

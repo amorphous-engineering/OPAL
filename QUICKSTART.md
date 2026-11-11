@@ -128,7 +128,7 @@ systemctl --user enable --now opal.service opal-backup.timer
 loginctl enable-linger "$USER"
 ```
 
-Without `enable-linger`, OPAL and the timer stop when you log out. To check the last backup, run `systemctl --user status opal-backup.service`. A failed backup shows as failed there, and `journalctl --user -u opal-backup.service` says why. Nothing else tells you, so look now and then.
+Without `enable-linger`, OPAL and the timer stop when you log out. To check the last backup, run `systemctl --user status opal-backup.service`. A failed backup shows as failed there, and `journalctl --user -u opal-backup.service` says why. A backup that had to leave out a missing or damaged attachment still finishes, and shows only as a `Warning:` line in that log, so look now and then.
 
 ## Update
 

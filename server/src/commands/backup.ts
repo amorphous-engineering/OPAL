@@ -12,7 +12,7 @@ function describe(counts: Counts): string[] {
 	const mb = (counts.databaseBytes / (1024 * 1024)).toFixed(1);
 	return [
 		`  Database: ${mb} MB`,
-		`  Attachment files: ${counts.attachments}`,
+		`  Attachment files: ${counts.attachments}${counts.attachmentsLeftOut ? ` (${counts.attachmentsLeftOut} left out: missing or damaged)` : ''}`,
 		`  Avatars: ${counts.avatars}`,
 		`  Key files: ${counts.keyFiles}`,
 		`  Plugin files: ${counts.pluginFiles}`
@@ -46,6 +46,9 @@ export function restore(args: string[]): void {
 		const r = restoreBackup(args[0]!);
 		console.log(`Restored the backup from ${r.createdAt} into ${r.path}`);
 		for (const line of describe(r.counts)) console.log(line);
+		if (r.attachmentsLeftOut.length) {
+			console.warn(`Warning: this backup left out attachment files that were missing or damaged when it was taken, so this instance lacks them too: ${r.attachmentsLeftOut.join(', ')}. An older backup may hold them.`);
+		}
 	} catch (e) {
 		console.error(`Restore failed: ${(e as Error).message}`);
 		process.exit(1);

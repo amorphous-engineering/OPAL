@@ -463,37 +463,67 @@ describe('what a backup holds', () => {
 	});
 });
 
-describe('a backup that cannot be complete is not called finished', () => {
-	test('a referenced attachment file that is missing fails the backup', async () => {
+describe('one bad attachment file does not stop the backup of every other record', () => {
+	test('a missing attachment file is left out and named, and --keep keeps the older backup that holds it', async () => {
 		const i = await small();
 		const parent = join(tempDir(), 'b');
 		const good = takeBackup(parent);
+		await Bun.sleep(5); // a later name
 		rmSync(join(i.dir, 'blobs', i.sha));
-		expect(() => takeBackup(parent, { keep: 1 })).toThrow(/missing/);
+		const r = takeBackup(parent, { keep: 1 });
 		i.close();
-		// Nothing new, nothing left over, and the good backup is not pruned by a failed one.
-		expect(readdirSync(parent)).toEqual([good.path.slice(parent.length + 1)]);
+		expect(r.attachmentsLeftOut).toEqual([i.sha]);
+		expect(r.counts).toMatchObject({ attachments: 0, attachmentsLeftOut: 1 });
+		expect(r.warnings.join('\n')).toMatch(new RegExp(`missing.*${i.sha}`));
+		expect(r.removed).toEqual([]);
+		expect(finishedIn(parent)).toEqual([good.path, r.path].map((p) => p.slice(parent.length + 1)).sort());
+		const m = JSON.parse(readFileSync(join(r.path, 'manifest.json'), 'utf8'));
+		expect(m.attachmentsLeftOut).toEqual([i.sha]);
+		expect(existsSync(join(r.path, 'blobs', i.sha))).toBe(false);
 	});
 
-	test('an attachment file that no longer matches its hash fails the backup', async () => {
+	test('a damaged attachment file is left out rather than copied under its good name', async () => {
 		const i = await small();
 		const parent = join(tempDir(), 'b');
 		writeFileSync(join(i.dir, 'blobs', i.sha), 'something else entirely');
-		expect(() => takeBackup(parent)).toThrow(/damaged/);
+		const r = takeBackup(parent);
 		i.close();
-		expect(readdirSync(parent)).toEqual([]);
+		expect(r.attachmentsLeftOut).toEqual([i.sha]);
+		expect(r.warnings.join('\n')).toMatch(new RegExp(`damaged.*${i.sha}`));
+		expect(existsSync(join(r.path, 'blobs', i.sha))).toBe(false);
+		expect(JSON.parse(readFileSync(join(r.path, 'manifest.json'), 'utf8')).files[`blobs/${i.sha}`]).toBeUndefined();
 	});
 
-	test('a failed backup exits non-zero from the command line', async () => {
+	test('a backup that left out an attachment restores, and says the restored instance lacks it too', async () => {
 		const i = await small();
-		rmSync(join(i.dir, 'blobs', i.sha));
 		const parent = join(tempDir(), 'b');
+		rmSync(join(i.dir, 'blobs', i.sha));
 		const r = await runCli(['backup', parent], { OPAL_DATA_DIR: i.dir });
 		i.close();
-		expect(r.code).toBe(1);
-		expect(r.err).toContain('Backup failed');
-		expect(readdirSync(parent)).toEqual([]);
+		expect(r.code).toBe(0);
+		expect(r.out).toContain('Backup finished');
+		expect(r.out).toContain('1 left out');
+		expect(r.err).toContain(i.sha);
+		const [name] = finishedIn(parent);
+		const restored = join(tempDir(), 'r');
+		const back = await runCli(['restore', join(parent, name!)], { OPAL_DATA_DIR: restored });
+		expect(back.code).toBe(0);
+		expect(back.err).toContain(i.sha);
+		expect(existsSync(join(restored, 'opal.db'))).toBe(true);
 	}, 60_000);
+
+	test('a backup that lists a left-out attachment that is not a file hash is refused', async () => {
+		const i = await small();
+		const parent = join(tempDir(), 'b');
+		rmSync(join(i.dir, 'blobs', i.sha));
+		const { path } = takeBackup(parent);
+		i.close();
+		rewriteManifest(path, (m) => Object.assign(m, { attachmentsLeftOut: ['../../etc/passwd'] }));
+		expect(() => verifyBackup(path)).toThrow(/not file hashes/);
+	});
+});
+
+describe('a backup that cannot be complete is not called finished', () => {
 
 	test('a damaged database fails the backup', () => {
 		const dir = join(tempDir(), 'data');
