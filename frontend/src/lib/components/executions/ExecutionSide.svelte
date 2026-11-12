@@ -11,7 +11,6 @@
 	let { store, onjump }: { store: ExecutionStore; onjump: (order: number) => void } = $props();
 
 	const doc = $derived(store.doc!);
-	const inst = $derived(doc.instance);
 	// The form takes the project and the work order from the URL, and opens beside the work.
 	const newIssue = $derived(store.issueUrl());
 </script>
