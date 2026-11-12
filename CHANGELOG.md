@@ -2,6 +2,11 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
+## Unreleased
+
+### Fixed
+- **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.
+
 ## 2.0.0-beta.2
 
 ### Added

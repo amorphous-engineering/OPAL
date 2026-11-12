@@ -145,6 +145,10 @@
 	let out = $state<Record<number, { qty: string; loc: string; lot: string; serial: string }>>({});
 	const o = (id: number, dflt: number) =>
 		(out[id] ??= { qty: String(dflt), loc: '', lot: '', serial: '' });
+	// Rows exist before the template reads them (the template must not create state).
+	$effect.pre(() => {
+		for (const x of doc.outputs) o(x.part_id, x.quantity);
+	});
 	async function produce() {
 		const items = doc.outputs
 			.map((x) => ({ x, v: o(x.part_id, x.quantity) }))
@@ -378,38 +382,45 @@
 				</thead>
 				<tbody>
 					{#each doc.outputs as x (x.part_id)}
-						{@const v = o(x.part_id, x.quantity)}
-						<tr class="border-b border-border">
-							<td class="px-3 py-1.5 whitespace-nowrap"
-								><a class="font-mono text-info hover:underline" href={`/parts/${x.part_id}`}
-									>{x.part_number}</a
-								></td
-							>
-							<td class="px-3 py-1.5">{x.part_name}</td>
-							<td class="px-3 py-1.5 font-mono whitespace-nowrap">{qtyUnit(x.quantity, x.uom)}</td>
-							<td class="px-3 py-1.5"
-								><Input
-									type="number"
-									min="0"
-									step="any"
-									class="h-7 w-24 font-mono"
-									bind:value={v.qty}
-									aria-label="Quantity"
-								/>
-								<span class="ml-1 font-mono text-xs text-muted-foreground"
-									>{(x.uom || 'ea').toUpperCase()}</span
-								></td
-							>
-							<td class="px-3 py-1.5"
-								><Input class="h-7 w-36 font-mono" bind:value={v.loc} aria-label="Location" /></td
-							>
-							<td class="px-3 py-1.5"
-								><Input class="h-7 w-28 font-mono" bind:value={v.lot} aria-label="Lot" /></td
-							>
-							<td class="px-3 py-1.5"
-								><Input class="h-7 w-32 font-mono" bind:value={v.serial} aria-label="Serial" /></td
-							>
-						</tr>
+						{@const v = out[x.part_id]}
+						{#if v}
+							<tr class="border-b border-border">
+								<td class="px-3 py-1.5 whitespace-nowrap"
+									><a class="font-mono text-info hover:underline" href={`/parts/${x.part_id}`}
+										>{x.part_number}</a
+									></td
+								>
+								<td class="px-3 py-1.5">{x.part_name}</td>
+								<td class="px-3 py-1.5 font-mono whitespace-nowrap">{qtyUnit(x.quantity, x.uom)}</td
+								>
+								<td class="px-3 py-1.5"
+									><Input
+										type="number"
+										min="0"
+										step="any"
+										class="h-7 w-24 font-mono"
+										bind:value={v.qty}
+										aria-label="Quantity"
+									/>
+									<span class="ml-1 font-mono text-xs text-muted-foreground"
+										>{(x.uom || 'ea').toUpperCase()}</span
+									></td
+								>
+								<td class="px-3 py-1.5"
+									><Input class="h-7 w-36 font-mono" bind:value={v.loc} aria-label="Location" /></td
+								>
+								<td class="px-3 py-1.5"
+									><Input class="h-7 w-28 font-mono" bind:value={v.lot} aria-label="Lot" /></td
+								>
+								<td class="px-3 py-1.5"
+									><Input
+										class="h-7 w-32 font-mono"
+										bind:value={v.serial}
+										aria-label="Serial"
+									/></td
+								>
+							</tr>
+						{/if}
 					{/each}
 				</tbody>
 			</table>
