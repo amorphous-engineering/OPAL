@@ -26,8 +26,10 @@ export default defineConfig(
 	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
+			// No projectService: type-aware parsing took lint from 15 s to about 9 minutes, almost
+			// all of it for svelte/require-store-reactive-access, and the app has no stores. Types
+			// are checked by svelte-check in `pnpm check`.
 			parserOptions: {
-				projectService: true,
 				extraFileExtensions: ['.svelte'],
 				parser: ts.parser
 			}
