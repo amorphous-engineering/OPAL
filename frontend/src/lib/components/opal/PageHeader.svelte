@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
-	// Page title row: identifier (mono), title, state, meta (a count), actions. Breadcrumbs above.
+	// Page title row: identifier (mono), title, meta (a count), actions. Breadcrumbs above, with the
+	// record's state at their right end: the same spot on every record, whatever the title.
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -25,12 +26,11 @@
 
 <svelte:head><title>{identifier ? `${identifier} ${title}` : title} · OPAL</title></svelte:head>
 
-{#if crumbs.length}
-	<!-- Breadcrumbs: shadcn's Breadcrumb in a compact row above the title, ruled below. -->
-	<div
-		class="flex h-8 items-center overflow-x-auto border-b border-border bg-background px-4 whitespace-nowrap"
-	>
-		<Breadcrumb.Root>
+{#if crumbs.length || state}
+	<!-- Breadcrumbs: shadcn's Breadcrumb in a compact row above the title, ruled below. Long
+	     crumbs scroll on their own so the state stays in view. -->
+	<div class="flex h-8 items-center gap-4 border-b border-border bg-background px-4">
+		<Breadcrumb.Root class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">
 			<Breadcrumb.List class="flex-nowrap">
 				{#each crumbs as c, i (i)}
 					{#if i > 0}<Breadcrumb.Separator />{/if}
@@ -46,6 +46,7 @@
 				{/each}
 			</Breadcrumb.List>
 		</Breadcrumb.Root>
+		{#if state}<div class="flex-none" data-record-state>{@render state()}</div>{/if}
 	</div>
 {/if}
 <div class="border-b border-border bg-background px-4 py-2.5">
@@ -59,7 +60,6 @@
 					{title}
 				</h1>{/if}
 			{#if meta}<span class="text-sm text-muted-foreground">{@render meta()}</span>{/if}
-			{@render state?.()}
 		</div>
 		<div class="ml-auto flex flex-wrap items-center gap-2">{@render actions?.()}</div>
 	</div>

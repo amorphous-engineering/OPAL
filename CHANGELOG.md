@@ -8,6 +8,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Every non-conformance takes a disposition**, whether or not it holds a work order. Use as is, rework, repair, scrap, return to supplier or no defect is filled in and signed under EDIT, and signing it starts the work. A non-conformance can no longer close without one. One already started without a disposition stays in work and needs a signed disposition before review.
 - **An issue's type can change only until work starts** or a disposition is signed, since the type decides which steps the issue goes through.
 - **RETURN sits beside SIGN OFF** on an issue in review, no longer under MORE.
+- **A record's state sits at the right end of the breadcrumb bar**, in the same place on every record page, no longer after the title.
 
 ### Fixed
 - **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.
