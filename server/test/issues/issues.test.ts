@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { auditLog, issueLink } from '../../src/db/schema/index.ts';
+import { eq } from 'drizzle-orm';
+import { now } from '@opal/shared';
+import { auditLog, issue, issueLink } from '../../src/db/schema/index.ts';
 import { holdingIssues } from '../../src/services/issues/holds.ts';
 import { issueHooks, type IssueNotification } from '../../src/services/issues/hooks.ts';
 import { createTestProject } from '../helpers/project.ts'; // added by projects
@@ -256,12 +258,12 @@ describe('disposition', () => {
 		expect(r.status).toBe(422);
 	});
 
-	test('an advisory issue has no disposition to sign', async () => {
+	test('a bug, task or improvement that holds no work has no disposition to sign', async () => {
 		const { raise, sign } = await setup();
 		const i = await raise();
 		const r = await sign(i.id);
 		expect(r.status).toBe(409);
-		expect(r.body.message).toContain('advisory');
+		expect(r.body.message).toContain('holds no work');
 	});
 
 	test('a signed disposition cannot be edited or signed again', async () => {
@@ -352,6 +354,9 @@ describe('closing', () => {
 		});
 		expect(ok.status).toBe(200);
 		const advisory = await raise({ issueType: 'non_conformance' });
+		const unsigned = await call('PATCH', `/issues/${advisory.id}`, { status: 'closed' });
+		expect(unsigned.body.message).toContain('sign a disposition');
+		await sign(advisory.id);
 		const r = await call('PATCH', `/issues/${advisory.id}`, { status: 'closed' });
 		expect(r.body.message).toContain('corrective action');
 	});
@@ -541,9 +546,9 @@ describe('ticket flow', () => {
 	});
 
 	test('sign-off of a non-conformance needs corrective action', async () => {
-		const { raise, post, call } = await flow();
+		const { raise, post, call, sign } = await flow();
 		const i = await raise({ issueType: 'non_conformance' });
-		await post(i.id, 'start');
+		await sign(i.id, 'rework', 're-torque to spec');
 		await post(i.id, 'review');
 		const r = await post(i.id, 'signoff');
 		expect(r.status).toBe(409);
@@ -1105,5 +1110,69 @@ describe('the links of an issue', () => {
 		expect((await t.call('DELETE', `/issues/${i.id}/links/${link.body.id}`)).status).toBe(409);
 		const b = t.mkPart('B', 'P-B');
 		expect((await t.call('POST', `/issues/${i.id}/links`, { kind: 'part', targetId: b.id })).status).toBe(409);
+	});
+});
+
+describe('a non-conformance takes a disposition whether or not it holds work', () => {
+	const flow = async () => {
+		const s = await setup();
+		const post = (id: number, path: string, body?: object) => s.call('POST', `/issues/${id}/${path}`, body ?? {});
+		const ids = async (q: string) => (await s.call('GET', `/issues?${q}`)).body.items.map((i: any) => i.id);
+		return { ...s, post, ids };
+	};
+
+	test('signing the disposition of an advisory non-conformance starts its work; START WORK is refused', async () => {
+		const { raise, post, sign, ids } = await flow();
+		const i = await raise({ issueType: 'non_conformance' });
+		const start = await post(i.id, 'start');
+		expect(start.status).toBe(409);
+		expect(start.body.message).toContain('sign its disposition');
+		expect(await ids('state=pending')).toContain(i.id);
+
+		const signed = await sign(i.id, 'rework', 'redrill on a corrected jig');
+		expect(signed.status).toBe(200);
+		expect(signed.body).toMatchObject({ ticketState: 'in_work', dispositioned: true, dispositionType: 'rework' });
+		expect(await ids('state=in_work')).toContain(i.id);
+		expect(await ids('state=pending')).not.toContain(i.id);
+	});
+
+	test('an advisory non-conformance holds nothing, before or after its disposition', async () => {
+		const { raise, sign, ids, db } = await flow();
+		const i = await raise({ issueType: 'non_conformance', executionId: 1 });
+		// The control: an issue that does hold the same work order shows up in the same list.
+		const held = await raise({ containment: 'wo', executionId: 1 });
+		expect(i).toMatchObject({ isBlocking: false, dispState: 'open', executionId: 1 });
+		expect(holdingIssues(db, 1).map((h) => h.id)).toEqual([held.id]);
+		expect(await ids('dispState=undispositioned')).not.toContain(i.id);
+		const signed = (await sign(i.id)).body;
+		expect(signed).toMatchObject({ isBlocking: false, dispState: 'open' });
+		expect(holdingIssues(db, 1).map((h) => h.id)).toEqual([held.id]);
+	});
+
+	test('one started before it took a disposition stays in work, and needs one before review', async () => {
+		const { raise, post, sign, db, call } = await flow();
+		const i = await raise({ issueType: 'non_conformance' });
+		db.update(issue).set({ workStartedAt: now() }).where(eq(issue.id, i.id)).run();
+		expect((await call('GET', `/issues/${i.id}`)).body.ticketState).toBe('in_work');
+		const refused = await post(i.id, 'review');
+		expect(refused.status).toBe(409);
+		expect(refused.body.message).toContain('no signed disposition');
+		expect((await sign(i.id, 'use_as_is', 'within tolerance on re-measure')).body.ticketState).toBe('in_work');
+		expect((await post(i.id, 'review')).body.ticketState).toBe('in_review');
+	});
+
+	test('the type is pencil only until the first stamp', async () => {
+		const { raise, post, sign, call } = await flow();
+		const pending = await raise();
+		expect((await call('PATCH', `/issues/${pending.id}`, { issueType: 'non_conformance' })).status).toBe(200);
+		const task = await raise();
+		await post(task.id, 'start');
+		const r1 = await call('PATCH', `/issues/${task.id}`, { issueType: 'non_conformance' });
+		expect(r1.status).toBe(409);
+		expect(r1.body.message).toContain('type can no longer change');
+		const nc = await raise({ issueType: 'non_conformance' });
+		await sign(nc.id);
+		expect((await call('PATCH', `/issues/${nc.id}`, { issueType: 'task' })).status).toBe(409);
+		expect((await call('GET', `/issues/${nc.id}`)).body.issueType).toBe('non_conformance');
 	});
 });

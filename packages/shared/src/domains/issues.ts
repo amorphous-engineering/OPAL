@@ -30,6 +30,15 @@ export const CONTAINMENT_RANK: Record<(typeof CONTAINMENTS)[number], number> = {
 	op: 2,
 	wo: 3
 };
+/**
+ * Whether an issue is settled by a signed disposition. An issue that holds work needs one to
+ * release it, and a non-conformance needs one whether or not it holds anything. Holding work is a
+ * separate question: an advisory non-conformance takes a disposition but holds nothing.
+ */
+export const takesDisposition = (r: {
+	containment: (typeof CONTAINMENTS)[number];
+	issueType: (typeof ISSUE_TYPES)[number];
+}) => r.containment !== 'advisory' || r.issueType === 'non_conformance';
 /** Derived ticket progress. */
 export const TICKET_STATES = ['pending', 'in_work', 'in_review', 'done'] as const;
 /** Derived disposition state: advisory issues show plain open | closed. */
@@ -295,7 +304,8 @@ export const issues = {
 		name: 'issues.start',
 		method: 'POST',
 		path: '/issues/:id/start',
-		summary: 'Advisory issue: pending to in work. Containment issues enter work by disposition.',
+		summary:
+			'Pending to in work, for a bug, task or improvement that holds no work. A non-conformance, or an issue that holds work, enters work when its disposition is signed.',
 		input: z.object({ id: zId }),
 		output: zIssue,
 		access: 'signed-in',
@@ -305,7 +315,7 @@ export const issues = {
 		name: 'issues.review',
 		method: 'POST',
 		path: '/issues/:id/review',
-		summary: 'In work to in review.',
+		summary: 'In work to in review. An issue that takes a disposition needs a signed one first.',
 		input: z.object({ id: zId }),
 		output: zIssue,
 		access: 'signed-in',
@@ -348,7 +358,8 @@ export const issues = {
 		name: 'issues.signDisposition',
 		method: 'POST',
 		path: '/issues/:id/disposition',
-		summary: 'Sign the disposition. Releases every containment the issue holds.',
+		summary:
+			'Sign the disposition of a non-conformance or of an issue that holds work. Starts the work and releases every containment the issue holds.',
 		input: z.object({
 			id: zId,
 			dispositionType: z.enum(DISPOSITION_TYPES),

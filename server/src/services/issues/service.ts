@@ -39,6 +39,7 @@ import {
 	dispStateSql,
 	isBlocking,
 	isDispositioned,
+	takesDisposition,
 	type IssueRow,
 	selfDispositioned,
 	ticketState,
@@ -443,11 +444,11 @@ const TEXT_FIELDS = [
 ] as const;
 
 /**
- * Closing rules. An undispositioned containment-bearing issue cannot close: disposition first.
- * A non-conformance also needs corrective action text, at any containment.
+ * Closing rules. An issue that takes a disposition (it holds work, or it is a non-conformance)
+ * cannot close without a signed one. A non-conformance also needs corrective action text.
  */
 export function validateClose(r: IssueRow): void {
-	if (containmentBearing(r) && !isDispositioned(r))
+	if (takesDisposition(r) && !isDispositioned(r))
 		throw refuse(`${r.issueNumber} is undispositioned; sign a disposition before closing`);
 	if (r.issueType === 'non_conformance' && !(r.correctiveAction ?? '').trim())
 		throw refuse(
@@ -489,7 +490,12 @@ export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Iss
 		requireActiveProject(ctx.db, input.projectId);
 		patch.projectId = input.projectId;
 	}
-	if (input.issueType !== undefined) patch.issueType = input.issueType;
+	if (input.issueType !== undefined && input.issueType !== before.issueType) {
+		// The type decides the flow, so it is pencil only until the first stamp.
+		if (before.workStartedAt !== null || before.dispositionedAt !== null)
+			throw refuse(`${before.issueNumber} is under way; its type can no longer change`);
+		patch.issueType = input.issueType;
+	}
 	if (input.priority !== undefined) patch.priority = input.priority;
 	for (const f of TEXT_FIELDS) if (input[f] !== undefined) patch[f] = norm(input[f]);
 
@@ -564,11 +570,13 @@ function requireState(r: IssueRow, state: TicketState, action: string) {
 	if (now_ !== state) throw refuse(`${r.issueNumber} is ${now_.replace('_', ' ')}; cannot ${action}`);
 }
 
-/** Advisory issue: pending to in work. Containment-bearing issues enter work by disposition. */
+/** Pending to in work, for an issue without a disposition. The others enter work by signing it. */
 export function startWork(ctx: Ctx, id: number): Issue {
 	const r = load(ctx, id);
-	if (containmentBearing(r))
-		throw refuse(`${r.issueNumber} holds work; sign its disposition to start work`);
+	if (takesDisposition(r))
+		throw refuse(
+			`${r.issueNumber} ${containmentBearing(r) ? 'holds work' : 'is a non-conformance'}; sign its disposition to start work`
+		);
 	requireState(r, 'pending', 'start work');
 	writeUpdate(ctx, issue, id, { workStartedAt: now(), workStartedById: actorUserId(ctx.actor) });
 	return one(ctx, id);
@@ -577,6 +585,9 @@ export function startWork(ctx: Ctx, id: number): Issue {
 export function requestReview(ctx: Ctx, id: number): Issue {
 	const r = load(ctx, id);
 	requireState(r, 'in_work', 'submit for review');
+	// Only an advisory non-conformance started before it took a disposition gets here without one.
+	if (takesDisposition(r) && !isDispositioned(r))
+		throw refuse(`${r.issueNumber} has no signed disposition; sign one before review`);
 	writeUpdate(ctx, issue, id, {
 		reviewRequestedAt: now(),
 		reviewRequestedById: actorUserId(ctx.actor)
@@ -629,8 +640,10 @@ export function signDisposition(
 	if (r.status === 'closed') throw refuse('Issue is closed');
 	if (r.status === 'void') throw refuse('Issue is void');
 	if (isDispositioned(r)) throw refuse('Disposition already signed');
-	if (!containmentBearing(r))
-		throw refuse(`${r.issueNumber} is advisory; there is no disposition to sign`);
+	if (!takesDisposition(r))
+		throw refuse(
+			`${r.issueNumber} is a ${r.issueType.replace('_', ' ')} that holds no work; there is no disposition to sign`
+		);
 	let after!: IssueRow;
 	watchHold(
 		ctx,

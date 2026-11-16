@@ -46,14 +46,17 @@ No other record can own a file. A new record type gets files by declaring its ru
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
-| Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
-| Pending, advisory | What is it, and who has it? | START WORK | Add comment, attachment | As above | VOID (reason required) |
-| In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off) | VOID, while no disposition is signed |
+| Pending, holding work | What is wrong, what is held, what do we do? | EDIT, where the disposition is filled in and signed | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step), disposition type and rationale, SIGN DISPOSITION (needs `issue.disposition`) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
+| Pending, non-conformance holding nothing | What is wrong, and what do we do with it? | EDIT, where the disposition is filled in and signed | Add comment, attachment | As above | VOID (reason required) |
+| Pending, bug, task or improvement | What is it, and who has it? | START WORK | Add comment, attachment | As above, without the disposition | VOID (reason required) |
+| In work | What is being done? | SUBMIT FOR REVIEW (an issue that takes a disposition needs a signed one) | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off), and the disposition while none is signed | VOID, while no disposition is signed |
 | In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
 | Done | What happened, and who signed? | | Add comment, attachment | | REOPEN (needs `issue.approve`, reason required) |
 | Void | Why was this struck? | | Add comment | | |
 
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
+- A non-conformance takes a disposition whether or not it holds work, and so does any issue that holds work. Signing it starts the work, and the issue cannot close without it. A non-conformance that holds nothing holds nothing after its disposition either.
+- The type decides the flow, so it can change only until work starts or a disposition is signed.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
 - A part link can be added while Pending or In work, because investigation is when another affected part turns up. It comes off only while Pending. In review, Done and Void take no new link.
 - A risk link also obeys the risk, from either page: a realized or closed risk takes no new line, and an accepted, realized or closed risk loses none. A void issue's risk links stay as they are, and a risk cannot link a void issue.

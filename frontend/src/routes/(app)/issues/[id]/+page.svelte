@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
+	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api, opal } from '#lib/api.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -45,7 +45,8 @@
 		type Attachment,
 		type DispositionType,
 		type IssuePriority,
-		type IssueType
+		type IssueType,
+		takesDisposition
 	} from '@opal/shared';
 	import { session } from '#lib/session.svelte.js';
 	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
@@ -58,6 +59,8 @@
 	let { data }: PageProps = $props();
 	const issue = $derived(data.issue);
 	const bearing = $derived(issue.containment !== 'advisory');
+	/** Settled by a signed disposition: it holds work, or it is a non-conformance. */
+	const disposable = $derived(takesDisposition(issue));
 	const closed = $derived(issue.status === 'closed');
 	const voided = $derived(issue.status === 'void');
 	const type = $derived(issue.issueType);
@@ -93,9 +96,18 @@
 	const editing = $derived(editable && isEditing(page.url));
 	const editObservation = $derived(editing && pending);
 	const editResolution = $derived(editing && inWork);
-	// Work starts at the signed disposition for containment-bearing issues.
-	const startedAt = $derived(bearing ? issue.dispositionedAt : issue.workStartedAt);
-	const startedBy = $derived(bearing ? issue.dispositionedBy?.name : issue.workStartedBy?.name);
+	// Work starts at the signed disposition for an issue that takes one. One started before
+	// non-conformances took a disposition keeps its start stamp.
+	const startedAt = $derived(
+		disposable ? (issue.dispositionedAt ?? issue.workStartedAt) : issue.workStartedAt
+	);
+	const startedBy = $derived(
+		disposable && issue.dispositionedAt ? issue.dispositionedBy?.name : issue.workStartedBy?.name
+	);
+	/** Waiting on a disposition before the issue can go further. */
+	const awaitingDisposition = $derived(
+		disposable && !voided && !closed && !issue.dispositioned && (pending || inWork)
+	);
 	const holdsWork = $derived(issue.dispState === 'undispositioned');
 	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
 
@@ -252,7 +264,6 @@
 			onselect: () => narrowTo(c),
 			when: holdsWork && issue.canDisposition
 		})),
-		{ label: 'RETURN', onselect: returnToWork, when: ticket === 'in_review' },
 		{ label: 'REOPEN', onselect: reopen, when: ticket === 'done' && issue.canApprove },
 		{ label: 'VOID', onselect: voidIssue, strike: true, when: canVoid }
 	]);
@@ -312,12 +323,6 @@
 		} finally {
 			dispBusy = false;
 		}
-	}
-
-	/** The primary action of a holding issue: sign a drafted disposition, else go and draft one. */
-	async function disposition() {
-		if (dispType && dispRationale.trim()) return sign();
-		await goto('?edit=1#disposition');
 	}
 
 	// ---- Links ----
@@ -496,22 +501,21 @@
 	{/snippet}
 	{#snippet actions()}
 		{#if !voided}
-			{#if pending && bearing}
-				<Button
-					size="sm"
-					disabled={dispBusy || !issue.canDisposition}
-					title={issue.canDisposition ? undefined : issue.gateReasons.disposition}
-					onclick={disposition}>DISPOSITION</Button
-				>
-				{#if !issue.canDisposition}
-					<span class="font-mono text-xs text-muted-foreground" data-gate-reason="disposition"
-						>{issue.gateReasons.disposition ?? 'Requires disposition role'}</span
-					>
-				{/if}
+			{#if pending && disposable}
+				<!-- The disposition is filled in and signed under EDIT, so EDIT is the move. -->
+				<EditToggle variant={editing ? 'outline' : 'default'} />
 			{:else if pending}
 				<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
 			{:else if inWork}
-				<Button size="sm" onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button>
+				<Button
+					size="sm"
+					disabled={awaitingDisposition}
+					title={awaitingDisposition ? 'A signed disposition is required' : undefined}
+					onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button
+				>
+				{#if awaitingDisposition}
+					<span class="font-mono text-xs text-muted-foreground">Disposition is required</span>
+				{/if}
 			{:else if ticket === 'in_review'}
 				<Button
 					size="sm"
@@ -530,8 +534,9 @@
 				{:else if needsCorrective}
 					<span class="font-mono text-xs text-muted-foreground">Corrective action is required</span>
 				{/if}
+				<Button size="sm" variant="outline" onclick={returnToWork}>RETURN</Button>
 			{/if}
-			{#if editable}<EditToggle />{/if}
+			{#if editable && !(pending && disposable)}<EditToggle />{/if}
 			<MoreMenu items={moreItems} />
 		{/if}
 	{/snippet}
@@ -576,7 +581,7 @@
 			</DetailTable>
 		</Section>
 
-		{#if issue.dispositioned || (bearing && !closed && !voided)}
+		{#if issue.dispositioned || (disposable && !closed && !voided)}
 			<Section id="disposition" title="Disposition">
 				{#snippet actions()}
 					{#if issue.selfDispositioned}
@@ -599,7 +604,7 @@
 								<Button size="sm" variant="outline" href={redlineHref}>SPAWN REDLINE OP</Button>
 							</DetailRow>
 						{/if}
-					{:else if editObservation}
+					{:else if editing}
 						<DetailRow label="Type">
 							<NativeSelect
 								aria-label="Disposition type"
