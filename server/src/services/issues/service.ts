@@ -19,11 +19,11 @@ import {
 	type zIssueCreate,
 	type zIssueUpdate
 } from '@opal/shared';
-import { type AnyColumn, and, asc, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
+import { type AnyColumn, and, asc, desc, eq, inArray, like, max, or, sql, type SQL } from 'drizzle-orm';
 import { personRefs } from '../org/people.ts';
 import type { z } from 'zod';
 import { actorUserId, type Ctx } from '../../context.ts';
-import { execution, issue, issueComment, issueLink, part, risk, user } from '../../db/schema/index.ts';
+import { execution, issue, issueComment, issueLink, part, procedure, procedureVersion, risk, user } from '../../db/schema/index.ts';
 import { insert, remove, update as writeUpdate } from '../../write.ts';
 import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
 import { nextDesignator } from '../designators.ts';
@@ -136,6 +136,7 @@ function hydrate(ctx: Ctx, rows: IssueRow[]): Issue[] {
 		]
 	});
 	const stepLabel = (id: number | null) => (id === null ? null : (described?.steps.get(id) ?? null));
+	const revisions = correctiveRevisions(ctx, rows);
 	return rows.map((r) => ({
 		id: r.id,
 		issueNumber: r.issueNumber,
@@ -175,6 +176,7 @@ function hydrate(ctx: Ctx, rows: IssueRow[]): Issue[] {
 		expectedBenefit: r.expectedBenefit,
 		rootCause: r.rootCause,
 		correctiveAction: r.correctiveAction,
+		correctiveRevision: revisions.get(r.id) ?? null,
 		dispositionType: r.dispositionType,
 		dispositionRationale: r.dispositionRationale,
 		dispositionedAt: r.dispositionedAt,
@@ -194,6 +196,59 @@ function hydrate(ctx: Ctx, rows: IssueRow[]): Issue[] {
 }
 
 const one = (ctx: Ctx, id: number): Issue => hydrate(ctx, [load(ctx, id)])[0]!;
+
+/** The latest released version number of each procedure, 0 when none is. */
+function latestVersions(ctx: Pick<Ctx, 'db'>, procedureIds: number[]): Map<number, number> {
+	if (!procedureIds.length) return new Map();
+	const rows = ctx.db
+		.select({ id: procedureVersion.procedureId, n: max(procedureVersion.versionNumber) })
+		.from(procedureVersion)
+		.where(inArray(procedureVersion.procedureId, procedureIds))
+		.groupBy(procedureVersion.procedureId)
+		.all();
+	return new Map(rows.map((r) => [r.id, r.n ?? 0]));
+}
+
+function correctiveRevisions(ctx: Ctx, rows: IssueRow[]): Map<number, NonNullable<Issue['correctiveRevision']>> {
+	const linked = rows.filter((r) => r.correctiveProcedureId !== null);
+	const ids = [...new Set(linked.map((r) => r.correctiveProcedureId!))];
+	if (!ids.length) return new Map();
+	const procs = new Map(ctx.db.select().from(procedure).where(inArray(procedure.id, ids)).all().map((p) => [p.id, p]));
+	const latest = latestVersions(ctx, ids);
+	return new Map(
+		linked.map((r) => {
+			const p = procs.get(r.correctiveProcedureId!)!;
+			const after = r.correctiveAfterVersion ?? 0;
+			return [
+				r.id,
+				{
+					procedureId: p.id,
+					templateNumber: p.templateNumber,
+					name: p.name,
+					versionNumber: after + 1,
+					released: (latest.get(p.id) ?? 0) > after
+				}
+			];
+		})
+	);
+}
+
+/**
+ * What the work leaves open: the issue's redlines must be finished, and a linked procedure
+ * revision released. Review and sign-off both wait on it.
+ */
+function openWork(ctx: Ctx, r: IssueRow): string | null {
+	const open = issueHooks.openRedlines?.(ctx, r.id) ?? [];
+	if (open.length) return `${r.issueNumber} waits on redline ${open.join(', ')}`;
+	if (r.correctiveProcedureId !== null) {
+		const after = r.correctiveAfterVersion ?? 0;
+		if ((latestVersions(ctx, [r.correctiveProcedureId]).get(r.correctiveProcedureId) ?? 0) <= after) {
+			const p = ctx.db.select().from(procedure).where(eq(procedure.id, r.correctiveProcedureId)).get();
+			return `${r.issueNumber} waits on the release of ${p?.templateNumber ?? 'its procedure'} v${after + 1}`;
+		}
+	}
+	return null;
+}
 
 // ---- gates ----
 
@@ -498,6 +553,18 @@ export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Iss
 	}
 	if (input.priority !== undefined) patch.priority = input.priority;
 	for (const f of TEXT_FIELDS) if (input[f] !== undefined) patch[f] = norm(input[f]);
+	if (input.correctiveProcedureId !== undefined && input.correctiveProcedureId !== before.correctiveProcedureId) {
+		if (input.correctiveProcedureId === null) {
+			Object.assign(patch, { correctiveProcedureId: null, correctiveAfterVersion: null });
+		} else {
+			const p = ctx.db.select().from(procedure).where(eq(procedure.id, input.correctiveProcedureId)).get();
+			if (!p) throw invalid('correctiveProcedureId', 'Procedure not found');
+			if (p.status === 'obsolete') throw invalid('correctiveProcedureId', `${p.templateNumber} is obsolete`);
+			// The revision asked for is the next one after what is released now.
+			const after = latestVersions(ctx, [p.id]).get(p.id) ?? 0;
+			Object.assign(patch, { correctiveProcedureId: p.id, correctiveAfterVersion: after });
+		}
+	}
 
 	if (input.dispositionType !== undefined || input.dispositionRationale !== undefined) {
 		// Drafting the panel is an edit. A signed disposition is immutable: a different
@@ -543,6 +610,8 @@ export function updateIssue(ctx: Ctx, input: z.output<typeof zIssueUpdate>): Iss
 	if (input.status === 'closed' && before.status !== 'closed') {
 		requireApprove(ctx);
 		validateClose({ ...before, ...patch } as IssueRow);
+		const waits = openWork(ctx, { ...before, ...patch } as IssueRow);
+		if (waits) throw refuse(waits);
 		Object.assign(patch, { status: 'closed', closedAt: now(), closedById: actorUserId(ctx.actor) });
 		closing = true;
 	}
@@ -588,6 +657,8 @@ export function requestReview(ctx: Ctx, id: number): Issue {
 	// Only an advisory non-conformance started before it took a disposition gets here without one.
 	if (takesDisposition(r) && !isDispositioned(r))
 		throw refuse(`${r.issueNumber} has no signed disposition; sign one before review`);
+	const open = issueHooks.openRedlines?.(ctx, r.id) ?? [];
+	if (open.length) throw refuse(`${r.issueNumber} waits on redline ${open.join(', ')}`);
 	writeUpdate(ctx, issue, id, {
 		reviewRequestedAt: now(),
 		reviewRequestedById: actorUserId(ctx.actor)
@@ -610,6 +681,8 @@ export function signOff(ctx: Ctx, id: number): Issue {
 	const r = load(ctx, id);
 	requireState(r, 'in_review', 'sign off');
 	validateClose(r);
+	const waits = openWork(ctx, r);
+	if (waits) throw refuse(waits);
 	let after!: IssueRow;
 	watchHold(
 		ctx,
@@ -655,6 +728,8 @@ export function signDisposition(
 				dispositionedById: actorUserId(ctx.actor),
 				dispositionedAt: now()
 			});
+			// The signature approves the written rework too: the hold passes straight to its gate.
+			issueHooks.releaseRedlines?.(ctx, id);
 		},
 		() => after
 	);

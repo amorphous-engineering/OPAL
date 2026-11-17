@@ -66,6 +66,10 @@ export interface IssueHooks {
 				issue: IssueRow
 		  ) => { raisedOpOrder: number | null; risks: LinkedRisk[]; redlineOps: RedlineOp[] })
 		| null;
+	/** Execution area: release the issue's draft redlines as its disposition is signed. */
+	releaseRedlines: ((ctx: Ctx, issueId: number) => string[]) | null;
+	/** Execution area: the issue's redline OPs that are drafts or unfinished, by number. */
+	openRedlines: ((ctx: Ctx, issueId: number) => string[]) | null;
 	/** Risks area: the risks an issue responds to or realizes. Added to `detailExtras.risks`. */
 	linkedRisks: ((ctx: Ctx, issueId: number) => LinkedRisk[]) | null; // added by risks
 	/**
@@ -98,6 +102,8 @@ export const issueHooks: IssueHooks = {
 	stepOptions: null,
 	freedSteps: null,
 	detailExtras: null,
+	releaseRedlines: null,
+	openRedlines: null,
 	linkedRisks: null, // added by risks
 	holdChanged: []
 };

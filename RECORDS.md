@@ -49,8 +49,8 @@ No other record can own a file. A new record type gets files by declaring its ru
 | Pending, holding work | What is wrong, what is held, what do we do? | EDIT, where the disposition is filled in and signed | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step), disposition type and rationale, SIGN DISPOSITION (needs `issue.disposition`) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
 | Pending, non-conformance holding nothing | What is wrong, and what do we do with it? | EDIT, where the disposition is filled in and signed | Add comment, attachment | As above | VOID (reason required) |
 | Pending anomaly, task or improvement | What is it, and who has it? | START WORK | Add comment, attachment | As above, without the disposition | VOID (reason required) |
-| In work | What is being done? | SUBMIT FOR REVIEW (an issue that takes a disposition needs a signed one) | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off), and the disposition while none is signed | VOID, while no disposition is signed |
-| In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
+| In work | What is being done? | SUBMIT FOR REVIEW (an issue that takes a disposition needs a signed one, and every redline of the issue finished) | Add comment, attachment | Root cause, corrective action, procedure revision, priority, assignee, + PART (adds a link, none comes off), + REDLINE, and the disposition while none is signed | VOID, while no disposition is signed |
+| In review | Is this finished? | SIGN OFF (needs `issue.approve`; a linked procedure revision must be released) | RETURN (reason required), add comment, attachment | | |
 | Done | What happened, and who signed? | | Add comment, attachment | | REOPEN (needs `issue.approve`, reason required) |
 | Void | Why was this struck? | | Add comment | | |
 
@@ -63,6 +63,9 @@ No other record can own a file. A new record type gets files by declaring its ru
 - Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
+- Rework and repair on a work order are written as redlines: WRITE REDLINE is the move while the Correction row is blank. Signing a rework or repair without one asks once, inline, because the hold lifts and nothing is reworked on the work order.
+- Signing the disposition releases the issue's draft redlines with it, so the hold passes straight to the redline gate. Correction lists every redline with its state, and who finished it.
+- Corrective action is what stops it happening again. It may link a procedure: the next version after the one released when it was linked. The issue cannot close until that version is released.
 
 ## Execution (work order)
 
@@ -79,6 +82,9 @@ No other record can own a file. A new record type gets files by declaring its ru
 - Only the current step of the current operation is open by default. Others are one click away. SKIP and + ISSUE appear on the open step.
 - SKIP on a step with required data or a declared sign-off needs `execution.skipRequired`, or every role its slots name. Once the work is done and waits on sign-off, or a slot is signed, SKIP is gone: sign it, or close the work order short.
 - Completed steps never reopen. A correction is a note or a redline.
+- A redline is written as a draft, dashed, in place above the OP it gates. The floor sees it and cannot claim, note, consume at or complete it. EDIT rewrites it and DELETE DRAFT removes it. Signing its issue's disposition releases it; one written after that is released on the work order (RELEASE, needs `issue.disposition`). Released, it is pen: no edit, no delete.
+- A redline may replace lines of the host OP's planned kit. Once released, the line reads struck where it is planned and in the Material tab, with its replacement under it. Consumption already booked against the struck line stays on it. The published version never changes.
+- The issues beside the work are grouped by when their hold is due: blocking now, due by the end of each OP (a hold bound to a later step names it), due by the end of the work order, then other open issues. Closed issues fold away.
 - Capture fields are editable while a step is workable and read-only afterwards.
 - Every quantity on the material tab shows its unit. Source is a search over stock of that part with stock on hand, defaulting to the oldest.
 

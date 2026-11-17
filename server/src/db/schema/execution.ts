@@ -10,7 +10,9 @@ import {
 	EXECUTION_PRIORITIES,
 	EXECUTION_STATUSES,
 	EXEC_STEP_STATUSES,
-	type ProcedureDataSchema
+	type ProcedureDataSchema,
+	type RedlineKitLine,
+	type RedlineStrike
 } from '@opal/shared';
 import { sql } from 'drizzle-orm';
 import { type AnySQLiteColumn, check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -105,6 +107,16 @@ export const adhocStep = sqliteTable(
 		dataSchema: text('data_schema', { mode: 'json' }).$type<ProcedureDataSchema>(),
 		/** Sign-off roles in slot order. Null: the default. */
 		signoffs: text('signoffs', { mode: 'json' }).$type<{ role: string | null }[]>(),
+		/** Parts this step consumes. */
+		kit: text('kit', { mode: 'json' }).$type<RedlineKitLine[]>(),
+		/** On the OP row: the snapshot kit lines this redline replaces, struck once it is released. */
+		strikes: text('strikes', { mode: 'json' }).$type<RedlineStrike[]>(),
+		/**
+		 * On the OP row. Null: a draft, pencil, which the floor cannot work. Signing the issue's
+		 * disposition releases its drafts; a draft written after that is released on its own.
+		 */
+		releasedAt: text('released_at'),
+		releasedById: integer('released_by_id').references(() => user.id, { onDelete: 'set null' }),
 		createdById: integer('created_by_id').references(() => user.id, { onDelete: 'set null' }),
 		createdAt: createdAt()
 	},

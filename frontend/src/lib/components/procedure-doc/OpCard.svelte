@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ActionLink } from '#lib/components/opal/index.js';
+	import { ActionLink, State, Timestamp } from '#lib/components/opal/index.js';
 	// One OP: a card with a header bar (number, title, what is exceptional, claim, count) over
 	// its steps. An OP without sub-steps is its own single step and shows that step's body
 	// directly, with its stamp in place of the count.
@@ -36,10 +36,13 @@
 	const leaf = $derived(op.steps.length === 0);
 	const terminal = $derived(isTerminal(op.status));
 	const key = $derived(`op:${op.order}`);
+	/** A redline not yet released: pencil, shown dashed, open, and not workable. */
+	const draftRl = $derived(!!op.redline && op.redline.released_at === null);
 	// Fold what cannot be acted on yet: a leaf OP that is held or waiting, an OP
 	// waiting on another OP or a redline. Unfinished sub-steps never fold an OP.
 	const blocked = $derived(
 		ctl.mode === 'execute' &&
+			!draftRl &&
 			(leaf
 				? isBlocked(op.step)
 				: !terminal &&
@@ -59,12 +62,9 @@
 				(ctl.currentOrder === op.order || op.steps.some((s) => s.order === ctl.currentOrder)))
 	);
 	const deletable = $derived(
-		op.is_ad_hoc &&
-			op.status === 'pending' &&
-			op.steps.every((s) => s.status === 'pending') &&
-			!!ctl.actions.deleteRedline &&
-			ctl.active
+		draftRl && !!op.redline?.can_edit && !!ctl.actions.deleteRedline && ctl.active
 	);
+	const draftKeys = $derived(ctl.mode === 'execute' && draftRl && ctl.active);
 	const redlinable = $derived(
 		ctl.mode === 'execute' &&
 			ctl.active &&
@@ -76,7 +76,7 @@
 	const opSignoffs = $derived(
 		!leaf && ctl.mode !== 'author' && (op.step.signoffs ?? []).length > 0
 	);
-	const footer = $derived(opSignoffs || (ctl.mode === 'execute' && deletable));
+	const footer = $derived(opSignoffs || draftKeys);
 
 	let deleting = $state(false);
 
@@ -88,13 +88,6 @@
 		'border-dotted border-foreground font-mono tracking-wider text-foreground dark:bg-transparent';
 </script>
 
-{#if op.is_ad_hoc && op.redline}
-	<a
-		class="mb-px flex h-7 items-center gap-2 border border-dotted border-foreground bg-background px-3 font-mono text-xs hover:underline"
-		href={`/issues/${op.redline.issue_id}`}
-		title="Open the authorizing NC">REDLINE · {op.redline.issue_number} · {op.redline.title}</a
-	>
-{/if}
 <section
 	id={`op-${op.order}`}
 	data-drop-row={au ? '' : undefined}
@@ -104,7 +97,7 @@
 	class={cn(
 		// clip, not hidden: hidden makes a scroll container, which stops the title bars from sticking.
 		'overflow-clip border border-border bg-card',
-		op.is_ad_hoc && 'border-warn'
+		op.is_ad_hoc && (draftRl ? 'border-dashed border-foreground' : 'border-warn')
 	)}
 >
 	<div
@@ -147,6 +140,7 @@
 		<span
 			class={cn(
 				'shrink-0 font-mono text-xs font-semibold',
+				draftRl && 'text-tan',
 				current && 'bg-foreground px-1 py-px text-background'
 			)}>OP {op.number}</span
 		>
@@ -164,6 +158,7 @@
 		{#if op.is_contingency}
 			<Badge variant="outline" class={mutedBadge}>CONTINGENCY</Badge>
 		{/if}
+		{#if draftRl}<State value="draft" />{/if}
 		{#if op.strict_sequence}
 			<Badge variant="outline" class={mutedBadge} title="Sub-steps complete in order">SEQ</Badge>
 		{/if}
@@ -272,6 +267,50 @@
 					{/if}
 				</div>
 			{/if}
+			{#if op.redline && !au}
+				{@const rl = op.redline}
+				<!-- What authorises the redline, laid out like the steps and parts below it. -->
+				<dl
+					class="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-border px-3 py-2 text-sm"
+				>
+					<dt class="label pt-0.5">Issue</dt>
+					<dd class="min-w-0">
+						<a href={`/issues/${rl.issue_id}`} class="font-mono text-info hover:underline"
+							>{rl.issue_number}</a
+						>
+						{rl.title}
+					</dd>
+					<dt class="label pt-0.5">Disposition</dt>
+					<dd class="font-mono">
+						{#if rl.disposition_type}{rl.disposition_type
+								.replaceAll('_', ' ')
+								.toUpperCase()}{:else}<span class="text-quiet">—</span>{/if}
+					</dd>
+					<dt class="label pt-0.5">Released</dt>
+					<dd>
+						{#if rl.released_at}
+							<span class="inline-flex flex-wrap gap-x-3"
+								><span>{rl.released_by ?? '—'}</span><Timestamp value={rl.released_at} /></span
+							>
+						{:else}
+							<span class="block h-6 border border-dashed border-foreground"></span>
+						{/if}
+					</dd>
+					{#if rl.strikes.length}
+						<dt class="label pt-0.5">Replaces</dt>
+						<dd class="grid grid-cols-1 gap-0.5">
+							{#each rl.strikes as x (`${x.step_order}:${x.part_id}`)}
+								<span class="flex flex-wrap gap-x-3 line-through"
+									><span>{x.part_number} {x.part_name}</span><span class="font-mono"
+										>{x.quantity} {x.uom}</span
+									><span class="font-mono text-muted-foreground">{x.step_number ?? 'kit'}</span
+									></span
+								>
+							{/each}
+						</dd>
+					{/if}
+				</dl>
+			{/if}
 			{#each op.steps as s (s.order)}
 				<StepRow step={s} {op} />
 			{/each}
@@ -285,6 +324,22 @@
 			{#if footer}
 				<div class="grid grid-cols-1 gap-2 border-t border-border bg-muted/30 px-3 py-3">
 					{#if opSignoffs}<SignoffTable step={op.step} {op} />{/if}
+					{#if draftKeys && op.redline}
+						<div class="flex flex-wrap items-center gap-2">
+							{#if op.redline.can_release}
+								<Button size="sm" onclick={() => ctl.actions.releaseRedline?.(op)}>RELEASE</Button>
+							{:else}
+								<Button size="sm" href={`/issues/${op.redline.issue_id}`}
+									>BACK TO {op.redline.issue_number}</Button
+								>
+							{/if}
+							{#if op.redline.can_edit}
+								<Button size="sm" variant="outline" onclick={() => ctl.actions.editRedline?.(op)}
+									>EDIT</Button
+								>
+							{/if}
+						</div>
+					{/if}
 					{#if deletable}
 						<div class="flex items-center gap-2">
 							<Button
@@ -292,7 +347,7 @@
 								variant={deleting ? 'default' : 'outline'}
 								class={deleting ? 'bg-error-fill text-error-on shadow-key hover:bg-error-fill' : ''}
 								onclick={() => (deleting ? ctl.actions.deleteRedline?.(op) : (deleting = true))}
-								>{deleting ? 'CONFIRM DELETE' : 'DELETE REDLINE'}</Button
+								>{deleting ? 'CONFIRM DELETE' : 'DELETE DRAFT'}</Button
 							>
 							{#if deleting}
 								<ActionLink onclick={() => (deleting = false)}>CANCEL</ActionLink>

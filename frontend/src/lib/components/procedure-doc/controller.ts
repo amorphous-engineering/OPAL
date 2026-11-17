@@ -41,8 +41,12 @@ export interface DocActions {
 	issueHref?(step: DocStep): string;
 	/** Open the redline dialog on an OP that carries an open NC. */
 	redline?(op: DocOp): void;
-	/** Delete a not-yet-started redline OP. */
+	/** Delete a draft redline OP. */
 	deleteRedline?(op: DocOp): Promise<void>;
+	/** Open a draft redline OP for editing, in place. */
+	editRedline?(op: DocOp): void;
+	/** Release a draft written after its issue's disposition was signed. */
+	releaseRedline?(op: DocOp): Promise<void>;
 	/** Bring a step's evidence into view (the host keeps evidence outside the document). */
 	showEvidence?(step: DocStep): void;
 	/** Add a markdown execution note with files attached to it. */

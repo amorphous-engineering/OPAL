@@ -20,7 +20,11 @@
 			(step.status === 'pending' || step.status === 'in_progress')
 	);
 	const consumedParts = $derived(new Set(step.consumptions.map((c) => c.part_id)));
-	const open = $derived(workable ? step.step_kit.filter((k) => !consumedParts.has(k.part_id)) : []);
+	const open = $derived(
+		workable ? step.step_kit.filter((k) => !consumedParts.has(k.part_id) && !k.struck_by) : []
+	);
+	/** Lines a released redline replaced: struck, never drawn from. */
+	const struck = $derived(step.step_kit.filter((k) => k.struck_by));
 
 	let stock = $state<Record<number, StockRecord[]>>({});
 	let pick = $state<Record<number, { record: string; qty: string }>>({});
@@ -130,7 +134,7 @@
 			</div>
 		{:else if !step.consumptions.length}
 			<ul class="m-0 list-none p-0 font-mono text-xs text-muted-foreground">
-				{#each step.step_kit as k (k.part_id)}
+				{#each step.step_kit.filter((k) => !k.struck_by) as k (k.part_id)}
 					<li>
 						{k.part_number ?? ''}
 						{k.part_name} × {qtyUnit(k.quantity_required, k.uom)}
@@ -139,6 +143,15 @@
 				{/each}
 			</ul>
 		{/if}
+		{#each struck as k (k.part_id)}
+			<div class="font-mono text-xs text-muted-foreground">
+				<span class="line-through"
+					>{k.part_number ?? ''}
+					{k.part_name} × {qtyUnit(k.quantity_required, k.uom)}</span
+				>
+				replaced by {k.struck_by}
+			</div>
+		{/each}
 		{#each step.consumptions as c (c.id)}
 			<div class="font-mono text-xs text-muted-foreground">
 				<span class="text-ok">{c.usage_type === 'tooling' ? 'USED' : 'CONSUMED'}</span>

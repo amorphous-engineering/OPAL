@@ -44,6 +44,34 @@
 
 	const remaining = (k: KitRow) => Math.max(0, k.qty_required - k.qty_consumed);
 
+	// Like a correction on paper: a line a redline replaced stays, struck, and what replaced it is
+	// written directly under it. The planned kit comes first; each redline's changes follow.
+	type KitLine =
+		| { kind: 'item'; k: KitRow; indent: boolean }
+		| { kind: 'struck'; x: (typeof doc.kit.struck)[number] };
+	const kitRows = $derived.by((): KitLine[] => {
+		const plain = doc.kit.items.filter((k) => !k.added_by);
+		const redlines = [
+			...new Set([
+				...doc.kit.struck.map((x) => x.redline),
+				...doc.kit.items.flatMap((k) => (k.added_by ? [k.added_by] : []))
+			])
+		];
+		return [
+			...plain.map((k) => ({ kind: 'item' as const, k, indent: false })),
+			...redlines.flatMap((r) => [
+				...doc.kit.struck
+					.filter((x) => x.redline === r)
+					.map((x) => ({ kind: 'struck' as const, x })),
+				...doc.kit.items
+					.filter((k) => k.added_by === r)
+					.map((k) => ({ kind: 'item' as const, k, indent: true }))
+			])
+		];
+	});
+	const lineKey = (l: KitLine) =>
+		l.kind === 'item' ? `i${l.k.part_id}` : `s${l.x.redline}:${l.x.step_number}:${l.x.part_id}`;
+
 	async function loadAvailability() {
 		if (!doc.kit.items.length) return;
 		try {
@@ -197,62 +225,92 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each doc.kit.items as k (k.part_id)}
-								{@const it = avail?.items.find((x) => x.part_id === k.part_id)}
-								<tr class="border-b border-border align-top">
-									<td class="px-3 py-1.5 whitespace-nowrap"
-										><a class="font-mono text-info hover:underline" href={`/parts/${k.part_id}`}
-											>{k.part_number}</a
-										></td
-									>
-									<td class="min-w-48 px-3 py-1.5">{k.part_name}</td>
-									<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
-										>{qtyUnit(k.qty_required, k.uom)}</td
-									>
-									<td
-										class="px-3 py-1.5 text-right font-mono whitespace-nowrap {it &&
-										it.quantity_available < remaining(k)
-											? 'text-error'
-											: ''}">{it ? qtyUnit(it.quantity_available, k.uom) : '—'}</td
-									>
-									<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
-										>{qtyUnit(k.qty_consumed, k.uom)}</td
-									>
-									<td class="max-w-64 px-3 py-1.5">
-										{#if canConsume && remaining(k) > 0}
-											<StockPicker
-												records={it?.available_locations.map((l) => ({
-													id: l.inventory_record_id,
-													opal_number: l.opal_number,
-													location: l.location,
-													lot_number: l.lot_number,
-													quantity: l.quantity,
-													uom: it.uom
-												}))}
-												value={pick[k.part_id]?.record ?? ''}
-												label={`Source for ${k.part_name}`}
-												onpick={(record) => (pick[k.part_id] = { ...pick[k.part_id], record })}
-											/>
-										{:else}<span class="text-quiet">—</span>{/if}
-									</td>
-									<td class="px-3 py-1.5">
-										{#if canConsume && remaining(k) > 0}
-											<span class="flex items-center gap-1.5 whitespace-nowrap">
-												<Input
-													type="number"
-													min="0"
-													step="any"
-													class="h-7 w-16 font-mono"
-													aria-label={`Quantity of ${k.part_name}`}
-													value={pick[k.part_id]?.qty ?? ''}
-													oninput={(e) =>
-														(pick[k.part_id] = { ...pick[k.part_id], qty: e.currentTarget.value })}
+							{#each kitRows as line (lineKey(line))}
+								{#if line.kind === 'struck'}
+									{@const x = line.x}
+									<tr class="border-b border-border align-top text-muted-foreground">
+										<td class="px-3 py-1.5 font-mono whitespace-nowrap line-through"
+											>{x.part_number}</td
+										>
+										<td class="min-w-48 px-3 py-1.5 line-through">{x.part_name}</td>
+										<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap line-through"
+											>{qtyUnit(x.quantity, x.uom)}</td
+										>
+										<td class="px-3 py-1.5 text-right"><span class="text-quiet">—</span></td>
+										<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
+											>{qtyUnit(x.qty_consumed, x.uom)}</td
+										>
+										<td class="px-3 py-1.5"></td>
+										<td class="px-3 py-1.5"></td>
+									</tr>
+								{:else}
+									{@const k = line.k}
+									{@const it = avail?.items.find((x) => x.part_id === k.part_id)}
+									<tr class="border-b border-border align-top">
+										<td class={['py-1.5 pr-3 whitespace-nowrap', line.indent ? 'pl-7' : 'pl-3']}
+											><a class="font-mono text-info hover:underline" href={`/parts/${k.part_id}`}
+												>{k.part_number}</a
+											></td
+										>
+										<td class="min-w-48 px-3 py-1.5"
+											>{k.part_name}{#if k.added_by}
+												<span class="ml-2 font-mono text-xs text-muted-foreground"
+													>{k.added_by}</span
+												>{/if}</td
+										>
+										<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
+											>{qtyUnit(k.qty_required, k.uom)}</td
+										>
+										<td
+											class="px-3 py-1.5 text-right font-mono whitespace-nowrap {it &&
+											it.quantity_available < remaining(k)
+												? 'text-error'
+												: ''}">{it ? qtyUnit(it.quantity_available, k.uom) : '—'}</td
+										>
+										<td class="px-3 py-1.5 text-right font-mono whitespace-nowrap"
+											>{qtyUnit(k.qty_consumed, k.uom)}</td
+										>
+										<td class="max-w-64 px-3 py-1.5">
+											{#if canConsume && remaining(k) > 0}
+												<StockPicker
+													records={it?.available_locations.map((l) => ({
+														id: l.inventory_record_id,
+														opal_number: l.opal_number,
+														location: l.location,
+														lot_number: l.lot_number,
+														quantity: l.quantity,
+														uom: it.uom
+													}))}
+													value={pick[k.part_id]?.record ?? ''}
+													label={`Source for ${k.part_name}`}
+													onpick={(record) => (pick[k.part_id] = { ...pick[k.part_id], record })}
 												/>
-												<span class="font-mono text-xs text-muted-foreground">{k.uom || 'ea'}</span>
-											</span>
-										{:else}<span class="text-quiet">—</span>{/if}
-									</td>
-								</tr>
+											{:else}<span class="text-quiet">—</span>{/if}
+										</td>
+										<td class="px-3 py-1.5">
+											{#if canConsume && remaining(k) > 0}
+												<span class="flex items-center gap-1.5 whitespace-nowrap">
+													<Input
+														type="number"
+														min="0"
+														step="any"
+														class="h-7 w-16 font-mono"
+														aria-label={`Quantity of ${k.part_name}`}
+														value={pick[k.part_id]?.qty ?? ''}
+														oninput={(e) =>
+															(pick[k.part_id] = {
+																...pick[k.part_id],
+																qty: e.currentTarget.value
+															})}
+													/>
+													<span class="font-mono text-xs text-muted-foreground"
+														>{k.uom || 'ea'}</span
+													>
+												</span>
+											{:else}<span class="text-quiet">—</span>{/if}
+										</td>
+									</tr>
+								{/if}
 							{/each}
 						</tbody>
 					</table>

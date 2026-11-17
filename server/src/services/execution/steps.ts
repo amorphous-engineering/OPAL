@@ -307,6 +307,7 @@ export function addNote(ctx: Ctx, input: { id: number; stepId: number; body: str
 		throw refuse(`This work order is ${m.exec.status.replace('_', ' ')}: add a comment instead`);
 	}
 	const row = getRow(m, input.stepId);
+	if (row.draft) throw refuse(`${row.number} is part of a draft redline; notes go on released work`);
 	const n = insert(ctx, stepNote, { stepExecutionId: row.id, authorId: actorUserId(ctx.actor), body: text });
 	const author = n.authorId === null ? null : (personRefs(ctx.db, [n.authorId]).get(n.authorId) ?? null);
 	return { id: n.id, stepId: row.id, author, createdAt: n.createdAt, body: n.body };

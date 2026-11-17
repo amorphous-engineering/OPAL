@@ -98,7 +98,12 @@ export const zRedlineOp = z.object({
 	stepNumber: z.number().int(),
 	label: z.string(),
 	title: z.string(),
-	status: z.string()
+	status: z.string(),
+	/** False while the redline is a draft. */
+	released: z.boolean(),
+	/** Who finished it and when, once it is done. */
+	doneBy: z.string().nullable(),
+	doneAt: zTimestamp.nullable()
 });
 export type RedlineOp = z.infer<typeof zRedlineOp>;
 
@@ -136,6 +141,19 @@ export const zIssue = z.object({
 	expectedBenefit: z.string().nullable(),
 	rootCause: z.string().nullable(),
 	correctiveAction: z.string().nullable(),
+	/**
+	 * A procedure revision that is part of the corrective action: the next version of the procedure
+	 * after the one current when it was linked. The issue cannot close until that version is released.
+	 */
+	correctiveRevision: z
+		.object({
+			procedureId: z.number().int(),
+			templateNumber: z.string(),
+			name: z.string(),
+			versionNumber: z.number().int(),
+			released: z.boolean()
+		})
+		.nullable(),
 	dispositionType: z.enum(RECORDED_DISPOSITION_TYPES).nullable(),
 	dispositionRationale: z.string().nullable(),
 	dispositionedAt: zTimestamp.nullable(),
@@ -224,6 +242,8 @@ export const zIssueUpdate = z.object({
 	expectedBenefit: text,
 	rootCause: text,
 	correctiveAction: text,
+	/** Link the next revision of this procedure as part of the corrective action. null removes the link. */
+	correctiveProcedureId: zId.nullable().optional(),
 	/** Draft only. The signature is `issues.signDisposition`. null clears the draft. */
 	dispositionType: z.enum(DISPOSITION_TYPES).nullable().optional(),
 	dispositionRationale: text,
