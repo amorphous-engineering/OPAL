@@ -8,6 +8,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Every non-conformance takes a disposition**, whether or not it holds a work order. Use as is, rework, repair, scrap, return to supplier or no defect is filled in and signed under EDIT, and signing it starts the work. A non-conformance can no longer close without one. One already started without a disposition stays in work and needs a signed disposition before review.
 - **An issue's type can change only until work starts** or a disposition is signed, since the type decides which steps the issue goes through.
 - **RETURN sits beside SIGN OFF** on an issue in review, no longer under MORE.
+- **The bug issue type is now called anomaly**: something behaved in a way nobody expected, and the cause is still being found. Existing bugs, and bugs imported from 1.x, become anomalies. "Actual behavior" reads "Observed behavior".
 - **A record's state sits at the right end of the breadcrumb bar**, in the same place on every record page, no longer after the title.
 
 ### Fixed

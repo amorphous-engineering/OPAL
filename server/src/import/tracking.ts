@@ -108,7 +108,8 @@ export function importIssues(c: ImportCtx): void {
 			projectId: c.projectId,
 			title: String(r.title),
 			description: str(r.description),
-			issueType: oneOf(c, r.issue_type, ISSUE_TYPES, 'task', `issue ${id} issue_type`),
+			// 1.x called an anomaly a bug.
+			issueType: oneOf(c, String(r.issue_type).toLowerCase() === 'bug' ? 'anomaly' : r.issue_type, ISSUE_TYPES, 'task', `issue ${id} issue_type`),
 			status: deleted ? ('void' as const) : closed ? ('closed' as const) : ('open' as const),
 			priority: oneOf(c, r.priority, ISSUE_PRIORITIES, 'medium', `issue ${id} priority`),
 			containment: oneOf(c, r.containment, CONTAINMENTS, 'advisory', `issue ${id} containment`),

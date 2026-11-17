@@ -4,7 +4,7 @@ import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
-export const ISSUE_TYPES = ['non_conformance', 'bug', 'task', 'improvement'] as const;
+export const ISSUE_TYPES = ['non_conformance', 'anomaly', 'task', 'improvement'] as const;
 /** `void` is the terminal state of an issue raised by mistake (it replaces legacy delete). */
 export const ISSUE_STATUSES = ['open', 'closed', 'void'] as const;
 export const ISSUE_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
@@ -305,7 +305,7 @@ export const issues = {
 		method: 'POST',
 		path: '/issues/:id/start',
 		summary:
-			'Pending to in work, for a bug, task or improvement that holds no work. A non-conformance, or an issue that holds work, enters work when its disposition is signed.',
+			'Pending to in work, for an anomaly, task or improvement that holds no work. A non-conformance, or an issue that holds work, enters work when its disposition is signed.',
 		input: z.object({ id: zId }),
 		output: zIssue,
 		access: 'signed-in',

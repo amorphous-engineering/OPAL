@@ -48,7 +48,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 |---|---|---|---|---|---|
 | Pending, holding work | What is wrong, what is held, what do we do? | EDIT, where the disposition is filled in and signed | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step), disposition type and rationale, SIGN DISPOSITION (needs `issue.disposition`) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
 | Pending, non-conformance holding nothing | What is wrong, and what do we do with it? | EDIT, where the disposition is filled in and signed | Add comment, attachment | As above | VOID (reason required) |
-| Pending, bug, task or improvement | What is it, and who has it? | START WORK | Add comment, attachment | As above, without the disposition | VOID (reason required) |
+| Pending anomaly, task or improvement | What is it, and who has it? | START WORK | Add comment, attachment | As above, without the disposition | VOID (reason required) |
 | In work | What is being done? | SUBMIT FOR REVIEW (an issue that takes a disposition needs a signed one) | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off), and the disposition while none is signed | VOID, while no disposition is signed |
 | In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
 | Done | What happened, and who signed? | | Add comment, attachment | | REOPEN (needs `issue.approve`, reason required) |

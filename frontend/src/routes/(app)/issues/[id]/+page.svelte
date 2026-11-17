@@ -413,7 +413,7 @@
 	const partLinks = $derived(issue.links.filter((l) => l.kind === 'part')); // added by risks
 	const typeFields = $derived({
 		nc: type === 'non_conformance',
-		bug: type === 'bug',
+		anomaly: type === 'anomaly',
 		improvement: type === 'improvement'
 	});
 	const redlineHref = $derived(
@@ -563,15 +563,15 @@
 					{@render textRow('Should be', 'shouldBe')}
 					{@render textRow('Is', 'actual')}
 				{/if}
-				{#if typeFields.bug || issue.stepsToReproduce || issue.expectedBehavior || issue.actualBehavior}
+				{#if typeFields.anomaly || issue.stepsToReproduce || issue.expectedBehavior || issue.actualBehavior}
 					{@render textRow('Steps to reproduce', 'stepsToReproduce')}
 					{@render textRow('Expected behavior', 'expectedBehavior')}
-					{@render textRow('Actual behavior', 'actualBehavior')}
+					{@render textRow('Observed behavior', 'actualBehavior')}
 				{/if}
 				{#if typeFields.improvement || issue.expectedBenefit}
 					{@render textRow('Expected benefit', 'expectedBenefit')}
 				{/if}
-				{#if typeFields.nc || typeFields.bug || issue.rootCause || issue.correctiveAction}
+				{#if typeFields.nc || typeFields.anomaly || issue.rootCause || issue.correctiveAction}
 					{@render textRow('Root cause', 'rootCause', { resolution: true })}
 					{@render textRow('Corrective action', 'correctiveAction', {
 						resolution: true,

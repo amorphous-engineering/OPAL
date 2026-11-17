@@ -13,15 +13,15 @@ describe('raising', () => {
 	test('an advisory issue gets the next IT number, opens, and is pending', async () => {
 		const { call, db } = await setup();
 		const r = await call('POST', '/issues', {
-			title: 'Test Bug',
+			title: 'Test anomaly',
 			description: 'Something is broken',
-			issueType: 'bug',
+			issueType: 'anomaly',
 			priority: 'high'
 		});
 		expect(r.status).toBe(201);
 		expect(r.body).toMatchObject({
 			issueNumber: 'IT-0001',
-			issueType: 'bug',
+			issueType: 'anomaly',
 			priority: 'high',
 			status: 'open',
 			containment: 'advisory',
@@ -79,10 +79,10 @@ describe('raising', () => {
 describe('listing', () => {
 	test('filters by type', async () => {
 		const { raise, call } = await setup();
-		await raise({ issueType: 'bug' });
+		await raise({ issueType: 'anomaly' });
 		await raise({ issueType: 'task' });
-		const r = await call('GET', '/issues?issueType=bug');
-		expect(r.body.items.every((i: any) => i.issueType === 'bug')).toBe(true);
+		const r = await call('GET', '/issues?issueType=anomaly');
+		expect(r.body.items.every((i: any) => i.issueType === 'anomaly')).toBe(true);
 		expect(r.body.total).toBe(1);
 	});
 
@@ -258,7 +258,7 @@ describe('disposition', () => {
 		expect(r.status).toBe(422);
 	});
 
-	test('a bug, task or improvement that holds no work has no disposition to sign', async () => {
+	test('an anomaly, task or improvement that holds no work has no disposition to sign', async () => {
 		const { raise, sign } = await setup();
 		const i = await raise();
 		const r = await sign(i.id);

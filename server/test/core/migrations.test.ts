@@ -233,3 +233,35 @@ describe('retiring the aborted status', () => {
 		expect(gates()).toEqual([]);
 	});
 });
+
+describe('renaming bug to anomaly', () => {
+	/** A database from before the rename, holding one issue of each given type. */
+	function older(types: string[]) {
+		const path = join(tempDir(), 'opal.db');
+		openDb(path, migrationsUpTo('0012_far_ravenous'));
+		const db = new Database(path);
+		db.run('PRAGMA foreign_keys = OFF');
+		types.forEach((t, i) =>
+			db.run("INSERT INTO issue (id, issue_number, project_id, title, issue_type, actual_behavior, created_at, updated_at) VALUES (?, ?, 1, 'x', ?, 'it hummed', 'x', 'x')", [i + 1, `IT-000000000${i + 1}`, t])
+		);
+		db.close();
+		return path;
+	}
+	const types = (path: string) => {
+		const db = new Database(path);
+		const rows = db.query('SELECT issue_type, actual_behavior FROM issue ORDER BY id').all();
+		db.close();
+		return rows;
+	};
+
+	test('a stored bug reads as an anomaly after the upgrade, and the other types keep theirs', () => {
+		const path = older(['bug', 'non_conformance', 'task', 'improvement']);
+		openDb(path);
+		expect(types(path)).toEqual(['anomaly', 'non_conformance', 'task', 'improvement'].map((t) => ({ issue_type: t, actual_behavior: 'it hummed' })));
+	});
+
+	test('the upgraded table refuses bug', () => {
+		const db = openDb(older(['task'])).$client;
+		expect(() => db.run("UPDATE issue SET issue_type = 'bug' WHERE id = 1")).toThrow();
+	});
+});
