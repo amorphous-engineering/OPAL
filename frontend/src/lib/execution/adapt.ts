@@ -95,7 +95,8 @@ function step(s: DocStepOut, parentOrder: number | null): DocStep {
 			quantity_required: num(k.quantity),
 			uom: k.uom,
 			usage_type: k.usage,
-			notes: k.notes
+			notes: k.notes,
+			struck_by: k.struckBy
 		})),
 		data_schema: s.dataSchema,
 		data_captured: s.dataCaptured,
@@ -159,7 +160,21 @@ function op(o: DocOpOut): DocOp {
 			issue_id: o.redline.issueId,
 			issue_number: o.redline.issueNumber,
 			title: o.redline.title,
-			host_order: o.redline.hostId
+			host_order: o.redline.hostId,
+			disposition_type: o.redline.dispositionType,
+			released_at: o.redline.releasedAt,
+			released_by: o.redline.releasedBy,
+			strikes: o.redline.strikes.map((x) => ({
+				step_order: x.stepId,
+				step_number: x.stepNumber,
+				part_id: x.partId,
+				part_number: x.partNumber,
+				part_name: x.partName,
+				quantity: num(x.quantity),
+				uom: x.uom
+			})),
+			can_release: o.redline.canRelease,
+			can_edit: o.redline.canEdit
 		},
 		waiting_on_ops: o.waitingOnOps,
 		holds: o.holds.map(hold),
@@ -245,6 +260,14 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			disposition_type: i.dispositionType,
 			is_blocking: i.isBlocking,
 			raised_step_number: i.raisedStepNumber,
+			holds_at: i.holdsAt && {
+				kind: i.holdsAt.kind,
+				step_number: i.holdsAt.stepNumber,
+				op_order: i.holdsAt.opId,
+				op_number: i.holdsAt.opNumber,
+				seq: i.holdsAt.seq,
+				now: i.holdsAt.now
+			},
 			created_at: i.createdAt
 		})),
 		holds: d.holds.map(holdSummary),
@@ -257,7 +280,19 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 				part_name: k.partName,
 				uom: k.uom,
 				qty_required: num(k.qtyRequired),
-				qty_consumed: num(k.qtyConsumed)
+				qty_consumed: num(k.qtyConsumed),
+				added_by: k.addedBy
+			})),
+			struck: d.kit.struck.map((k) => ({
+				part_id: k.partId,
+				part_number: k.partNumber,
+				part_name: k.partName,
+				uom: k.uom,
+				quantity: num(k.quantity),
+				qty_consumed: num(k.qtyConsumed),
+				step_number: k.stepNumber,
+				redline: k.redline,
+				redline_order: k.redlineStepId
 			})),
 			unplanned: d.kit.unplanned.map((k) => ({
 				part_id: k.partId,

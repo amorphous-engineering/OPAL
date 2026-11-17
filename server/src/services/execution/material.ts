@@ -19,7 +19,7 @@ import { executionOutput, part, stockMove, stockRecord } from '../../db/schema/i
 import { update } from '../../write.ts';
 import { balancesForPart, consumeStock, produceStock } from '../inventory/index.ts';
 import { ensurePartsActive } from '../parts/lifecycle.ts';
-import { getRow, isActive, loadModel, type Model } from './model.ts';
+import { getRow, isActive, loadModel, type Model, opRowOf, type Row } from './model.ts';
 
 // ---------------------------------------------------------------- consumption rows
 
@@ -111,6 +111,7 @@ export function consume(ctx: Ctx, input: { id: number; stepId?: number; items: L
 	const m = loadModel(ctx.db, input.id);
 	requireOpen(m);
 	const row = input.stepId === undefined ? null : getRow(m, input.stepId);
+	if (row?.draft) throw new OpalError(409, 'redline_draft', `${row.number} is part of a draft redline; nothing is consumed there until it is released`);
 	const stocks = ctx.db
 		.select({ id: stockRecord.id, partId: stockRecord.partId })
 		.from(stockRecord)
@@ -253,21 +254,55 @@ export function produce(
 
 // ---------------------------------------------------------------- reconciliation
 
+/** Planned kit lines replaced by a released redline: `${stepId}:${partId}` to the redline OP. */
+export function struckLines(m: Model): Map<string, Row> {
+	const out = new Map<string, Row>();
+	for (const r of m.rows) {
+		if (r.level !== 0 || !r.adhoc || r.draft) continue;
+		for (const x of r.adhoc.strikes ?? []) out.set(`${x.stepId}:${x.partId}`, r);
+	}
+	return out;
+}
+
+/**
+ * The kit against what was consumed. Expected is the procedure kit and every consumed step kit
+ * line, released redline steps included, less the lines a released redline replaced. A replaced
+ * line is listed apart with what was consumed at its step before the redline, so that consumption
+ * is neither counted against the new plan nor reported as unplanned.
+ */
 export function reconcile(db: Db, m: Model) {
+	const struck = struckLines(m);
 	const consumed = new Map<number, number>();
-	const names = new Map<number, { pn: string; name: string; uom: string }>();
+	const consumedAt = new Map<string, number>();
 	for (const c of consumptionRows(db, m)) {
 		if (c.usage !== 'consume') continue;
+		const at = `${c.stepId}:${c.partId}`;
+		if (struck.has(at)) {
+			consumedAt.set(at, (consumedAt.get(at) ?? 0) + parseQty(c.quantity));
+			continue;
+		}
 		consumed.set(c.partId, (consumed.get(c.partId) ?? 0) + parseQty(c.quantity));
-		names.set(c.partId, { pn: c.partNumber, name: c.partName, uom: '' });
 	}
-	// Expected: the kit of the procedure plus the consumed lines of every step kit.
 	const expected = new Map<number, number>();
-	for (const k of m.snapshot.kit) expected.set(k.partId, (expected.get(k.partId) ?? 0) + parseQty(k.quantity));
-	for (const s of m.snapshot.steps) {
-		for (const k of s.kit) if (k.usage === 'consume') expected.set(k.partId, (expected.get(k.partId) ?? 0) + parseQty(k.quantity));
+	const addedBy = new Map<number, string>();
+	const add = (partId: number, qty: string) => expected.set(partId, (expected.get(partId) ?? 0) + parseQty(qty));
+	for (const k of m.snapshot.kit) if (!struck.has(`null:${k.partId}`)) add(k.partId, k.quantity);
+	for (const r of m.rows) {
+		if (r.draft) continue;
+		for (const k of r.kit) {
+			if (k.usage !== 'consume' || struck.has(`${r.id}:${k.partId}`)) continue;
+			add(k.partId, k.quantity);
+			if (r.adhoc && !addedBy.has(k.partId)) addedBy.set(k.partId, opRowOf(m, r).number);
+		}
 	}
-	const ids = [...new Set([...expected.keys(), ...consumed.keys()])];
+	const struckRows = [...struck].map(([key, op]) => {
+		const [step, partId] = key.split(':');
+		const stepId = step === 'null' ? null : Number(step);
+		const row = stepId === null ? null : (m.byId.get(stepId) ?? null);
+		const line = (row ? row.kit : m.snapshot.kit).find((k) => k.partId === Number(partId));
+		return { key, stepId, row, partId: Number(partId), quantity: line?.quantity ?? '0', op };
+	});
+	const ids = [...new Set([...expected.keys(), ...consumed.keys(), ...struckRows.map((x) => x.partId)])];
 	const parts = new Map(ids.length ? db.select().from(part).where(inArray(part.id, ids)).all().map((p) => [p.id, p]) : []);
 	const kitItems = [...expected].map(([partId, req]) => {
 		const got = consumed.get(partId) ?? 0;
@@ -280,14 +315,29 @@ export function reconcile(db: Db, m: Model) {
 			uom: p.unitOfMeasure,
 			qtyRequired: formatQty(req as Qty),
 			qtyConsumed: formatQty(got as Qty),
-			variance: formatQty((got - req) as Qty)
+			variance: formatQty((got - req) as Qty),
+			addedBy: addedBy.get(partId) ?? null
+		};
+	});
+	const struckOut = struckRows.map((x) => {
+		const p = parts.get(x.partId)!;
+		return {
+			partId: x.partId,
+			partNumber: p.internalPn,
+			partName: p.name,
+			uom: p.unitOfMeasure,
+			quantity: x.quantity,
+			qtyConsumed: formatQty((consumedAt.get(x.key) ?? 0) as Qty),
+			stepNumber: x.row?.number ?? null,
+			redline: x.op.number,
+			redlineStepId: x.op.id
 		};
 	});
 	const unplanned = [...consumed].map(([partId, qty]) => {
 		const p = parts.get(partId)!;
 		return { partId, partNumber: p.internalPn, partName: p.name, uom: p.unitOfMeasure, qtyConsumed: formatQty(qty as Qty) };
 	});
-	return { kitItems, unplanned };
+	return { kitItems, struck: struckOut, unplanned };
 }
 
 export function bom(ctx: Pick<Ctx, 'db'>, executionId: number) {

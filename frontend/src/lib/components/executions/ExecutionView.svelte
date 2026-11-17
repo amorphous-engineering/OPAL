@@ -44,17 +44,18 @@
 			// ?redline_issue=ID the redline form opens on that OP, linked to the NC.
 			const q = page.url.searchParams;
 			const target = Number(q.get('step')) || Number(q.get('op'));
-			if (target) store.jumpTo(target);
 			const issueId = Number(q.get('redline_issue'));
 			const opOrder = Number(q.get('op'));
 			if (issueId && opOrder && store.active) {
 				const hit = store.allOps.find((o) => o.order === opOrder);
 				if (hit?.open_ncs.some((n) => n.id === issueId)) {
+					// The form brings itself into view above the OP; a jump would scroll past it.
 					store.panel = { kind: 'redline', op: hit, issueId };
-				} else if (hit) {
-					toastError(new Error('That issue is not an open NC on this OP'));
+					return;
 				}
+				if (hit) toastError(new Error('That issue is not an open NC on this OP'));
 			}
+			if (target) store.jumpTo(target);
 		});
 		return () => store.stop();
 	});
@@ -77,9 +78,6 @@
 	]);
 	const tab = $derived(
 		tabs.find((t) => t.id === page.url.searchParams.get('tab'))?.id ?? 'document'
-	);
-	const holds = $derived(
-		(doc?.holds ?? []).filter((h) => h.disposition_state === 'undispositioned')
 	);
 
 	function setTab(value: string) {
@@ -212,19 +210,6 @@
 			{/if}
 			{#if inst.active && isEditing(page.url)}<EditForm {store} facts={inst} />{/if}
 			{#if inst.active && store.panel?.kind === 'closeShort'}<CloseShortPanel {store} />{/if}
-
-			{#if inst.active && holds.length}
-				<div
-					class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-error-fill px-4 py-1.5 text-error-on"
-				>
-					{#each holds as h (h.issue_id)}
-						<span class="font-mono text-xs font-bold">
-							HELD BY <a class="underline" href={`/issues/${h.issue_id}`}>{h.issue_number}</a>
-							{#if h.blocks.length}<span>({h.blocks.join(', ')})</span>{/if}
-						</span>
-					{/each}
-				</div>
-			{/if}
 		</div>
 		<div
 			class="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[20%_minmax(0,1fr)_20%] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch lg:pb-0"
@@ -260,15 +245,22 @@
 					id="exec-scroll"
 					class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto lg:pb-4 [&_[data-doc-mode]>section:first-of-type]:rounded-t-none [&_[data-doc-mode]>section:first-of-type]:border-t-0"
 				>
-					{#if inst.active && store.panel?.kind === 'redline'}
-						<RedlineForm {store} op={store.panel.op} preselect={store.panel.issueId} />
-					{/if}
 					{#if tab === 'document'}
 						<ProcedureDocument
 							controller={store}
 							ops={doc.ops.filter((o) => store.shownOps.includes(o))}
 							contingency={doc.contingency_ops.filter((o) => store.shownOps.includes(o))}
-						/>
+							hide={(op) =>
+								store.panel?.kind === 'redline' && store.panel.draft?.order === op.order}
+						>
+							{#snippet before(op)}
+								{@const p = store.panel}
+								<!-- A redline is written where it will sit: above the OP it gates, or in place of the draft. -->
+								{#if inst.active && p?.kind === 'redline' && (p.draft ? p.draft.order === op.order : p.op.order === op.order)}
+									<RedlineForm {store} op={p.op} preselect={p.issueId} draft={p.draft} />
+								{/if}
+							{/snippet}
+						</ProcedureDocument>
 					{:else if tab === 'graph'}
 						<ExecutionGraph {store} onopen={jump} />
 					{:else if tab === 'data'}

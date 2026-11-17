@@ -260,6 +260,9 @@ export function importExecutions(c: ImportCtx, links: InventoryLinks): void {
 			instructions: str(r.instructions),
 			dataSchema: captureFieldsFrom(c, r.required_data_schema, `step_execution ${id}`),
 			signoffs: slots,
+			// 1.x had no drafts: a redline went to the floor as it was written.
+			releasedAt: parent ? null : tsReq(r.created_at),
+			releasedById: null,
 			createdById: null,
 			createdAt: tsReq(r.created_at)
 		});

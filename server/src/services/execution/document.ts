@@ -26,9 +26,9 @@ import { holdsGate } from '../org/gates.ts';
 import { roleNamesOf, holdsSlotRole } from '../org/roles.ts';
 import { type HoldingIssue } from '../issues/holds.ts';
 import { type Blocker, blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
-import { type HoldState, blockersForBound, holdState } from './holds.ts';
+import { type HoldState, blockersForBound, holdLandings, holdState } from './holds.ts';
 import { closureOf, workStarted } from './executions.ts';
-import { consumptionRows, productionRows, reconcile, unbooked } from './material.ts';
+import { consumptionRows, productionRows, reconcile, struckLines, unbooked } from './material.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, progress } from './model.ts';
 import { claimsFor, cursorOf, roster, touch } from './presence.ts';
 import { initials, personRefs, signoffRecords } from './present.ts';
@@ -157,10 +157,12 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 		...stepIds.flatMap((id) => (recs.get(id) ?? []).map((s) => s.signedById)).filter((x): x is number => x !== null),
 		...notes.map((n) => n.authorId).filter((x): x is number => x !== null),
 		...m.rows.map((r) => r.se.completedById).filter((x): x is number => x !== null),
+		...m.rows.map((r) => r.adhoc?.releasedById ?? null).filter((x): x is number => x !== null),
 		...(exec.createdById === null ? [] : [exec.createdById]),
 		...(m.version.createdById === null ? [] : [m.version.createdById])
 	]);
 	const nameOf = (id: number | null) => (id === null ? null : (people.get(id)?.name ?? null));
+	const canDispose = ctx.actor.kind !== 'token' && holdsGate(db, ctx.actor, 'issue.disposition');
 	const viewerRoles = viewer === null ? null : roleNamesOf(db, viewer);
 
 	const cursorsOf = new Map<number, ReturnType<typeof cursorOf>[]>();
@@ -171,7 +173,11 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 		if (viewer !== null && c.userId === viewer) myCursorId = c.stepId;
 	}
 
-	const partIds = [...new Set(m.snapshot.steps.flatMap((s) => s.kit.map((k) => k.partId)))];
+	const strikes = m.rows.flatMap((r) => (r.level === 0 && r.adhoc ? (r.adhoc.strikes ?? []) : []));
+	const partIds = [
+		...new Set([...m.rows.flatMap((r) => r.kit.map((k) => k.partId)), ...m.snapshot.kit.map((k) => k.partId), ...strikes.map((x) => x.partId)])
+	];
+	const struck = struckLines(m);
 	const parts = new Map(partIds.length ? db.select().from(part).where(inArray(part.id, partIds)).all().map((p) => [p.id, p]) : []);
 
 	const consBy = new Map<number, typeof consumptions>();
@@ -231,7 +237,8 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 				quantity: k.quantity,
 				uom: parts.get(k.partId)?.unitOfMeasure ?? 'ea',
 				usage: k.usage,
-				notes: k.notes
+				notes: k.notes,
+				struckBy: struck.get(`${row.id}:${k.partId}`)?.number ?? null
 			})),
 			dataSchema: row.dataSchema,
 			dataCaptured: skipped ? null : (se.dataCaptured ?? null),
@@ -310,9 +317,34 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 					.filter((i) => i.issueType === 'non_conformance' && i.raisedStepId !== null && rowIds.has(i.raisedStepId) && i.status === 'open')
 					.map((i) => ({ id: i.id, issueNumber: i.issueNumber, title: i.title }));
 		let redline: DocOpOut['redline'] = null;
-		if (op.redline) {
+		if (op.redline && op.adhoc) {
 			const ri = issues.find((i) => i.id === op.redline!.issueId) ?? db.select().from(issue).where(eq(issue.id, op.redline!.issueId)).get();
-			redline = { issueId: op.redline.issueId, issueNumber: ri?.issueNumber ?? null, title: ri?.title ?? null, hostId: op.redline.hostId };
+			const editable = op.draft && active && ri?.status === 'open';
+			redline = {
+				issueId: op.redline.issueId,
+				issueNumber: ri?.issueNumber ?? null,
+				title: ri?.title ?? null,
+				hostId: op.redline.hostId,
+				dispositionType: ri?.dispositionType ?? null,
+				releasedAt: op.adhoc.releasedAt,
+				releasedBy: nameOf(op.adhoc.releasedById),
+				strikes: (op.adhoc.strikes ?? []).map((x) => {
+					const row = x.stepId === null ? null : m.byId.get(x.stepId);
+					const line = (row ? row.kit : m.snapshot.kit).find((k) => k.partId === x.partId);
+					const p = parts.get(x.partId);
+					return {
+						stepId: x.stepId,
+						stepNumber: row?.number ?? null,
+						partId: x.partId,
+						partNumber: p?.internalPn ?? '',
+						partName: p?.name ?? '',
+						quantity: line?.quantity ?? '0',
+						uom: p?.unitOfMeasure ?? 'ea'
+					};
+				}),
+				canRelease: editable && ri?.dispositionedAt != null && canDispose,
+				canEdit: editable
+			};
 		}
 		return {
 			id: op.id,
@@ -341,11 +373,12 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 	const contingencyOps = allOps.filter((o) => o.isContingency);
 
 	const rec = reconcile(db, m);
+	const landings = holdLandings(m, st);
 	const productions = productionRows(db, m);
 	const outputParts = m.snapshot.outputs.length
 		? new Map(db.select().from(part).where(inArray(part.id, m.snapshot.outputs.map((o) => o.partId))).all().map((p) => [p.id, p]))
 		: new Map<number, typeof part.$inferSelect>();
-	const kitRelevant = m.snapshot.kit.length > 0 || consumptions.length > 0 || m.snapshot.steps.some((s) => s.kit.length > 0);
+	const kitRelevant = m.snapshot.kit.length > 0 || consumptions.length > 0 || m.rows.some((r) => r.kit.length > 0);
 
 	const dataRows = m.rows.flatMap((r) => {
 		if (!r.se.dataCaptured || r.se.status === 'skipped') return [];
@@ -413,12 +446,24 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			dispositionType: i.dispositionType,
 			isBlocking: isBlocking(i),
 			raisedStepNumber: i.raisedStepId === null ? null : (m.byId.get(i.raisedStepId)?.number ?? null),
+			holdsAt: (() => {
+				const h = landings.get(i.id);
+				if (!h) return null;
+				return {
+					kind: h.kind,
+					stepNumber: h.kind === 'step' ? (h.row?.number ?? null) : null,
+					opId: h.op?.id ?? null,
+					opNumber: h.op?.number ?? null,
+					seq: (h.row ?? h.op)?.seq ?? m.rows.length,
+					now: h.now
+				};
+			})(),
 			createdAt: i.createdAt
 		})),
 		holds: summarizeHolds(m, st),
 		roster: rosterRows,
 		myCursorId,
-		kit: { items: rec.kitItems, unplanned: rec.unplanned },
+		kit: { items: rec.kitItems, struck: rec.struck, unplanned: rec.unplanned },
 		consumptions,
 		outputs: m.snapshot.outputs.map((o) => ({
 			partId: o.partId,

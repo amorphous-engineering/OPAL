@@ -20,6 +20,10 @@ export const blocker = (kind: Blocker['kind'], message: string, issueId: number 
 /** Structural gates: open sub-steps, strict sequence, OP dependencies, open redlines. */
 export function sequenceBlockers(m: Model, row: Row): Blocker[] {
 	const out: Blocker[] = [];
+	if (row.draft) {
+		const op = row.level === 0 ? row : row.parentId !== null ? m.byId.get(row.parentId) : undefined;
+		out.push(blocker('redline', `Redline op ${op?.number ?? row.number} is a draft`));
+	}
 	let gate: Row | null = null;
 	if (row.level === 0) {
 		gate = row;

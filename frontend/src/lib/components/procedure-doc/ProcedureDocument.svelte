@@ -2,6 +2,7 @@
 	// A procedure as a document: OP cards in order, contingency OPs after a
 	// divider. The host supplies a controller (state + actions); this component
 	// only lays the document out.
+	import type { Snippet } from 'svelte';
 	import { EmptyLine } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { provideDoc, type DocController } from './controller.js';
@@ -11,8 +12,18 @@
 	let {
 		controller,
 		ops,
-		contingency = []
-	}: { controller: DocController; ops: DocOp[]; contingency?: DocOp[] } = $props();
+		contingency = [],
+		before,
+		hide
+	}: {
+		controller: DocController;
+		ops: DocOp[];
+		contingency?: DocOp[];
+		/** Rendered just above an OP card: the host puts in-place forms there. */
+		before?: Snippet<[DocOp]>;
+		/** OP cards the host is showing another way, such as a draft open in its form. */
+		hide?: (op: DocOp) => boolean;
+	} = $props();
 
 	// svelte-ignore state_referenced_locally
 	provideDoc(controller);
@@ -21,7 +32,8 @@
 
 <div class="grid grid-cols-1 gap-2" data-doc-mode={controller.mode}>
 	{#each ops as op (op.order)}
-		<OpCard {op} />
+		{@render before?.(op)}
+		{#if !hide?.(op)}<OpCard {op} />{/if}
 	{/each}
 	{#if contingency.length}
 		<div class="label mt-2 flex items-center gap-2">

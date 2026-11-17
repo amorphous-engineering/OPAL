@@ -58,6 +58,8 @@ export const executionImpls: Impl[] = [
 
 	implement(e.createRedline, (ctx, i) => redlines.createRedline(ctx, i)),
 	implement(e.listRedlines, (ctx, i) => redlines.listRedlines(ctx, i.id)),
-	implement(e.deleteRedline, (ctx, i) => redlines.deleteRedline(ctx, i))
+	implement(e.deleteRedline, (ctx, i) => redlines.deleteRedline(ctx, i)),
+	implement(e.updateRedline, (ctx, i) => redlines.updateRedline(ctx, i)),
+	implement(e.releaseRedline, (ctx, i) => redlines.releaseRedline(ctx, i))
 ];
 
