@@ -217,7 +217,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	}
 	if (Object.keys(patch).length) update(ctx, procedureStep, step.id, patch);
 	if (regroup) {
-		// Toggling contingency moves the OP to the end of the other numbering group (1, 2 / C1, C2).
+		// Toggling contingency moves the OP to the end of the other numbering group (1, 2 / C901, C902).
 		applyPlacements(ctx, place(asNodes(stepRows(ctx.db, input.id)), step.id, null, Number.MAX_SAFE_INTEGER, input.isContingency));
 	}
 	return presentStep(ctx, input.id, step.id);

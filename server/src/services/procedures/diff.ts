@@ -1,6 +1,7 @@
 /** Differences between two snapshots: per step (matched by number), per part list. */
 import type { PartDiff, ProcedureSnapshot, SnapshotStep, StepDiff } from '@opal/shared';
 import { relabel } from './signoffs.ts';
+import { currentNumber } from './tree.ts';
 
 const STEP_FIELDS = [
 	'title',
@@ -39,16 +40,17 @@ function comparable(s: SnapshotStep, numberOf: Map<number, string>) {
 	};
 }
 
-/** 1, 1.1, 1.2, 2, C1, C1.1 */
+/** 1, 1.1, 1.2, 2, C901, C901.1 */
 function stepSortKey(n: string): [number, number[]] {
 	return [n.startsWith('C') ? 1 : 0, n.replace(/^C/, '').split('.').map((p) => Number.parseInt(p, 10) || 0)];
 }
 
 export function diffSteps(a: ProcedureSnapshot, b: ProcedureSnapshot) {
-	const numA = new Map(a.steps.map((s) => [s.id, s.number]));
-	const numB = new Map(b.steps.map((s) => [s.id, s.number]));
-	const mapA = new Map(a.steps.map((s) => [s.number, comparable(s, numA)]));
-	const mapB = new Map(b.steps.map((s) => [s.number, comparable(s, numB)]));
+	// A version published before the 900 series says C1 where a later one says C901: same step.
+	const numA = new Map(a.steps.map((s) => [s.id, currentNumber(s.number)]));
+	const numB = new Map(b.steps.map((s) => [s.id, currentNumber(s.number)]));
+	const mapA = new Map(a.steps.map((s) => [currentNumber(s.number), comparable(s, numA)]));
+	const mapB = new Map(b.steps.map((s) => [currentNumber(s.number), comparable(s, numB)]));
 	const numbers = [...new Set([...mapA.keys(), ...mapB.keys()])].sort((x, y) => {
 		const [cx, nx] = stepSortKey(x);
 		const [cy, ny] = stepSortKey(y);

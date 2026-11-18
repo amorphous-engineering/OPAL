@@ -16,13 +16,20 @@ describe('step tree', () => {
 		expect((await s.draft(s.pid)).map((x) => [x.order, x.level])).toEqual([[1, 0], [2, 1], [3, 1], [4, 0], [5, 1]]);
 	});
 
-	test('contingency OPs are numbered C1, C2 apart from the normal OPs', async () => {
+	test('contingency OPs are numbered C901, C902 apart from the normal OPs, so none reads as OP 1', async () => {
 		const s = await fx();
 		await s.step(s.pid, 'Normal');
 		const c1 = await s.step(s.pid, 'Fallback', { isContingency: true });
 		await s.step(s.pid, 'Sub', { parentId: c1.id });
 		await s.step(s.pid, 'Normal 2');
-		expect(await s.numbers(s.pid)).toEqual([['1', 'Normal'], ['2', 'Normal 2'], ['C1', 'Fallback'], ['C1.1', 'Sub']]);
+		await s.step(s.pid, 'Second fallback', { isContingency: true });
+		expect(await s.numbers(s.pid)).toEqual([
+			['1', 'Normal'],
+			['2', 'Normal 2'],
+			['C901', 'Fallback'],
+			['C901.1', 'Sub'],
+			['C902', 'Second fallback']
+		]);
 	});
 
 	test('a sub-step follows its OP in contingency and cannot hold sub-steps', async () => {
@@ -139,7 +146,7 @@ describe('step tree', () => {
 		const { op1 } = await s.tree(s.pid);
 		const r = await s.call('PATCH', `/procedures/${s.pid}/steps/${op1.id}`, { isContingency: true });
 		expect(r.status).toBe(200);
-		expect(await s.numbers(s.pid)).toEqual([['1', 'OP two'], ['1.1', 'c'], ['C1', 'OP one'], ['C1.1', 'a'], ['C1.2', 'b']]);
+		expect(await s.numbers(s.pid)).toEqual([['1', 'OP two'], ['1.1', 'c'], ['C901', 'OP one'], ['C901.1', 'a'], ['C901.2', 'b']]);
 		expect((await s.draft(s.pid)).slice(2).every((x) => x.isContingency)).toBe(true);
 	});
 

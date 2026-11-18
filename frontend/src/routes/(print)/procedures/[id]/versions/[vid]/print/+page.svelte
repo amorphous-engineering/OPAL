@@ -108,7 +108,6 @@
 		<div
 			class="flex items-center gap-2 border-b border-black bg-neutral-200 px-2.5 py-1.5 font-bold"
 		>
-			{#if contingency}<span class="border-2 border-black bg-white px-1.5 text-[9pt]">C</span>{/if}
 			<span class="text-[13pt]">OP {g.op.number}</span>
 			<span>{g.op.title}</span>
 			{#if g.op.estimatedDurationMinutes}
