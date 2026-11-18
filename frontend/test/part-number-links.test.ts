@@ -16,11 +16,15 @@ describe('part numbers in step text', () => {
 	const render = renderer();
 
 	test('a number that names a part links to it by number', () => {
-		expect(render('Fit SPX-F-0132 to the frame.', ['SPX-F-0132'])).toBe(`<p>Fit ${link('SPX-F-0132')} to the frame.</p>`);
+		expect(render('Fit SPX-F-0132 to the frame.', ['SPX-F-0132'])).toBe(
+			`<p>Fit ${link('SPX-F-0132')} to the frame.</p>`
+		);
 	});
 
 	test('a number the server did not name stays plain text', () => {
-		expect(render('Fit SPX-F-0132 and SPX-F-0133.', ['SPX-F-0132'])).toBe(`<p>Fit ${link('SPX-F-0132')} and SPX-F-0133.</p>`);
+		expect(render('Fit SPX-F-0132 and SPX-F-0133.', ['SPX-F-0132'])).toBe(
+			`<p>Fit ${link('SPX-F-0132')} and SPX-F-0133.</p>`
+		);
 		expect(render('Fit SPX-F-0132.', [])).toBe('<p>Fit SPX-F-0132.</p>');
 	});
 
@@ -38,15 +42,26 @@ describe('part numbers in step text', () => {
 	});
 
 	test('the same characters running into a word are not the number', () => {
-		for (const text of ['XSPX-F-0132', 'A-SPX-F-0132', 'SPX-F-0132A', 'SPX-F-0132-02', 'SPX-F-0132.5', 'a_SPX-F-0132']) {
+		for (const text of [
+			'XSPX-F-0132',
+			'A-SPX-F-0132',
+			'SPX-F-0132A',
+			'SPX-F-0132-02',
+			'SPX-F-0132.5',
+			'a_SPX-F-0132'
+		]) {
 			expect(render(text, ['SPX-F-0132'])).toBe(`<p>${text}</p>`);
 		}
 	});
 
 	test('code and existing links are left as written', () => {
 		expect(render('`SPX-F-0132`', ['SPX-F-0132'])).toBe('<p><code>SPX-F-0132</code></p>');
-		expect(render('```\nSPX-F-0132\n```', ['SPX-F-0132'])).toBe('<pre><code>SPX-F-0132\n</code></pre>');
-		expect(render('[SPX-F-0132](/elsewhere)', ['SPX-F-0132'])).toBe('<p><a href="/elsewhere">SPX-F-0132</a></p>');
+		expect(render('```\nSPX-F-0132\n```', ['SPX-F-0132'])).toBe(
+			'<pre><code>SPX-F-0132\n</code></pre>'
+		);
+		expect(render('[SPX-F-0132](/elsewhere)', ['SPX-F-0132'])).toBe(
+			'<p><a href="/elsewhere">SPX-F-0132</a></p>'
+		);
 		expect(render('See https://x.local/SPX-F-0132 now', ['SPX-F-0132'])).toBe(
 			'<p>See <a href="https://x.local/SPX-F-0132">https://x.local/SPX-F-0132</a> now</p>'
 		);
@@ -56,7 +71,9 @@ describe('part numbers in step text', () => {
 		expect(render('Fit RV.1.F.0042/002 now', ['RV.1.F.0042/002'])).toBe(
 			'<p>Fit <a href="/parts/number/RV.1.F.0042%2F002">RV.1.F.0042/002</a> now</p>'
 		);
-		expect(render('A&B-0001 here', ['A&B-0001'])).toBe('<p><a href="/parts/number/A%26B-0001">A&#38;B-0001</a> here</p>');
+		expect(render('A&B-0001 here', ['A&B-0001'])).toBe(
+			'<p><a href="/parts/number/A%26B-0001">A&#38;B-0001</a> here</p>'
+		);
 	});
 
 	test('nothing is linked once the render is over', () => {

@@ -114,7 +114,7 @@
 	</div>
 {/snippet}
 
-{#snippet opBlock(g: { op: SnapshotStep; subs: SnapshotStep[] }, contingency: boolean)}
+{#snippet opBlock(g: { op: SnapshotStep; subs: SnapshotStep[] })}
 	<section class="mb-3 break-inside-avoid-page border border-black">
 		<div
 			class="flex items-center gap-2 border-b border-black bg-neutral-200 px-2.5 py-1.5 font-bold"
@@ -135,7 +135,9 @@
 				<table class="w-full border-collapse border-t border-black text-[10pt]" data-short-run>
 					<tbody>
 						{#each run.steps as s (s.id)}
-							<tr class="break-inside-avoid border-t border-dotted border-neutral-500 first:border-t-0">
+							<tr
+								class="break-inside-avoid border-t border-dotted border-neutral-500 first:border-t-0"
+							>
 								<td class="w-10 py-1 pl-6"
 									><span class="inline-block size-4 border-2 border-black align-middle"></span></td
 								>
@@ -147,7 +149,8 @@
 								>
 								<td class="w-20 py-1 pr-2 pl-3 text-[9pt]"
 									><span class="flex items-baseline gap-1"
-										>Init <span class="inline-block flex-1 border-b border-black">&nbsp;</span></span
+										>Init <span class="inline-block flex-1 border-b border-black">&nbsp;</span
+										></span
 									></td
 								>
 							</tr>
@@ -161,7 +164,9 @@
 							<span>{s.number}</span>
 							<span>{s.title}</span>
 							{#if s.estimatedDurationMinutes}
-								<span class="ml-auto text-[9pt] font-normal">EST {s.estimatedDurationMinutes} min</span>
+								<span class="ml-auto text-[9pt] font-normal"
+									>EST {s.estimatedDurationMinutes} min</span
+								>
 							{/if}
 						</div>
 						{@render body(s)}
@@ -253,14 +258,14 @@
 	{/if}
 
 	<h2 class="mt-5 mb-2 border-b-2 border-black pb-1 text-[12pt] font-bold uppercase">Operations</h2>
-	{#each grouped.ops as g (g.op.id)}{@render opBlock(g, false)}{/each}
+	{#each grouped.ops as g (g.op.id)}{@render opBlock(g)}{/each}
 	{#if !hasOps}<p class="mb-3 text-[10pt]">OPERATIONS — none</p>{/if}
 
 	{#if grouped.contingency.length}
 		<h2 class="mt-5 mb-2 border-b-2 border-black pb-1 text-[12pt] font-bold uppercase">
 			Contingency operations
 		</h2>
-		{#each grouped.contingency as g (g.op.id)}{@render opBlock(g, true)}{/each}
+		{#each grouped.contingency as g (g.op.id)}{@render opBlock(g)}{/each}
 	{/if}
 
 	<footer class="mt-8 flex break-inside-avoid justify-between border-t-[3px] border-black pt-4">

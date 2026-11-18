@@ -4,6 +4,8 @@
 import { MAX_NUMBERS_IN_TEXTS } from '@opal/shared';
 import { opal } from '#lib/api.js';
 
+/* eslint-disable svelte/prefer-svelte-reactivity -- bookkeeping; `answered` is the reactive signal */
+
 const found = new Map<string, readonly string[]>();
 const waiting = new Set<string>();
 const asking = new Set<string>();
