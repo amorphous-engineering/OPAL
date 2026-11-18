@@ -18,6 +18,7 @@ import { api, opal } from '#lib/api.js';
 import { toast, toastError } from '#lib/components/opal/index.js';
 import {
 	isActionable,
+	isShort,
 	isTerminal,
 	visibleRows,
 	type ConsumeItem,
@@ -422,7 +423,9 @@ export class ExecutionStore implements DocController {
 	private defaultOpen(key: string): boolean {
 		const order = this.openOrder;
 		const hit = order === null ? undefined : this.findStep(order);
-		if (hit && (key === `step:${order}` || key === `op:${hit.op.order}`)) return true;
+		if (hit && key === `op:${hit.op.order}`) return true;
+		// A short step is one row with a tick, so the current one does not open its notes and actions.
+		if (hit && key === `step:${order}` && !isShort(hit.step, hit.op)) return true;
 		// Values typed into a step never close under the operator.
 		const [kind, id] = key.split(':');
 		if (kind === 'step') return !!this.drafts[Number(id)] || !!this.noteBodies[Number(id)];

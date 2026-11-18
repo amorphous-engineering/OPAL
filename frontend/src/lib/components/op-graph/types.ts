@@ -5,7 +5,7 @@ export type GraphNodeKind = 'op' | 'contingency' | 'redline';
 export interface GraphNode {
 	/** The OP's document `order`. */
 	id: number;
-	/** "1", "C1", "2R1" */
+	/** "1", "C901", "2R1" */
 	number: string;
 	title: string;
 	kind: GraphNodeKind;

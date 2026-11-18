@@ -97,7 +97,10 @@
 	class={cn(
 		// clip, not hidden: hidden makes a scroll container, which stops the title bars from sticking.
 		'overflow-clip border border-border bg-card',
-		op.is_ad_hoc && (draftRl ? 'border-dashed border-foreground' : 'border-warn')
+		op.is_ad_hoc && (draftRl ? 'border-dashed border-foreground' : 'border-warn'),
+		// Quiet until someone enters a contingency OP, then a yellow edge. An edge and never a fill,
+		// because a fill means someone is being waited on.
+		op.is_contingency && op.status !== 'pending' && 'border-l-4 border-l-warn-fill'
 	)}
 >
 	<div

@@ -44,6 +44,7 @@ export {
 	isActionable,
 	isBlocked,
 	isRoutine,
+	isShort,
 	isTerminal,
 	visibleRows,
 	TERMINAL_STATUSES

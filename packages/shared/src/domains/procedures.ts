@@ -154,7 +154,7 @@ export const zProcedureStep = z.object({
 	procedureId: z.number().int(),
 	/** 1..n in document order: normal OPs first, then contingency OPs, each followed by its steps. */
 	order: z.number().int(),
-	/** `1`, `1.2`, `C1`, `C1.2`. */
+	/** `1`, `1.2`, `C901`, `C901.2`. A version published before the 900 series keeps `C1`. */
 	number: z.string(),
 	/** 0 = OP, 1 = sub-step. */
 	level: z.number().int(),
@@ -428,7 +428,7 @@ const steps = {
 		method: 'POST',
 		path: '/procedures/:id/steps',
 		summary:
-			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C1, C2; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) and an optional spec.',
+			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C901, C902; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) and an optional spec.',
 		input: zStepAdd,
 		output: zProcedureStep,
 		access: 'signed-in',
