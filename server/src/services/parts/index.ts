@@ -156,6 +156,35 @@ export function get(ctx: Ctx, id: number): Part {
 	return present(ctx, getRow(ctx, id));
 }
 
+/** A part by its number as a person writes it: `SPX-F-132`, `SPX-F-0132` and the stored form are one part. */
+export function byNumber(ctx: Ctx, internalPn: string): Part {
+	const pn = numbersFor(ctx.db).canonical(internalPn);
+	const row = ctx.db.select().from(part).where(eq(part.internalPn, pn)).get();
+	if (!row) throw notFound('Part');
+	return present(ctx, row);
+}
+
+/**
+ * For each text, the part numbers written in it that name a part, as written and each once. The
+ * organization's numbering settings decide what reads as a number; a number that names no part is
+ * left out, so a reader is never sent to a page that does not exist.
+ */
+export function numbersIn(ctx: Ctx, texts: string[]): string[][] {
+	const hits = texts.map((t) => numbersFor(ctx.db).find(t));
+	const wanted = [...new Set(hits.flat().map((h) => h.stored))];
+	const known = new Set<string>();
+	// Chunked to stay under SQLite's limit on bound values.
+	for (let i = 0; i < wanted.length; i += 500) {
+		const rows = ctx.db
+			.select({ pn: part.internalPn })
+			.from(part)
+			.where(inArray(part.internalPn, wanted.slice(i, i + 500)))
+			.all();
+		for (const r of rows) known.add(r.pn);
+	}
+	return hits.map((h) => [...new Set(h.filter((x) => known.has(x.stored)).map((x) => x.text))]);
+}
+
 export function detail(ctx: Ctx, id: number): PartDetail {
 	const row = getRow(ctx, id);
 	const activator = row.activatedById

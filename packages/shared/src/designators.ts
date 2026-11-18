@@ -127,6 +127,13 @@ export interface NumberCodec {
 	 * variant code. A number without a suffix has `variant: null`. Null outside the scheme.
 	 */
 	split(stored: string): { base: string; variant: string | null } | null;
+	/**
+	 * Part numbers written in prose, in order: each as written and in its stored form. The sequence
+	 * must be written at the display width or longer, so a short run like `3-4` under a format with
+	 * no prefix is not taken for a part. A number that runs on into a word (`F-0132A`,
+	 * `F-0132-02`) is not one either.
+	 */
+	find(text: string): { text: string; stored: string }[];
 }
 
 export function numberCodec(width: number, scheme: PartNumberScheme = FALLBACK_SCHEME): NumberCodec {
@@ -149,6 +156,14 @@ export function numberCodec(width: number, scheme: PartNumberScheme = FALLBACK_S
 		? new RegExp(`^(${parts.before})(\\d{1,${STORED_DIGITS}})(${parts.after})(${parts.joiner})(\\d{0,${VARIANT_DIGITS}})$`)
 		: null;
 	const pnPartial = parts ? new RegExp(`^(${parts.before})(\\d{1,${STORED_DIGITS}})$`) : null;
+	// Not after a word or hyphen, and not followed by a word, directly or across a separator.
+	const runsOn = [esc(scheme.separator), parts?.joiner ?? ''].filter(Boolean).map((t) => `|(?:${t})\\w`).join('');
+	const pnInText = parts
+		? new RegExp(
+				`(?<![\\w-])(${parts.before})(\\d{${width},${STORED_DIGITS}})(${parts.after})${suffix(`{${VARIANT_DIGITS}}`)}(?!\\w${runsOn})`,
+				'g'
+			)
+		: null;
 	const desigPartial = new RegExp(`^(${ALT})-(\\d{1,${STORED_DIGITS}})$`, 'i');
 	// Fewer digits than the width with a leading zero is the start of a shown number (WO-00 at
 	// width 4 is WO-0001 to WO-0099). Anything else is a whole number (WO-4, WO-0004, WO-00004).
@@ -199,6 +214,13 @@ export function numberCodec(width: number, scheme: PartNumberScheme = FALLBACK_S
 		split(stored) {
 			const m = pnSplit?.exec(stored);
 			return m ? { base: m[1]!, variant: m[3] || null } : null;
+		},
+		find(text) {
+			if (!pnInText) return [];
+			return [...text.matchAll(pnInText)].map((m) => ({
+				text: m[0],
+				stored: m[1]! + full(m[2]!) + m[3]! + code(m[4], m[5])
+			}));
 		}
 	};
 }

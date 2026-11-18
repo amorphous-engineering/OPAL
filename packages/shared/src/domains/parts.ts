@@ -345,6 +345,8 @@ export type ImportPreviewRow = z.infer<typeof zImportRowPreview>;
 export type ImportResult = z.infer<typeof zImportResult>;
 
 export const MAX_BULK_PARTS = 500;
+/** Texts per `parts.numbersIn` call: one page of steps. */
+export const MAX_NUMBERS_IN_TEXTS = 200;
 
 const parts_ = {
 	// Static paths come first: the registry mounts routes in this order and `/parts/:id` would
@@ -376,6 +378,27 @@ const parts_ = {
 		summary: 'Tiers, categories, custom fields and the numbering format from the project configuration.',
 		input: z.object({}),
 		output: zPartSchema,
+		access: 'signed-in',
+		mcp: true
+	}),
+	byNumber: op({
+		name: 'parts.byNumber',
+		method: 'GET',
+		path: '/parts/number/:internalPn',
+		summary: 'Get one part by its part number, at any sequence width.',
+		input: z.object({ internalPn: z.string().max(MAX_SHORT) }),
+		output: zPart,
+		access: 'signed-in',
+		mcp: true
+	}),
+	numbersIn: op({
+		name: 'parts.numbersIn',
+		method: 'POST',
+		path: '/parts/numbers-in',
+		summary:
+			'For each text, the part numbers written in it that name a part, as written. Numbers that name no part are left out.',
+		input: z.object({ texts: z.array(z.string().max(MAX_MARKDOWN)).max(MAX_NUMBERS_IN_TEXTS) }),
+		output: z.object({ found: z.array(z.array(z.string())) }),
 		access: 'signed-in',
 		mcp: true
 	}),
