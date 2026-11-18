@@ -295,7 +295,9 @@ export class ExecutionStore implements DocController {
 	openOrder = $derived.by(() => {
 		const doc = this.doc;
 		if (!doc?.instance.active) return null;
-		const ready = (r: WorkRow) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
+		// A waiver is the one move left for the person alone on a step they signed.
+		const ready = (r: WorkRow) =>
+			isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign || s.can_waive);
 		const pick = (rows: WorkRow[]) =>
 			rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
 		const claimed = this.workRows(this.allOps.filter((o) => o.order === this.claimedOrder));
