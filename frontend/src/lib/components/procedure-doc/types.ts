@@ -4,7 +4,14 @@
  * gates), the template editor will fill only the authoring fields and leave the
  * rest at their empty defaults.
  */
-import { isShortStep, type ComponentRemoval, type DocUnitSlot, type ExecUnit, type Spec, type UnitSlot } from '@opal/shared';
+import {
+	isShortStep,
+	type ComponentRemoval,
+	type DocUnitSlot,
+	type ExecUnit,
+	type Spec,
+	type UnitSlot
+} from '@opal/shared';
 
 /**
  * execute: operator controls. readonly: facts only. author: the template editor; every
