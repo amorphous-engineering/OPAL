@@ -81,6 +81,18 @@ export function draftAsSnapshot(steps: ProcedureStep[]): {
 				state: k.partState
 			});
 		}
+		// A slot names only its part; the reader needs it in the part list like a kit line.
+		for (const u of s.units) {
+			if (!parts.has(u.partId))
+				parts.set(u.partId, {
+					id: u.partId,
+					internalPn: u.partNumber,
+					name: u.partName,
+					externalPn: null,
+					unitOfMeasure: 'ea',
+					state: 'active'
+				});
+		}
 		return {
 			id: s.id,
 			order: s.order,
@@ -102,8 +114,19 @@ export function draftAsSnapshot(steps: ProcedureStep[]): {
 				partId: k.partId,
 				quantity: k.quantity,
 				usage: k.usage,
-				notes: k.notes
-			}))
+				notes: k.notes,
+				...(k.into ? { into: k.into } : {})
+			})),
+			...(s.units.length
+				? {
+						units: s.units.map((u) => ({
+							key: u.key,
+							label: u.label,
+							partId: u.partId,
+							required: u.required
+						}))
+					}
+				: {})
 		} satisfies SnapshotStep;
 	});
 	return { steps: out, parts: [...parts.values()] };

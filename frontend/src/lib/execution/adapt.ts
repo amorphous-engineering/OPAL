@@ -96,8 +96,13 @@ function step(s: DocStepOut, parentOrder: number | null): DocStep {
 			uom: k.uom,
 			usage_type: k.usage,
 			notes: k.notes,
-			struck_by: k.struckBy
+			struck_by: k.struckBy,
+			into: k.into
 		})),
+		unit_record:
+			s.unitSlots.length || s.extraUnits.length || s.removals.length
+				? { slots: s.unitSlots, extras: s.extraUnits, removals: s.removals }
+				: undefined,
 		data_schema: s.dataSchema,
 		data_captured: s.dataCaptured,
 		skip_reason: s.skipReason,
@@ -305,6 +310,7 @@ export function adaptDocument(d: ApiDocument): ExecutionDocument {
 			}))
 		},
 		consumptions: d.consumptions.map(consumption),
+		units: d.units,
 		outputs: d.outputs.map((o) => ({
 			part_id: o.partId,
 			part_number: o.partNumber,
@@ -361,6 +367,7 @@ export function adaptState(s: ApiState): ExecutionState {
 			})),
 			attachments: x.attachments,
 			consumed: x.consumed,
+			units: x.units,
 			notes: x.notes
 		})),
 		roster: s.roster.map(rosterEntry),

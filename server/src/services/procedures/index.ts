@@ -303,7 +303,8 @@ export function clone(
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			callouts: structuredClone(s.callouts ?? []),
 			strictSequence: s.strictSequence,
-			workcenterId: s.workcenterId
+			workcenterId: s.workcenterId,
+			units: s.units ? structuredClone(s.units) : null
 		});
 		map.set(s.id, dup.id);
 		if (input.copyKit) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UnitsReport from '#lib/components/units/UnitsReport.svelte';
 	import { datetimeSec, stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import ReportChart from '#lib/components/executions/ReportChart.svelte';
@@ -114,6 +115,11 @@
 				</tbody>
 			</table>
 		{:else}{@render none('End item')}{/if}
+
+		{#if r.units.length || r.removals.length}
+			{@render h2('Units acted on')}
+			<UnitsReport units={r.units} removals={r.removals} />
+		{/if}
 
 		{@render h2('Operations summary')}
 		{#if r.operations.length}

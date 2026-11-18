@@ -9,6 +9,7 @@ import { captureDisplay, readingOf } from './document.ts';
 import { closureOf } from './executions.ts';
 import { productionRows } from './material.ts';
 import { isActive, isRoutine, loadModel, opRowOf } from './model.ts';
+import { presentUnits, removalRows } from './units.ts';
 import { signoffRecords, userNames, waiverRecords } from './present.ts';
 
 export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): ExecutionReport {
@@ -139,6 +140,8 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 			closure: closureOf(db, m.exec)
 		},
 		generatedAt: now(),
+		units: presentUnits(db, m),
+		removals: removalRows(db, m),
 		endItems,
 		operations,
 		dataCollects,

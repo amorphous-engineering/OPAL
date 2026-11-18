@@ -19,6 +19,8 @@
 	import SaveBadge from './author/SaveBadge.svelte';
 	import StepProps from './author/StepProps.svelte';
 	import { isRoutine, type DocOp, type DocStep } from './types.js';
+	import StepUnits from '#lib/components/units/StepUnits.svelte';
+	import UnitSlotsEditor from '#lib/components/units/UnitSlotsEditor.svelte';
 
 	let { step, op }: { step: DocStep; op: DocOp } = $props();
 	const ctl = useDoc();
@@ -67,6 +69,11 @@
 		{/if}
 	{/if}
 	<StepImages images={step.images} {step} />
+	{#if authoring && op.step === step}
+		<UnitSlotsEditor {step} />
+	{:else if !authoring}
+		<StepUnits {step} {op} />
+	{/if}
 	<StepKit {step} />
 
 	{#if hasFields || authoring}

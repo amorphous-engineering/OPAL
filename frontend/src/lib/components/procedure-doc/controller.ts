@@ -9,6 +9,7 @@
  * will be a different set of actions on the same components.
  */
 import { getContext, setContext } from 'svelte';
+import type { ExecUnit, InstalledComponent, UnitSlot } from '@opal/shared';
 import type { Callout, DocLabor, DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
 
 export interface StockRecord {
@@ -26,6 +27,44 @@ export interface ConsumeItem {
 	inventory_record_id: number;
 	quantity: number;
 	usage_type: string;
+	/** A unit slot key: the part goes into the unit named there. */
+	into?: string | null;
+}
+
+/** Naming the units a work order acts on, and taking components out of them. */
+export interface UnitActions {
+	bind(
+		step: DocStep,
+		body: {
+			slot?: string | null;
+			stockId?: number;
+			borrowed?: { name: string; serial?: string | null; lentBy?: string | null };
+		}
+	): Promise<boolean>;
+	unbind(unitId: number): Promise<boolean>;
+	/** Serialized records of a part to name as a unit. */
+	candidates(partId: number): Promise<StockRecordLite[]>;
+	installed(unitId: number): Promise<InstalledComponent[]>;
+	remove(
+		step: DocStep,
+		body: {
+			unitId: number;
+			stockId: number;
+			quantity: string;
+			location?: string | null;
+			notes?: string | null;
+		}
+	): Promise<boolean>;
+	/** The units named on the work order, for a removal at any step. */
+	named(): ExecUnit[];
+}
+
+export interface StockRecordLite {
+	id: number;
+	opal_number: string;
+	serial_number: string | null;
+	location: string;
+	balance: string;
 }
 
 /** Operator actions. Optional: an absent action removes its control. */
@@ -57,6 +96,7 @@ export interface DocActions {
 	loadStock?(partId: number): Promise<StockRecord[]>;
 	/** Upload photos for a photo capture field; resolves to the new attachment ids. */
 	uploadPhotos?(step: DocStep, files: File[]): Promise<number[]>;
+	units?: UnitActions;
 }
 
 /**
@@ -86,6 +126,8 @@ export interface StepEdit {
 	strict_sequence?: boolean;
 	workcenter_id?: number | null;
 	data_schema?: DocSchema | null;
+	/** OPs only: the unit slots. Null or empty clears them. */
+	units?: UnitSlot[] | null;
 }
 
 export interface PartHit {
@@ -132,13 +174,21 @@ export interface AuthorActions {
 		part: PartHit,
 		quantity: number,
 		usage: string,
-		notes: string | null
+		notes: string | null,
+		into?: string | null
 	): Promise<void>;
 	editKit(
 		step: DocStep,
 		kitId: number,
-		patch: { quantity_required?: number; usage_type?: string; notes?: string | null }
+		patch: {
+			quantity_required?: number;
+			usage_type?: string;
+			notes?: string | null;
+			into?: string | null;
+		}
 	): void;
+	/** Every unit slot the procedure declares, for kit lines that install into one. */
+	unitSlots(): UnitSlot[];
 	removeKit(step: DocStep, kitId: number): Promise<void>;
 	/** Upload an image for use inside markdown; resolves to the markdown to insert. */
 	uploadInline(file: File): Promise<string>;

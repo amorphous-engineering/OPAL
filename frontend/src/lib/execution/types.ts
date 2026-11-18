@@ -10,6 +10,7 @@ import type {
 	DocLabor,
 	DocOp
 } from '#lib/components/procedure-doc/index.js';
+import type { ExecUnit } from '@opal/shared';
 
 export type InstanceStatus = 'cut' | 'in_work' | 'completed' | 'void' | 'closed_short';
 
@@ -173,6 +174,8 @@ export interface ExecutionDocument {
 	my_cursor_order: number | null;
 	kit: { items: KitRow[]; struck: StruckKitRow[]; unplanned: UnplannedRow[] };
 	consumptions: DocConsumption[];
+	/** Every unit the work order acts on. */
+	units: ExecUnit[];
 	outputs: OutputRow[];
 	productions: ProductionRow[];
 	kit_relevant: boolean;
@@ -199,6 +202,7 @@ export interface ExecutionState {
 		holds: { issue_id: number; issue_number: string; disposition_state: string; kind: string }[];
 		attachments: number;
 		consumed: number;
+		units: string;
 		notes: number;
 	}[];
 	roster: RosterEntry[];

@@ -384,6 +384,7 @@ export class ExecutionStore implements DocController {
 				x.holds.map((h) => `${h.issue_number}:${h.disposition_state}:${h.kind}`),
 				x.attachments,
 				x.consumed,
+				x.units,
 				x.notes
 			]),
 			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`),
@@ -744,7 +745,8 @@ export class ExecutionStore implements DocController {
 					items: items.map((i) => ({
 						stockId: i.inventory_record_id,
 						quantity: String(i.quantity),
-						usage: i.usage_type === 'tooling' ? ('tooling' as const) : ('consume' as const)
+						usage: i.usage_type === 'tooling' ? ('tooling' as const) : ('consume' as const),
+						...(i.into ? { into: i.into } : {})
 					}))
 				});
 				this.stock = {};
@@ -754,6 +756,55 @@ export class ExecutionStore implements DocController {
 				toastError(e, 'Failed to consume parts');
 				return false;
 			}
+		},
+		units: {
+			bind: async (step, body) => {
+				try {
+					await opal.execution.bindUnit({ id: this.id, stepId: step.order, ...body });
+					await this.changed();
+					return true;
+				} catch (e) {
+					toastError(e, 'Unit not named');
+					return false;
+				}
+			},
+			unbind: async (unitId) => {
+				try {
+					await opal.execution.unbindUnit({ id: this.id, unitId });
+					await this.changed();
+					return true;
+				} catch (e) {
+					toastError(e, 'Unit not taken back');
+					return false;
+				}
+			},
+			candidates: async (partId) => {
+				const r = await opal.inventory.list({
+					partId,
+					sort: 'createdAt',
+					order: 'asc',
+					limit: 200
+				});
+				return r.items.map((x) => ({
+					id: x.id,
+					opal_number: x.opalNumber,
+					serial_number: x.serialNumber,
+					location: x.location,
+					balance: x.balance
+				}));
+			},
+			installed: (unitId) => opal.execution.installed({ id: this.id, unitId }),
+			remove: async (step, body) => {
+				try {
+					await opal.execution.removeComponent({ id: this.id, stepId: step.order, ...body });
+					await this.changed();
+					return true;
+				} catch (e) {
+					toastError(e, 'Removal not recorded');
+					return false;
+				}
+			},
+			named: () => this.doc?.units ?? []
 		},
 		loadStock: async (partId) => {
 			if (this.stock[partId]) return this.stock[partId];

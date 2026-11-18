@@ -20,6 +20,7 @@ import { update } from '../../write.ts';
 import { balancesForPart, consumeStock, produceStock } from '../inventory/index.ts';
 import { ensurePartsActive } from '../parts/lifecycle.ts';
 import { getRow, isActive, loadModel, type Model, opRowOf, type Row } from './model.ts';
+import { intoStockOf } from './units.ts';
 
 // ---------------------------------------------------------------- consumption rows
 
@@ -94,6 +95,11 @@ export function kitAvailability(ctx: Pick<Ctx, 'db'>, executionId: number) {
 
 // ---------------------------------------------------------------- consume
 
+function intoOther(stockId: number, into: number | null): number | null {
+	if (into !== null && stockId === into) throw new OpalError(422, 'invalid_input', 'A unit cannot go into itself', { into: 'the same unit' });
+	return into;
+}
+
 /** Material moves belong to the work done; a closed work order's record stays as signed. */
 function requireOpen(m: Model) {
 	if (!isActive(m.exec)) {
@@ -105,6 +111,7 @@ interface Line {
 	stockId: number;
 	quantity: string;
 	usage: 'consume' | 'tooling';
+	into?: string | null;
 }
 
 export function consume(ctx: Ctx, input: { id: number; stepId?: number; items: Line[]; notes?: string | null }) {
@@ -122,6 +129,9 @@ export function consume(ctx: Ctx, input: { id: number; stepId?: number; items: L
 	// A consumption never references a draft part.
 	ensurePartsActive(ctx, stocks.map((s) => s.partId), row ? 'step consumption' : 'procedure consumption');
 	const links = { executionId: m.exec.id, ...(row ? { stepExecutionId: row.id } : {}) };
+	for (const i of input.items) {
+		if (i.into && i.usage === 'tooling') throw new OpalError(422, 'invalid_input', 'Tooling is returned; only consumed material is installed', { into: 'consume only' });
+	}
 	const moveIds: number[] = [];
 	for (const i of input.items) {
 		const mv = consumeStock(ctx, {
@@ -129,6 +139,7 @@ export function consume(ctx: Ctx, input: { id: number; stepId?: number; items: L
 			quantity: parseQty(i.quantity),
 			tooling: i.usage === 'tooling',
 			notes: input.notes,
+			intoStockId: i.into ? intoOther(i.stockId, intoStockOf(m, i.into)) : null,
 			links
 		});
 		moveIds.push(mv.id);

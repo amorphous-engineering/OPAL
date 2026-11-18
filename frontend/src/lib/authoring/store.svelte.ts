@@ -298,9 +298,12 @@ export class AuthorStore implements DocController {
 				part_number: k.partNumber,
 				quantity_required: toNum(k.quantity),
 				usage_type: k.usage,
-				notes: k.notes
+				notes: k.notes,
+				into: k.into
 			}));
 			if (JSON.stringify(st.step_kit) !== JSON.stringify(kit)) st.step_kit = kit;
+			if (!dirty(d.id, 'units') && JSON.stringify(st.units ?? []) !== JSON.stringify(d.units))
+				st.units = d.units.map((u) => ({ ...u }));
 		}
 
 		const build = (group: DraftStep[]): DocOp[] =>
@@ -362,6 +365,7 @@ export class AuthorStore implements DocController {
 			workcenter_id: d.workcenterId,
 			images: [],
 			step_kit: [],
+			units: d.units.map((u) => ({ ...u })),
 			data_schema: d.dataSchema,
 			data_captured: null,
 			skip_reason: null,
@@ -411,6 +415,7 @@ export class AuthorStore implements DocController {
 	}
 
 	ops = () => this.allOps;
+	unitSlots = () => this.allOps.flatMap((o) => o.step.units ?? []);
 
 	findStep(order: number): { op: DocOp; step: DocStep } | undefined {
 		for (const op of this.allOps) {
@@ -553,6 +558,15 @@ export class AuthorStore implements DocController {
 			const fields = patch.data_schema?.fields ?? [];
 			body.dataSchema = fields.length ? { fields: fields as ProcedureDataField[] } : null;
 		}
+		if ('units' in patch)
+			body.units = patch.units?.length
+				? patch.units.map((u) => ({
+						key: u.key,
+						label: u.label,
+						partId: u.partId,
+						required: u.required
+					}))
+				: null;
 		return body;
 	}
 
@@ -941,7 +955,8 @@ export class AuthorStore implements DocController {
 		part: PartHit,
 		quantity: number,
 		usage: string,
-		notes: string | null
+		notes: string | null,
+		into: string | null = null
 	) => {
 		await this.track(step.order, 'kit', async () => {
 			const r = await opal.procedures.steps.kit.add({
@@ -950,7 +965,8 @@ export class AuthorStore implements DocController {
 				partId: part.id,
 				quantity: toQty(quantity),
 				usage: usage as 'consume' | 'tooling',
-				notes
+				notes,
+				into
 			});
 			step.step_kit = [
 				...step.step_kit,
@@ -961,7 +977,8 @@ export class AuthorStore implements DocController {
 					part_number: part.internal_pn,
 					quantity_required: quantity,
 					usage_type: usage,
-					notes
+					notes,
+					into
 				}
 			];
 		});
@@ -970,11 +987,18 @@ export class AuthorStore implements DocController {
 	editKit = (
 		step: DocStep,
 		kitId: number,
-		patch: { quantity_required?: number; usage_type?: string; notes?: string | null }
+		patch: {
+			quantity_required?: number;
+			usage_type?: string;
+			notes?: string | null;
+			into?: string | null;
+		}
 	) => {
 		const line = step.step_kit.find((k) => k.id === kitId);
 		if (!line) return;
 		Object.assign(line, patch);
+		// Tooling is returned, so it installs nothing.
+		if (line.usage_type === 'tooling') line.into = null;
 		this.schedule(`kit:${step.order}:${kitId}`, step.order, TEXT_DELAY, async () => {
 			if (!(line.quantity_required > 0)) throw new Error('Quantity must be above zero');
 			await opal.procedures.steps.kit.update({
@@ -983,7 +1007,8 @@ export class AuthorStore implements DocController {
 				kitId,
 				quantity: toQty(line.quantity_required),
 				usage: line.usage_type as 'consume' | 'tooling',
-				notes: line.notes ?? null
+				notes: line.notes ?? null,
+				into: line.into ?? null
 			});
 		});
 	};

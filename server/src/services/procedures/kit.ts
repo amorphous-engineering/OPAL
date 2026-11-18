@@ -17,6 +17,7 @@ import { bomLine, kitItem, part, procedureOutput } from '../../db/schema/index.t
 import { insert, remove, update } from '../../write.ts';
 import { draftRow, presentKit, presentOutput, presentOutputs, procedureKitRows, procedureRow, stepRow } from './draft.ts';
 import { invalid } from './steps.ts';
+import { checkInto } from './units.ts';
 
 type Usage = 'consume' | 'tooling';
 export type Scope = { procedureId: number; stepId?: undefined } | { procedureId: number; stepId: number };
@@ -62,9 +63,12 @@ export function listKit(ctx: Ctx, scope: Scope): ProcedureKitItem[] {
 export function addKit(
 	ctx: Ctx,
 	scope: Scope,
-	input: { partId: number; quantity: string; usage: Usage; notes?: string | null }
+	input: { partId: number; quantity: string; usage: Usage; notes?: string | null; into?: string | null }
 ): ProcedureKitItem {
 	check(ctx, scope, true);
+	// A procedure-level line belongs to no step, so it has no step to install at.
+	if (scope.stepId === undefined && input.into) throw invalid('into_step', 'Only a step kit line installs into a unit', { into: 'step lines only' });
+	const into = checkInto(ctx.db, scope.procedureId, input.into ?? null, input.usage);
 	requirePart(ctx, input.partId);
 	const quantity = positive(input.quantity);
 	const dup = ctx.db
@@ -79,7 +83,8 @@ export function addKit(
 		partId: input.partId,
 		quantity,
 		usage: input.usage,
-		notes: input.notes ?? null
+		notes: input.notes ?? null,
+		intoSlot: into
 	});
 	return presentKit(ctx, [row])[0]!;
 }
@@ -88,14 +93,18 @@ export function updateKit(
 	ctx: Ctx,
 	scope: Scope,
 	kitId: number,
-	input: { quantity?: string; usage?: Usage; notes?: string | null }
+	input: { quantity?: string; usage?: Usage; notes?: string | null; into?: string | null }
 ): ProcedureKitItem {
 	check(ctx, scope, true);
-	kitRow(ctx, scope, kitId);
+	const cur = kitRow(ctx, scope, kitId);
 	const patch: Partial<typeof kitItem.$inferInsert> = {};
 	if (input.quantity !== undefined) patch.quantity = positive(input.quantity);
 	if (input.usage !== undefined) patch.usage = input.usage;
 	if (input.notes !== undefined) patch.notes = input.notes;
+	if (input.into !== undefined || (input.usage === 'tooling' && cur.intoSlot !== null)) {
+		const into = input.into !== undefined ? input.into : cur.intoSlot;
+		patch.intoSlot = checkInto(ctx.db, scope.procedureId, into, input.usage ?? cur.usage);
+	}
 	const row = Object.keys(patch).length ? update(ctx, kitItem, kitId, patch) : kitRow(ctx, scope, kitId);
 	return presentKit(ctx, [row])[0]!;
 }

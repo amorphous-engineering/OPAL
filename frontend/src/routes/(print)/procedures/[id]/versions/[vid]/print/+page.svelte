@@ -6,6 +6,7 @@
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import { stepRuns } from '#lib/components/procedures/runs.js';
 	import { orderCallouts } from '#lib/components/procedure-doc/callouts.js';
+	import UnitSlotsPrint from '#lib/components/units/UnitSlotsPrint.svelte';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
@@ -14,6 +15,9 @@
 	const v = $derived(data.version);
 	const grouped = $derived(groupOps(v.snapshot.steps));
 	const partById = $derived(new Map(v.parts.map((p) => [p.id, p])));
+	const slotLabel = $derived(
+		new Map(v.snapshot.steps.flatMap((s) => s.units ?? []).map((u) => [u.key, u.label]))
+	);
 	const target = $derived(`${page.url.origin}/procedures/versions/${v.id}`);
 	const qr = $derived(`/api/procedures/versions/${v.id}/qr?url=${encodeURIComponent(target)}`);
 	const hasOps = $derived(grouped.ops.length > 0);
@@ -106,7 +110,12 @@
 	{#if s.kit.length}
 		<p class="my-1 text-[9pt]">
 			<b>PARTS</b>
-			{s.kit.map((k) => `${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}`).join(' · ')}
+			{s.kit
+				.map(
+					(k) =>
+						`${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}${k.into ? ` into ${slotLabel.get(k.into) ?? k.into}` : ''}`
+				)
+				.join(' · ')}
 		</p>
 	{/if}
 	<div class="grid gap-1.5">
@@ -127,6 +136,7 @@
 		</div>
 		<div class="px-2.5 py-2">
 			{@render body(g.op)}
+			<UnitSlotsPrint slots={g.op.units ?? []} {partById} />
 			{#if g.subs.length === 0}{@render signLines(g.op)}{/if}
 		</div>
 		{#each stepRuns(g.subs) as run (run.steps[0].id)}

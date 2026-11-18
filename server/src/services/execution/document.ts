@@ -33,6 +33,7 @@ import { type Model, type Row, isActive, isTerminal, loadModel, progress } from 
 import { claimsFor, cursorOf, roster, touch } from './presence.ts';
 import { initials, personRefs, signoffRecords, waiverRecords } from './present.ts';
 import { skipRefusal, waiverOf } from './steps.ts';
+import { presentUnits, removalRows } from './units.ts';
 
 type Att = {
 	id: number;
@@ -177,9 +178,16 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 
 	const strikes = m.rows.flatMap((r) => (r.level === 0 && r.adhoc ? (r.adhoc.strikes ?? []) : []));
 	const partIds = [
-		...new Set([...m.rows.flatMap((r) => r.kit.map((k) => k.partId)), ...m.snapshot.kit.map((k) => k.partId), ...strikes.map((x) => x.partId)])
+		...new Set([
+			...m.rows.flatMap((r) => r.kit.map((k) => k.partId)),
+			...m.snapshot.kit.map((k) => k.partId),
+			...strikes.map((x) => x.partId),
+			...m.rows.flatMap((r) => r.units.map((u) => u.partId))
+		])
 	];
 	const struck = struckLines(m);
+	const units = presentUnits(db, m);
+	const removals = removalRows(db, m);
 	const parts = new Map(partIds.length ? db.select().from(part).where(inArray(part.id, partIds)).all().map((p) => [p.id, p]) : []);
 
 	const consBy = new Map<number, typeof consumptions>();
@@ -246,7 +254,8 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 				uom: parts.get(k.partId)?.unitOfMeasure ?? 'ea',
 				usage: k.usage,
 				notes: k.notes,
-				struckBy: struck.get(`${row.id}:${k.partId}`)?.number ?? null
+				struckBy: struck.get(`${row.id}:${k.partId}`)?.number ?? null,
+				into: k.into ?? null
 			})),
 			dataSchema: row.dataSchema,
 			dataCaptured: skipped ? null : (se.dataCaptured ?? null),
@@ -289,6 +298,17 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 			signoffs,
 			attachments: stepAtts.filter((a) => a.ownerId === row.id).map(attOut),
 			consumptions: consBy.get(row.id) ?? [],
+			unitSlots: row.units.map((s) => ({
+				key: s.key,
+				label: s.label,
+				partId: s.partId,
+				partNumber: parts.get(s.partId)?.internalPn ?? '',
+				partName: parts.get(s.partId)?.name ?? '',
+				required: s.required,
+				unit: units.find((u) => u.stepId === row.id && u.slot === s.key) ?? null
+			})),
+			extraUnits: units.filter((u) => u.stepId === row.id && u.slot === null),
+			removals: removals.filter((r) => r.stepId === row.id),
 			waiting: null
 		};
 	};
@@ -473,6 +493,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 		myCursorId,
 		kit: { items: rec.kitItems, struck: rec.struck, unplanned: rec.unplanned },
 		consumptions,
+		units,
 		outputs: m.snapshot.outputs.map((o) => ({
 			partId: o.partId,
 			partNumber: outputParts.get(o.partId)?.internalPn ?? '',
@@ -509,6 +530,9 @@ export function buildState(ctx: Ctx, executionId: number): ExecutionState {
 	for (const a of attachments(db, 'step_execution', stepIds)) attCount.set(a.ownerId, (attCount.get(a.ownerId) ?? 0) + 1);
 	const consCount = new Map<number, number>();
 	for (const c of consumptionRows(db, m)) if (c.stepId !== null) consCount.set(c.stepId, (consCount.get(c.stepId) ?? 0) + 1);
+	const removalIds = removalRows(db, m).map((r) => [r.stepId, r.id] as const);
+	const unitMark = (stepId: number) =>
+		[...m.units.filter((u) => u.stepExecutionId === stepId).map((u) => `u${u.id}`), ...removalIds.filter(([s]) => s === stepId).map(([, id]) => `r${id}`)].join(',');
 	return {
 		execution: { id: m.exec.id, status: m.exec.status, progress: progress(m) },
 		steps: m.rows.map((r) => ({
@@ -522,7 +546,8 @@ export function buildState(ctx: Ctx, executionId: number): ExecutionState {
 			holds: holdsOf(st, r),
 			attachments: attCount.get(r.id) ?? 0,
 			consumed: consCount.get(r.id) ?? 0,
-			notes: noteCount.get(r.id) ?? 0
+			notes: noteCount.get(r.id) ?? 0,
+			units: unitMark(r.id)
 		})),
 		roster: roster(db, m),
 		holds: summarizeHolds(m, st),

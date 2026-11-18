@@ -10,7 +10,7 @@ import { insert, update } from '../../write.ts';
 import { gateRefusal, holdsGate } from '../org/gates.ts';
 import { holdsSlotRole, roleNamesOf } from '../org/roles.ts';
 import { attachmentsFor, detach, publish } from '../platform/index.ts';
-import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate, waiveGate } from './gates.ts';
+import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate, unitBlockers, waiveGate } from './gates.ts';
 import { holdState, rowHeld } from './holds.ts';
 import { type Model, type Row, getRow, isActive, isRoutine, isTerminal, loadModel } from './model.ts';
 import { personRefs, signedSlots, stepState, waivedSlots } from './present.ts';
@@ -85,6 +85,8 @@ export function checkCompletion(ctx: Ctx, executionId: number): boolean {
 		const kids = m.children.get(op.id) ?? [];
 		if (!kids.every((k) => isTerminal(k.se.status))) continue;
 		if (rowHeld(st, op) || kids.some((k) => rowHeld(st, k))) continue;
+		// An OP that names units waits for its required ones, then completes when they are named.
+		if (unitBlockers(m, op).length) continue;
 		const last = kids
 			.filter((k) => k.se.completedAt)
 			.sort((a, b) => (a.se.completedAt! < b.se.completedAt! ? 1 : -1))[0];
@@ -348,7 +350,7 @@ export function waiveSlot(ctx: Ctx, input: { id: number; stepId: number; slot: n
 export function skipRefusal(ctx: Ctx, row: Row): string | null {
 	// A routine leaf's one unnamed slot is the implicit COMPLETE, not a declared sign-off.
 	const declared = row.signoffs.length > 0 && !isRoutine(row);
-	const required = !!row.dataSchema?.fields.some((f) => f.required);
+	const required = !!row.dataSchema?.fields.some((f) => f.required) || row.units.some((u) => u.required);
 	if ((!required && !declared) || holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) return null;
 	// A holder of every role the slots name may skip without the gate: that is authority over the
 	// step, which holds even though the same person cannot sign two of its slots. An unnamed slot
