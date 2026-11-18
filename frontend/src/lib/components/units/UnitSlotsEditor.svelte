@@ -92,11 +92,14 @@
 							<PartPicker
 								meta="tracking_type"
 								onselect={(p: PartHit | null) =>
-									p && patch(s.key, { partId: p.id, partNumber: p.internal_pn ?? '', partName: p.name })}
+									p &&
+									patch(s.key, { partId: p.id, partNumber: p.internal_pn ?? '', partName: p.name })}
 							>
 								{#snippet trigger({ props })}
-									<button {...props} type="button" class="ml-2 font-mono text-xs text-info hover:underline"
-										>CHANGE</button
+									<button
+										{...props}
+										type="button"
+										class="ml-2 font-mono text-xs text-info hover:underline">CHANGE</button
 									>
 								{/snippet}
 							</PartPicker>

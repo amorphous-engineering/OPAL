@@ -63,7 +63,11 @@
 				const b = lent[key] ?? { name: '', serial: '', lentBy: '' };
 				await act.bind(step, {
 					slot,
-					borrowed: { name: b.name.trim() || partName, serial: b.serial.trim() || null, lentBy: b.lentBy.trim() || null }
+					borrowed: {
+						name: b.name.trim() || partName,
+						serial: b.serial.trim() || null,
+						lentBy: b.lentBy.trim() || null
+					}
 				});
 			} else if (pick) {
 				await act.bind(step, { slot, stockId: Number(pick) });
@@ -119,8 +123,10 @@
 {#snippet unitCell(u: ExecUnit)}
 	{#if u.borrowed}
 		<span class="font-mono">BORROWED</span>
-		{u.borrowed.name}{#if u.borrowed.serial}<span class="font-mono"> SN {u.borrowed.serial}</span
-			>{/if}{#if u.borrowed.lentBy}<span class="text-muted-foreground"> from {u.borrowed.lentBy}</span
+		{u.borrowed.name}{#if u.borrowed.serial}<span class="font-mono">
+				SN {u.borrowed.serial}</span
+			>{/if}{#if u.borrowed.lentBy}<span class="text-muted-foreground">
+				from {u.borrowed.lentBy}</span
 			>{/if}
 	{:else}
 		<a class="font-mono text-info hover:underline" href={`/inventory/opal/${u.opalNumber}`}
@@ -148,7 +154,8 @@
 			value={choice[key] ?? ''}
 			onchange={(e) => {
 				choice[key] = e.currentTarget.value;
-				if (choice[key] === BORROWED && !lent[key]) lent[key] = { name: partName, serial: '', lentBy: '' };
+				if (choice[key] === BORROWED && !lent[key])
+					lent[key] = { name: partName, serial: '', lentBy: '' };
 			}}
 		>
 			<option value="">—</option>
@@ -164,10 +171,18 @@
 				placeholder="Serial"
 				bind:value={lent[key].serial}
 			/>
-			<Input class="h-7 w-32" aria-label="Lent by" placeholder="Lent by" bind:value={lent[key].lentBy} />
+			<Input
+				class="h-7 w-32"
+				aria-label="Lent by"
+				placeholder="Lent by"
+				bind:value={lent[key].lentBy}
+			/>
 		{/if}
-		<Button size="sm" variant="outline" disabled={busy || !choice[key]} onclick={() => name(key, slot, partName)}
-			>NAME</Button
+		<Button
+			size="sm"
+			variant="outline"
+			disabled={busy || !choice[key]}
+			onclick={() => name(key, slot, partName)}>NAME</Button
 		>
 	</span>
 {/snippet}
@@ -240,7 +255,9 @@
 				<span class="text-quiet">—</span>
 			{/if}
 		</td>
-		<td class="px-2 py-1">{#if s.unit}{@render stamp(s.unit)}{/if}</td>
+		<td class="px-2 py-1"
+			>{#if s.unit}{@render stamp(s.unit)}{/if}</td
+		>
 	</tr>
 {/snippet}
 
@@ -262,7 +279,11 @@
 		{#if workable && named.length}
 			{#if removing}
 				<div class="flex flex-wrap items-center gap-2 border border-border bg-muted/30 p-2 text-xs">
-					<NativeSelect aria-label="Unit" value={fromUnit} onchange={(e) => pickUnit(e.currentTarget.value)}>
+					<NativeSelect
+						aria-label="Unit"
+						value={fromUnit}
+						onchange={(e) => pickUnit(e.currentTarget.value)}
+					>
 						<option value="">Out of…</option>
 						{#each named as u (u.id)}<option value={String(u.id)}
 								>{u.slotLabel ?? u.partName} {u.opalNumber}</option
@@ -277,10 +298,22 @@
 						</NativeSelect>
 					{/if}
 					{#if chosen && !chosen.serialized}
-						<Input type="number" min="0" step="any" class="h-7 w-20 font-mono" aria-label="Quantity" bind:value={qty} />
+						<Input
+							type="number"
+							min="0"
+							step="any"
+							class="h-7 w-20 font-mono"
+							aria-label="Quantity"
+							bind:value={qty}
+						/>
 						<span class="font-mono text-muted-foreground">{chosen.uom} · SCRAP</span>
 					{:else if chosen}
-						<Input class="h-7 w-36" aria-label="Back to stock at" placeholder="Back to stock at (blank: scrap)" bind:value={location} />
+						<Input
+							class="h-7 w-36"
+							aria-label="Back to stock at"
+							placeholder="Back to stock at (blank: scrap)"
+							bind:value={location}
+						/>
 					{/if}
 					<Input class="h-7 w-48" aria-label="Why" placeholder="Why" bind:value={why} />
 					<Button size="sm" disabled={busy || !chosen} onclick={record}>RECORD</Button>

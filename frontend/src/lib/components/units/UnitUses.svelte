@@ -43,7 +43,11 @@
 				{:else if col.key === 'status'}
 					<State
 						value={r.status}
-						tone={r.counted ? 'ok' : r.status === 'void' || r.status === 'closed_short' ? 'muted' : 'warn'}
+						tone={r.counted
+							? 'ok'
+							: r.status === 'void' || r.status === 'closed_short'
+								? 'muted'
+								: 'warn'}
 						label={stateLabel(r.status).toUpperCase()}
 					/>
 				{:else}

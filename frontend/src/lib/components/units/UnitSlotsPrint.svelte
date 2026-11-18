@@ -29,7 +29,8 @@
 				<span class="inline-block flex-1 border-b border-black">&nbsp;</span>
 			</div>
 		{/each}
-		{#if slots.some((s) => s.required)}<span class="text-[8pt]">* required before the OP completes</span
+		{#if slots.some((s) => s.required)}<span class="text-[8pt]"
+				>* required before the OP completes</span
 			>{/if}
 	</div>
 {/if}

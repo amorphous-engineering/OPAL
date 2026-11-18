@@ -138,6 +138,22 @@ describe('naming the units a work order acts on', () => {
 		expect((await t.complete(e.id, '1', { dataCaptured: { site: 'FAR' } })).status).toBe(200);
 	});
 
+	test('an OP whose sub-steps are done completes once its required unit is named', async () => {
+		const t = await setup();
+		const r = await unit(t, 'Rocket');
+		const p = await t.proc('Prep');
+		const op = await t.step(p.id, 'Prepare', { units: [{ key: 'rocket', label: 'Rocket', partId: r.part.id, required: true }] });
+		await t.step(p.id, 'Load fuel', { parentId: op.id });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const e = await t.cut(p.id);
+		await t.complete(e.id, '1.1');
+		expect((await t.get(e.id)).status).toBe('in_work');
+		await bind(t, e.id, '1', { slot: 'rocket', stockId: r.stock.id });
+		expect((await t.get(e.id)).status).toBe('completed');
+		const detail = await t.ok('GET', `/inventory/opal/${r.stock.opalNumber}/detail`);
+		expect(detail.uses[0].count).toBe(1);
+	});
+
 	test('borrowed gear is a text line: no stock record, and it fills a slot', async () => {
 		const t = await setup();
 		const r = await unit(t, 'Rocket');
@@ -328,7 +344,7 @@ describe('work on a unit that already exists', () => {
 		expect(e1).toBe('in_work');
 	});
 
-	test('borrowed gear takes no install: OPAL keeps no record of what goes into it', async () => {
+	test('a part installed into borrowed gear is used up, with no record of where it went', async () => {
 		const t = await setup();
 		const r = await t.part('Rocket');
 		const g = await t.part('GSE box');
@@ -338,8 +354,10 @@ describe('work on a unit that already exists', () => {
 		const e = await t.cut(pid);
 		await bind(t, e.id, '1', { slot: 'rocket', borrowed: { name: 'Loaner' } });
 		const fly = await t.stepOf(e.id, '2');
-		const r1 = await t.call('POST', `/executions/${e.id}/steps/${fly}/consume`, { items: [{ stockId: lot.id, quantity: '1', into: 'rocket' }] });
-		expect(r1.status).toBe(409);
+		await t.ok('POST', `/executions/${e.id}/steps/${fly}/consume`, { items: [{ stockId: lot.id, quantity: '1', into: 'rocket' }] });
+		expect((await t.ok('GET', `/inventory/${lot.id}`)).balance).toBe('9');
+		const moves = t.db.select().from(stockMove).where(eq(stockMove.executionId, e.id)).all();
+		expect(moves[0]!.intoStockId).toBeNull();
 		expect(t.db.select().from(executionUnit).all()).toHaveLength(1);
 	});
 });

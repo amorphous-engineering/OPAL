@@ -741,7 +741,12 @@ export class ExecutionStore implements DocController {
 				}
 			},
 			candidates: async (partId) => {
-				const r = await opal.inventory.list({ partId, sort: 'createdAt', order: 'asc', limit: 200 });
+				const r = await opal.inventory.list({
+					partId,
+					sort: 'createdAt',
+					order: 'asc',
+					limit: 200
+				});
 				return r.items.map((x) => ({
 					id: x.id,
 					opal_number: x.opalNumber,

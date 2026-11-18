@@ -25,7 +25,7 @@ import { insert, remove, update } from '../../write.ts';
 import { balanceOf, installedIn, isInstalled, netInstalled, writeMove } from '../inventory/index.ts';
 import { type Model, type Row, type UnitRow, getRow, isActive, loadModel } from './model.ts';
 import { userNames } from './present.ts';
-import { markInWork } from './steps.ts';
+import { checkCompletion, markInWork } from './steps.ts';
 
 const refuse = (message: string, status = 409) => new OpalError(status, 'step_blocked', message);
 
@@ -190,6 +190,8 @@ export function bindUnit(
 		borrowedFrom: input.borrowed?.lentBy?.trim() || null,
 		recordedById: actorUserId(ctx.actor)
 	});
+	// An OP with sub-steps completes on its own once they are done; a missing unit was all it waited on.
+	checkCompletion(ctx, input.id);
 	return presentUnits(ctx.db, loadModel(ctx.db, input.id), [row2])[0]!;
 }
 
@@ -217,12 +219,14 @@ export function unbindUnit(ctx: Ctx, input: { id: number; unitId: number }): voi
 
 // ---------------------------------------------------------------- install and remove
 
-/** The stock record a kit line installs into: the unit named in that slot. */
-export function intoStockOf(m: Model, slotKey: string): number {
+/**
+ * The stock record a kit line installs into: the unit named in that slot. Null for borrowed gear:
+ * the part is still used up, and OPAL keeps no record of what is inside someone else's unit.
+ */
+export function intoStockOf(m: Model, slotKey: string): number | null {
 	const u = m.units.find((x) => x.slot === slotKey);
 	const label = m.rows.flatMap((r) => r.units).find((s) => s.key === slotKey)?.label ?? slotKey;
 	if (!u) throw refuse(`Name the ${label} before installing into it`);
-	if (u.stockId === null) throw refuse(`The ${label} is borrowed: OPAL keeps no record of what goes into it`);
 	return u.stockId;
 }
 

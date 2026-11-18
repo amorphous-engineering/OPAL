@@ -16,6 +16,9 @@
 	let { steps, parts }: { steps: SnapshotStep[]; parts: VersionPart[] } = $props();
 
 	const partById = $derived(new Map(parts.map((p) => [p.id, p])));
+	const slotLabel = $derived(
+		new Map(steps.flatMap((s) => s.units ?? []).map((u) => [u.key, u.label]))
+	);
 
 	const grouped = $derived(groupOps(steps));
 
@@ -92,10 +95,26 @@
 			</tbody>
 		</table>
 	{/if}
+	{#if s.units?.length}
+		<p class="my-1 font-mono text-xs">
+			<span class="label">Units</span>
+			{s.units
+				.map(
+					(u) =>
+						`${u.label}: ${partById.get(u.partId)?.internalPn ?? ''} ${partById.get(u.partId)?.name ?? '—'}${u.required ? ' (required)' : ''}`
+				)
+				.join(' · ')}
+		</p>
+	{/if}
 	{#if s.kit.length}
 		<p class="my-1 font-mono text-xs">
 			<span class="label">Step kit</span>
-			{s.kit.map((k) => `${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}`).join(' · ')}
+			{s.kit
+				.map(
+					(k) =>
+						`${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}${k.into ? ` into ${slotLabel.get(k.into) ?? k.into}` : ''}`
+				)
+				.join(' · ')}
 		</p>
 	{/if}
 	{@render signoffs(s)}

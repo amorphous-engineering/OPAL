@@ -558,7 +558,12 @@ export class AuthorStore implements DocController {
 		}
 		if ('units' in patch)
 			body.units = patch.units?.length
-				? patch.units.map((u) => ({ key: u.key, label: u.label, partId: u.partId, required: u.required }))
+				? patch.units.map((u) => ({
+						key: u.key,
+						label: u.label,
+						partId: u.partId,
+						required: u.required
+					}))
 				: null;
 		return body;
 	}
@@ -980,7 +985,12 @@ export class AuthorStore implements DocController {
 	editKit = (
 		step: DocStep,
 		kitId: number,
-		patch: { quantity_required?: number; usage_type?: string; notes?: string | null; into?: string | null }
+		patch: {
+			quantity_required?: number;
+			usage_type?: string;
+			notes?: string | null;
+			into?: string | null;
+		}
 	) => {
 		const line = step.step_kit.find((k) => k.id === kitId);
 		if (!line) return;

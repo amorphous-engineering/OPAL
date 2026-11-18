@@ -47,7 +47,13 @@ export interface UnitActions {
 	installed(unitId: number): Promise<InstalledComponent[]>;
 	remove(
 		step: DocStep,
-		body: { unitId: number; stockId: number; quantity: string; location?: string | null; notes?: string | null }
+		body: {
+			unitId: number;
+			stockId: number;
+			quantity: string;
+			location?: string | null;
+			notes?: string | null;
+		}
 	): Promise<boolean>;
 	/** The units named on the work order, for a removal at any step. */
 	named(): ExecUnit[];
@@ -168,7 +174,12 @@ export interface AuthorActions {
 	editKit(
 		step: DocStep,
 		kitId: number,
-		patch: { quantity_required?: number; usage_type?: string; notes?: string | null; into?: string | null }
+		patch: {
+			quantity_required?: number;
+			usage_type?: string;
+			notes?: string | null;
+			into?: string | null;
+		}
 	): void;
 	/** Every unit slot the procedure declares, for kit lines that install into one. */
 	unitSlots(): UnitSlot[];

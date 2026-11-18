@@ -9,7 +9,8 @@
 
 <table class="dense">
 	<thead
-		><tr><th>OP</th><th>As</th><th>Part</th><th>OPAL #</th><th>Serial</th><th>Named by</th></tr></thead
+		><tr><th>OP</th><th>As</th><th>Part</th><th>OPAL #</th><th>Serial</th><th>Named by</th></tr
+		></thead
 	>
 	<tbody>
 		{#each units as u (u.id)}
@@ -17,7 +18,9 @@
 				<td>{u.stepNumber}</td>
 				<td>{u.slotLabel ?? '—'}</td>
 				{#if u.borrowed}
-					<td>{u.borrowed.name} (borrowed{u.borrowed.lentBy ? ` from ${u.borrowed.lentBy}` : ''})</td>
+					<td
+						>{u.borrowed.name} (borrowed{u.borrowed.lentBy ? ` from ${u.borrowed.lentBy}` : ''})</td
+					>
 					<td>—</td>
 					<td>{u.borrowed.serial ?? '—'}</td>
 				{:else}

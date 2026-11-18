@@ -366,6 +366,7 @@ export const zDocUnitSlot = z.object({
 	required: z.boolean(),
 	unit: zExecUnit.nullable()
 });
+export type DocUnitSlot = z.infer<typeof zDocUnitSlot>;
 
 export const zDocImage = z.object({ sha256: z.string(), filename: z.string(), caption: z.string().nullable() });
 

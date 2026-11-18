@@ -95,8 +95,8 @@ export function kitAvailability(ctx: Pick<Ctx, 'db'>, executionId: number) {
 
 // ---------------------------------------------------------------- consume
 
-function intoOther(stockId: number, into: number): number {
-	if (stockId === into) throw new OpalError(422, 'invalid_input', 'A unit cannot go into itself', { into: 'the same unit' });
+function intoOther(stockId: number, into: number | null): number | null {
+	if (into !== null && stockId === into) throw new OpalError(422, 'invalid_input', 'A unit cannot go into itself', { into: 'the same unit' });
 	return into;
 }
 

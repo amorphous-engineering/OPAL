@@ -579,7 +579,9 @@
 			{:else if col.key === 'since'}
 				{#if r.usesSinceInstalled.length}
 					<span class="font-mono text-xs"
-						>{r.usesSinceInstalled.map((u) => `${u.procedureName.toUpperCase()} ${u.count}`).join(' · ')}</span
+						>{r.usesSinceInstalled
+							.map((u) => `${u.procedureName.toUpperCase()} ${u.count}`)
+							.join(' · ')}</span
 					>
 				{:else}<span class="text-quiet">—</span>{/if}
 			{:else}
