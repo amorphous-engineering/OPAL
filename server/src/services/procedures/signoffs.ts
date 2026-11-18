@@ -59,12 +59,14 @@ export function writeSignoffs(
 	db: Db,
 	current: StoredSignoffs,
 	hasChildren: boolean,
-	input: SignoffWrite
+	input: SignoffWrite,
+	/** The procedure's project: a slot names an organization role or one of this project's. */
+	projectId?: number
 ): StoredSignoffs | undefined {
 	ensureSystemRoles(db);
 	if (input.signoffs !== undefined) {
 		if (input.signoffs === null) return null;
-		return input.signoffs.map((s) => ({ role: canonicalRoleName(db, s.role) }));
+		return input.signoffs.map((s) => ({ role: canonicalRoleName(db, s.role, projectId) }));
 	}
 	if (input.requiresSignoff === undefined && input.requiredRole === undefined) return undefined;
 	let slots = effectiveSignoffs(current, hasChildren).map((s) => ({ role: s.role }));
@@ -79,7 +81,7 @@ export function writeSignoffs(
 		}
 	}
 	if (input.requiredRole !== undefined && slots.length > 0) {
-		slots[0] = { role: canonicalRoleName(db, input.requiredRole) };
+		slots[0] = { role: canonicalRoleName(db, input.requiredRole, projectId) };
 	}
 	return slots;
 }

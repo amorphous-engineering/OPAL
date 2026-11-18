@@ -4,13 +4,17 @@
  * Four system roles exist on every install: Engineer, Technician, Quality, Admin. The Admin
  * role is not stored as a grant: its membership IS user.isAdmin. A sign-off slot that names a
  * role can be signed only by a holder, or by an admin.
+ *
+ * A role may belong to one project: a crew position such as a launch director. Such a role is
+ * offered only in that project's procedures and passes no gate. Names stay unique across the
+ * organization, because sign-offs and steps name a role by its name.
  */
 import { OpalError, conflict, notFound, now } from '@opal/shared';
 import { defaultRoleColor, roleInitials, type GateInfo, type Role, type RoleColor, type RoleMark } from '@opal/shared';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
-import { role, roleGate, user, userRole } from '../../db/schema/index.ts';
+import { project, role, roleGate, user, userRole } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
 import { GATE_INFO, gateRoleIds } from './gates.ts';
 import { personRefs } from './people.ts';
@@ -87,12 +91,16 @@ export function holdsSlotRole(holder: Set<string>, slotRole: string | null | und
 	return holder.has(ADMIN_KEY) || holder.has(slotRole!.trim().toLowerCase());
 }
 
-/** The canonical name of a known role; null for a blank name; throws 422 for an unknown one. */
-export function canonicalRoleName(db: Db, name: string | null | undefined): string | null {
+/**
+ * The canonical name of a known role; null for a blank name; throws 422 for an unknown one, and,
+ * given a project, for a role of another project.
+ */
+export function canonicalRoleName(db: Db, name: string | null | undefined, projectId?: number): string | null {
 	const cleaned = (name ?? '').trim();
 	if (!cleaned) return null;
 	const r = findRole(db, cleaned);
 	if (!r) throw new OpalError(422, 'unknown_role', `Unknown role '${cleaned}'`);
+	if (projectId !== undefined) checkRoleScope(db, r.name, projectId);
 	return r.name;
 }
 
@@ -105,7 +113,27 @@ export function roleMark(db: Db, name: string | null | undefined): RoleMark | nu
 	if (!cleaned) return null;
 	const r = findRole(db, cleaned);
 	if (!r) return { name: cleaned, code: roleInitials(cleaned), color: null };
-	return { name: r.name, code: r.code ?? roleInitials(r.name), color: r.color ?? defaultRoleColor(r.id) };
+	return { name: r.name, code: r.code ?? roleInitials(r.name), color: colorOf(db, r) };
+}
+
+/**
+ * A role's colour: its own, or the palette in turn among the roles it is offered beside (the
+ * organization's, or its project's), so a project's crew starts out in different colours.
+ */
+function colorOf(db: Db, r: RoleRow): RoleColor {
+	if (r.color) return r.color;
+	const scope = r.projectId === null ? isNull(role.projectId) : eq(role.projectId, r.projectId);
+	const before = db.select({ n: sql<number>`count(*)` }).from(role).where(and(scope, lt(role.id, r.id))).get()!.n;
+	return defaultRoleColor(before + 1);
+}
+
+/** Refuses a role of another project: a procedure names organization roles and its own. */
+export function checkRoleScope(db: Db, name: string | null, projectId: number): void {
+	if (!name) return;
+	const r = findRole(db, name);
+	if (!r || r.projectId === null || r.projectId === projectId) return;
+	const p = db.select({ code: project.code }).from(project).where(eq(project.id, r.projectId)).get();
+	throw new OpalError(422, 'role_not_in_project', `${r.name} is a role of project ${p?.code ?? r.projectId}`);
 }
 
 function memberCounts(db: Db): Map<number, number> {
@@ -124,7 +152,7 @@ function memberCounts(db: Db): Map<number, number> {
 }
 
 type RoleRow = typeof role.$inferSelect;
-function toRole(r: RoleRow, counts: Map<number, number>): Role {
+function toRole(db: Db, r: RoleRow, counts: Map<number, number>): Role {
 	return {
 		id: r.id,
 		name: r.name,
@@ -132,7 +160,12 @@ function toRole(r: RoleRow, counts: Map<number, number>): Role {
 		key: r.key,
 		isSystem: r.isSystem,
 		code: r.code ?? roleInitials(r.name),
-		color: r.color ?? defaultRoleColor(r.id),
+		color: colorOf(db, r),
+		projectId: r.projectId,
+		projectCode:
+			r.projectId === null
+				? null
+				: (db.select({ code: project.code }).from(project).where(eq(project.id, r.projectId)).get()?.code ?? null),
 		memberCount: counts.get(r.id) ?? 0,
 		createdAt: r.createdAt,
 		updatedAt: r.updatedAt
@@ -148,6 +181,8 @@ export function listRoles(ctx: Pick<Ctx, 'db'>): Role[] {
 		.from(role)
 		.all()
 		.sort((a, b) => {
+			// Organization roles first, then each project's.
+			if ((a.projectId ?? 0) !== (b.projectId ?? 0)) return (a.projectId ?? 0) - (b.projectId ?? 0);
 			const ka = a.key ? keys.indexOf(a.key) : -1;
 			const kb = b.key ? keys.indexOf(b.key) : -1;
 			if (ka >= 0 && kb >= 0) return ka - kb;
@@ -155,7 +190,7 @@ export function listRoles(ctx: Pick<Ctx, 'db'>): Role[] {
 			if (kb >= 0) return 1;
 			return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
 		})
-		.map((r) => toRole(r, counts));
+		.map((r) => toRole(ctx.db, r, counts));
 }
 
 function getRow(db: Db, id: number): RoleRow {
@@ -180,24 +215,31 @@ export function getRole(ctx: Pick<Ctx, 'db'>, id: number) {
 					.all();
 	const refs = personRefs(ctx.db, memberIds.map((m) => m.id));
 	const members = memberIds.map((m) => refs.get(m.id)!).filter(Boolean);
-	return { ...toRole(r, new Map([[r.id, members.length]])), members };
+	return { ...toRole(ctx.db, r, new Map([[r.id, members.length]])), members };
 }
 
 type MarkInput = { code?: string; color?: RoleColor };
 
-export function createRole(ctx: Ctx, input: { name: string; description?: string | null } & MarkInput): Role {
+export function createRole(
+	ctx: Ctx,
+	input: { name: string; description?: string | null; projectId?: number | null } & MarkInput
+): Role {
 	ensureSystemRoles(ctx.db);
 	const existing = findRole(ctx.db, input.name);
 	if (existing) throw conflict('duplicate', `Role '${existing.name}' already exists`);
+	if (input.projectId != null && !ctx.db.select({ id: project.id }).from(project).where(eq(project.id, input.projectId)).get()) {
+		throw notFound('Project');
+	}
 	const row = insert(ctx, role, {
 		name: input.name,
 		description: input.description ?? null,
 		key: null,
 		isSystem: false,
 		code: input.code ?? null,
-		color: input.color ?? null
+		color: input.color ?? null,
+		projectId: input.projectId ?? null
 	});
-	return toRole(row, new Map());
+	return toRole(ctx.db, row, new Map());
 }
 
 export function updateRole(ctx: Ctx, input: { id: number; name?: string; description?: string | null } & MarkInput): Role {
@@ -214,7 +256,7 @@ export function updateRole(ctx: Ctx, input: { id: number; name?: string; descrip
 	if (input.description !== undefined) patch.description = input.description;
 	if (input.code !== undefined) patch.code = input.code;
 	if (input.color !== undefined) patch.color = input.color;
-	return toRole(update(ctx, role, r.id, patch), memberCounts(ctx.db));
+	return toRole(ctx.db, update(ctx, role, r.id, patch), memberCounts(ctx.db));
 }
 
 export function deleteRole(ctx: Ctx, id: number): void {
@@ -248,6 +290,11 @@ export function setGate(ctx: Ctx, key: string, roleIds: number[]): GateInfo {
 	if (missing.length) {
 		throw new OpalError(400, 'unknown_role', `Unknown role id(s): ${missing.sort((a, b) => a - b).join(', ')}`);
 	}
+	const scoped = wanted.size
+		? ctx.db.select({ name: role.name, projectId: role.projectId }).from(role).where(inArray(role.id, [...wanted])).all()
+		: [];
+	const own = scoped.find((r) => r.projectId !== null);
+	if (own) throw new OpalError(400, 'project_role', `${own.name} is a role of one project; gates take organization roles`);
 	const rows = ctx.db.select().from(roleGate).where(eq(roleGate.gate, key)).all();
 	const held = new Set(rows.map((r) => r.roleId));
 	for (const r of rows) if (!wanted.has(r.roleId)) remove(ctx, roleGate, r.id);

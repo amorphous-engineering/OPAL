@@ -36,6 +36,10 @@ export function roleList(): Promise<Role[]> {
 	return list;
 }
 
+/** The roles a procedure of this project may name: the organization's and the project's own. */
+export const offeredIn = (roles: Role[], projectId: number | null): Role[] =>
+	roles.filter((r) => r.projectId === null || r.projectId === projectId);
+
 /** Role names for pickers. */
 export const roleNames = (): Promise<string[]> => roleList().then((r) => r.map((x) => x.name));
 

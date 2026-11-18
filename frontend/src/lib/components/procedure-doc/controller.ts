@@ -167,6 +167,8 @@ export interface AuthorActions {
 	/** Every top-level OP, for "waits on" choices. */
 	ops(): DocOp[];
 	workcenters: WorkcenterOption[];
+	/** The procedure's project: its roles are offered beside the organization's. */
+	projectId: number | null;
 	addImages(step: DocStep, files: File[]): Promise<void>;
 	setCaption(step: DocStep, imageId: number, caption: string): void;
 	removeImage(step: DocStep, imageId: number): Promise<void>;

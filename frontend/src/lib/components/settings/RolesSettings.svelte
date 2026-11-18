@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Roles of the organization (in Settings, with the gates they pass) or of one project (on the
+	// project page: crew positions its procedures name, which pass no gate).
 	import { goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
@@ -30,10 +32,12 @@
 	let {
 		roles: unsorted,
 		people,
-		isAdmin
-	}: { roles: Role[]; people: Member[]; isAdmin: boolean } = $props();
+		isAdmin,
+		projectId = null
+	}: { roles: Role[]; people: Member[]; isAdmin: boolean; projectId?: number | null } = $props();
 
-	const roles = $derived(sortRoles(unsorted));
+	const roles = $derived(sortRoles(unsorted).filter((r) => r.projectId === projectId));
+	const home = $derived(projectId === null ? '/settings#roles' : `/projects/${projectId}#roles`);
 
 	let gates = $state<GateInfo[]>([]);
 	let gateBusy = $state<string | null>(null);
@@ -41,6 +45,7 @@
 	const adminRole = $derived(roles.find((r) => r.key === 'admin'));
 
 	async function loadGates() {
+		if (projectId !== null) return;
 		try {
 			gates = await opal.org.gates.list({});
 		} catch (err) {
@@ -125,7 +130,8 @@
 		try {
 			const r = await opal.org.roles.create({
 				name: newName.trim(),
-				description: newDescription.trim() || null
+				description: newDescription.trim() || null,
+				projectId
 			});
 			resetRoleNames();
 			toast.success('Role created');
@@ -176,7 +182,7 @@
 			await opal.org.roles.delete({ id: role.id });
 			resetRoleNames();
 			toast.success('Role deleted');
-			await goto('/settings#roles');
+			await goto(home);
 			await refreshAll();
 		} catch (err) {
 			toastError(err);
@@ -240,48 +246,48 @@
 			{/snippet}
 		</DataTable>
 	</Section>
-	<Section title="Gates" count={gates.length}>
-		{#if gates.length === 0}
-			<EmptyLine label="gates" />
-		{:else}
-			<div class="overflow-x-auto">
-				<table class="w-full text-sm" aria-label="Gates">
-					<thead>
-						<tr class="border-b border-border text-left font-mono text-xs text-muted-foreground">
-							<th class="px-3 py-1.5 font-medium">GATE</th>
-							{#each roles as r (r.id)}
-								<th class="px-3 py-1.5 text-center font-medium">{r.name}</th>
-							{/each}
-						</tr>
-					</thead>
-					<tbody>
-						{#each gates as g (g.key)}
-							<tr class="border-b border-border last:border-b-0" data-gate={g.key}>
-								<td class="px-3 py-1.5">
-									<div class="font-medium">{g.label}</div>
-									{#if g.description}
-										<div class="text-xs text-muted-foreground">{g.description}</div>
-									{/if}
-								</td>
+	{#if projectId === null}<Section title="Gates" count={gates.length}>
+			{#if gates.length === 0}
+				<EmptyLine label="gates" />
+			{:else}
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm" aria-label="Gates">
+						<thead>
+							<tr class="border-b border-border text-left font-mono text-xs text-muted-foreground">
+								<th class="px-3 py-1.5 font-medium">GATE</th>
 								{#each roles as r (r.id)}
-									{@const isAdminRole = r.key === 'admin'}
-									<td class="px-3 py-1.5 text-center">
-										{#key gateRev}<Checkbox
-												checked={isAdminRole || g.roleIds.includes(r.id)}
-												disabled={isAdminRole || !isAdmin || gateBusy === g.key}
-												onCheckedChange={(v) => toggleGate(g, r, !!v)}
-												aria-label={`${r.name} passes ${g.label}`}
-												title={isAdminRole ? 'Admin passes all gates' : undefined}
-											/>{/key}
-									</td>
+									<th class="px-3 py-1.5 text-center font-medium">{r.name}</th>
 								{/each}
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</Section>
+						</thead>
+						<tbody>
+							{#each gates as g (g.key)}
+								<tr class="border-b border-border last:border-b-0" data-gate={g.key}>
+									<td class="px-3 py-1.5">
+										<div class="font-medium">{g.label}</div>
+										{#if g.description}
+											<div class="text-xs text-muted-foreground">{g.description}</div>
+										{/if}
+									</td>
+									{#each roles as r (r.id)}
+										{@const isAdminRole = r.key === 'admin'}
+										<td class="px-3 py-1.5 text-center">
+											{#key gateRev}<Checkbox
+													checked={isAdminRole || g.roleIds.includes(r.id)}
+													disabled={isAdminRole || !isAdmin || gateBusy === g.key}
+													onCheckedChange={(v) => toggleGate(g, r, !!v)}
+													aria-label={`${r.name} passes ${g.label}`}
+													title={isAdminRole ? 'Admin passes all gates' : undefined}
+												/>{/key}
+										</td>
+									{/each}
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</Section>{/if}
 	{#if selected}
 		<Section title={selected.name}>
 			{#snippet actions()}

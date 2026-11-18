@@ -7,7 +7,7 @@
 	import { EmptyLine, toastError } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import { roleNames } from '#lib/components/users/roles.js';
+	import { offeredIn, roleList } from '#lib/components/users/roles.js';
 	import { useDoc } from '../controller.js';
 	import type { DocOp, DocStep, SignoffDef } from '../types.js';
 
@@ -18,8 +18,8 @@
 	const mayBeEmpty = $derived(op.step === step && op.steps.length > 0);
 	let known = $state<string[]>([]);
 	$effect(() => {
-		roleNames()
-			.then((n) => (known = n))
+		roleList()
+			.then((r) => (known = offeredIn(r, au.projectId).map((x) => x.name)))
 			.catch(toastError);
 	});
 	/** Roles to offer, plus the row's own role when it no longer exists. */

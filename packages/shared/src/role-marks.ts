@@ -12,9 +12,10 @@ export const zRoleColor = z.enum(ROLE_COLORS);
 /** One to three capital letters or digits: LD, LO, RSO. */
 export const zRoleCode = z
 	.string()
+	.max(16)
 	.trim()
 	.transform((s) => s.toUpperCase())
-	.pipe(z.string().regex(/^[A-Z0-9]{1,3}$/, 'One to three letters or digits'));
+	.pipe(z.string().max(3).regex(/^[A-Z0-9]{1,3}$/, 'One to three letters or digits'));
 
 /**
  * The mark as a step shows it. `color` is null for a role that no longer exists, which draws an
@@ -35,5 +36,5 @@ export function roleInitials(name: string): string {
 	return letters(words[0] ?? '').slice(0, 2).toUpperCase() || '?';
 }
 
-/** The default colour of a role: the palette in turn by id, so new roles differ from the last. */
-export const defaultRoleColor = (id: number): RoleColor => ROLE_COLORS[(Math.max(id, 1) - 1) % ROLE_COLORS.length]!;
+/** The default colour of the nth role offered together (1-based): the palette in turn. */
+export const defaultRoleColor = (n: number): RoleColor => ROLE_COLORS[(Math.max(n, 1) - 1) % ROLE_COLORS.length]!;

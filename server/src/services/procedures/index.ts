@@ -31,7 +31,7 @@ import { type ProcedureRow, draftRow, presentDraft, procedureRow, stepRows } fro
 import { buildSnapshot, snapshotsEquivalent } from './snapshot.ts';
 import { checkWorkcenter, copyAttachment, copyStepContent, invalid, normalizeCallouts, removeStepDeep } from './steps.ts';
 import { writeSignoffs } from './signoffs.ts';
-import { canonicalRoleName } from '../org/roles.ts';
+import { canonicalRoleName, checkRoleScope } from '../org/roles.ts';
 
 export type ProcedureOut = z.output<typeof zProcedure>;
 
@@ -225,6 +225,10 @@ export function updateProcedure(
 	const patch: Partial<typeof procedure.$inferInsert> = {};
 	if (input.projectId !== undefined && input.projectId !== row.projectId) {
 		requireOpenProject(ctx.db, input.projectId);
+		// The steps' roles must be ones the new project offers.
+		for (const st of stepRows(ctx.db, row.id)) {
+			for (const name of [st.performer, ...(st.signoffs ?? []).map((x) => x.role)]) checkRoleScope(ctx.db, name, input.projectId);
+		}
 		patch.projectId = input.projectId;
 	}
 	if (input.name !== undefined) patch.name = input.name;
@@ -401,8 +405,8 @@ export function build(ctx: Ctx, input: BuildInput) {
 			position,
 			title: s.title,
 			instructions: s.instructions ?? null,
-			signoffs: writeSignoffs(ctx.db, null, false, s) ?? null,
-			performer: canonicalRoleName(ctx.db, s.performer),
+			signoffs: writeSignoffs(ctx.db, null, false, s, input.projectId) ?? null,
+			performer: canonicalRoleName(ctx.db, s.performer, input.projectId),
 			estimatedDurationMinutes: s.estimatedDurationMinutes ?? null,
 			callouts: normalizeCallouts(s.callouts),
 			strictSequence: s.strictSequence ?? false,

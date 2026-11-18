@@ -270,6 +270,9 @@ export const zRole = z.object({
 	/** The letters of the role's mark on a step. Initials of the name until someone sets them. */
 	code: z.string(),
 	color: zRoleColor,
+	/** Null: an organization role. Set: a role of that project only, which passes no gate. */
+	projectId: z.number().int().nullable(),
+	projectCode: z.string().nullable(),
 	memberCount: z.number().int(),
 	createdAt: zTimestamp,
 	updatedAt: zTimestamp
@@ -311,10 +314,13 @@ const roles = {
 		name: 'roles.create',
 		method: 'POST',
 		path: '/roles',
-		summary: 'Create a role. Names are unique ignoring case.',
+		summary:
+			'Create a role, for the organization or for one project. Names are unique across the organization, ignoring case.',
 		input: z.object({
 			name: z.string().trim().min(1).max(50),
 			description: z.string().max(1000).nullable().optional(),
+			/** A role of this project only: offered in its procedures, passing no gate. */
+			projectId: z.number().int().nullable().optional(),
 			code: zRoleCode.optional(),
 			color: zRoleColor.optional()
 		}),

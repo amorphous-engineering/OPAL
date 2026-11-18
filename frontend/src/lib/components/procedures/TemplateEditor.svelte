@@ -33,7 +33,11 @@
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
-	const store = new AuthorStore(data.procedure.id, () => onchange?.(store.counts));
+	const store = new AuthorStore(
+		data.procedure.id,
+		() => onchange?.(store.counts),
+		data.procedure.projectId
+	);
 	const preview = new PreviewController();
 	let previewing = $state(false);
 

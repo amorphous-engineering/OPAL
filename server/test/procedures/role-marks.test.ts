@@ -102,3 +102,55 @@ describe('role marks', () => {
 		expect((await s.draft(p.id)).find((x) => x.id === st.id).performer?.name).toBe('Launch Operator');
 	});
 });
+
+describe('project roles', () => {
+	async function twoProjects() {
+		const s = await setup();
+		const other = await s.ok('POST', '/projects', { code: 'OTH', name: 'Other' });
+		const director = await s.ok('POST', '/roles', { name: 'Launch Director', projectId: s.proj.id });
+		return { ...s, other, director };
+	}
+
+	test('a project role is offered in its own project only', async () => {
+		const s = await twoProjects();
+		expect(s.director.projectId).toBe(s.proj.id);
+		const mine = await s.proc('Load and Go');
+		const op = await s.step(mine.id, 'Load and Go', { performer: 'Launch Director', signoffs: [{ role: 'Launch Director' }] });
+		expect(op.performer.name).toBe('Launch Director');
+
+		const theirs = await s.ok('POST', '/procedures', { projectId: s.other.id, name: 'Elsewhere' });
+		const r = await s.call('POST', `/procedures/${theirs.id}/steps`, { title: 'Count down', performer: 'Launch Director' });
+		expect(r.status).toBe(422);
+		expect(r.json.error).toBe('role_not_in_project');
+		const st = await s.step(theirs.id, 'Count down');
+		const slot = await s.call('PATCH', `/procedures/${theirs.id}/steps/${st.id}`, { requiredRole: 'Launch Director' });
+		expect(slot.json.error).toBe('role_not_in_project');
+		// Organization roles go anywhere.
+		expect((await s.step(theirs.id, 'Inspect', { performer: 'Quality' })).performer.name).toBe('Quality');
+	});
+
+	test('a procedure cannot move to a project that does not offer its roles', async () => {
+		const s = await twoProjects();
+		const p = await s.proc('Load and Go');
+		await s.step(p.id, 'Load and Go', { performer: 'Launch Director' });
+		const r = await s.call('PATCH', `/procedures/${p.id}`, { projectId: s.other.id });
+		expect(r.status).toBe(422);
+		expect(r.json.error).toBe('role_not_in_project');
+	});
+
+	test('a project role passes no gate', async () => {
+		const s = await twoProjects();
+		const r = await s.call('PUT', '/gates/issue.approve', { roleIds: [s.director.id] });
+		expect(r.status).toBe(400);
+		expect(r.json.error).toBe('project_role');
+	});
+
+	test('names stay unique across the organization, and colours run per project', async () => {
+		const s = await twoProjects();
+		expect((await s.call('POST', '/roles', { name: 'quality', projectId: s.proj.id })).status).toBe(409);
+		expect((await s.call('POST', '/roles', { name: 'Launch Director', projectId: s.other.id })).status).toBe(409);
+		const operator = await s.ok('POST', '/roles', { name: 'Launch Operator', projectId: s.proj.id });
+		// The first two roles of the project take the first two colours, whatever the organization has.
+		expect([s.director.color, operator.color]).toEqual(['purple', 'teal']);
+	});
+});

@@ -143,7 +143,14 @@ export class AuthorStore implements DocController {
 	private onchange: () => void;
 	private changeTimer: ReturnType<typeof setTimeout> | undefined;
 
-	constructor(procedureId: number, onchange: () => void = () => {}) {
+	projectId: number | null = null;
+
+	constructor(
+		procedureId: number,
+		onchange: () => void = () => {},
+		projectId: number | null = null
+	) {
+		this.projectId = projectId;
 		this.procedureId = procedureId;
 		this.onchange = onchange;
 		this.overrides = read(this.key('open'), {});

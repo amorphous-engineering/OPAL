@@ -1,5 +1,5 @@
 /** Tables for the org area: profiles, roles, gates, workcenters, app settings. */
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { type AnySQLiteColumn, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { PROJECT_STATES, type RoleColor } from '@opal/shared';
 import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { user } from './core.ts';
@@ -56,13 +56,19 @@ export const role = sqliteTable('role', {
 	/** Stable key of a system role: engineer, technician, quality, admin. */
 	key: text('key').unique(),
 	isSystem: integer('is_system', { mode: 'boolean' }).notNull().default(false),
+	/**
+	 * Null: an organization role, offered everywhere and able to pass gates. Set: a role of one
+	 * project (a crew position), offered only in that project's procedures. Names stay unique
+	 * across both, because sign-offs and steps name a role by its name.
+	 */
+	projectId: integer('project_id').references((): AnySQLiteColumn => project.id),
 	/** The letters of the role's mark. Null: the initials of the name. */
 	code: text('code'),
-	/** A key of ROLE_COLORS. Null: the palette in turn by id. */
+	/** A key of ROLE_COLORS. Null: the palette in turn among the roles offered beside it. */
 	color: text('color').$type<RoleColor>(),
 	createdAt: createdAt(),
 	updatedAt: updatedAt()
-}, (t) => [uniqueIndex('role_name_nocase').on(t.name)]);
+}, (t) => [uniqueIndex('role_name_nocase').on(t.name), index('role_project_idx').on(t.projectId)]);
 
 export const userRole = sqliteTable(
 	'user_role',

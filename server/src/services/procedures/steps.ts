@@ -116,7 +116,7 @@ function renormalize(ctx: Ctx, procedureId: number) {
 // ------------------------------------------------------------------- add
 
 export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
-	draftRow(ctx.db, input.id);
+	const proc = draftRow(ctx.db, input.id);
 	const rows = stepRows(ctx.db, input.id);
 	const byId = new Map(rows.map((r) => [r.id, r]));
 
@@ -163,7 +163,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 		isContingency
 	);
 	const mine = patches.find((p) => p.id === NEW)!;
-	const signoffs = writeSignoffs(ctx.db, null, false, input) ?? null;
+	const signoffs = writeSignoffs(ctx.db, null, false, input, proc.projectId) ?? null;
 	checkDataFields(input.dataSchema, null);
 	const units = input.units?.length ? checkUnits(ctx.db, input.id, { id: NEW, parentStepId: mine.parentStepId }, input.units) : null;
 	const row = insert(ctx, procedureStep, {
@@ -175,7 +175,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 		instructions: input.instructions ?? null,
 		dataSchema: normalizeSchema(input.dataSchema),
 		signoffs,
-		performer: canonicalRoleName(ctx.db, input.performer),
+		performer: canonicalRoleName(ctx.db, input.performer, proc.projectId),
 		estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
 		callouts: normalizeCallouts(input.callouts),
 		strictSequence: parentId === null ? (input.strictSequence ?? false) : false,
@@ -189,7 +189,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 // ------------------------------------------------------------------- update
 
 export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
-	draftRow(ctx.db, input.id);
+	const proc = draftRow(ctx.db, input.id);
 	const step = stepRow(ctx.db, input.id, input.stepId);
 	const rows = stepRows(ctx.db, input.id);
 	const hasChildren = rows.some((r) => r.parentStepId === step.id);
@@ -200,7 +200,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	if (input.dataSchema) checkDataFields(input.dataSchema, step.dataSchema);
 	if (input.dataSchema !== undefined) patch.dataSchema = normalizeSchema(input.dataSchema);
 	if (input.estimatedDurationMinutes !== undefined) patch.estimatedDurationMinutes = input.estimatedDurationMinutes;
-	if (input.performer !== undefined) patch.performer = canonicalRoleName(ctx.db, input.performer);
+	if (input.performer !== undefined) patch.performer = canonicalRoleName(ctx.db, input.performer, proc.projectId);
 	if (input.workcenterId !== undefined) {
 		checkWorkcenter(ctx.db, input.workcenterId);
 		patch.workcenterId = input.workcenterId;
@@ -208,7 +208,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	if (input.callouts !== undefined) patch.callouts = normalizeCallouts(input.callouts);
 	if (input.strictSequence !== undefined) patch.strictSequence = input.strictSequence;
 	if (input.units !== undefined) patch.units = checkUnits(ctx.db, input.id, step, input.units ?? []);
-	const signoffs = writeSignoffs(ctx.db, step.signoffs, hasChildren, input);
+	const signoffs = writeSignoffs(ctx.db, step.signoffs, hasChildren, input, proc.projectId);
 	if (signoffs !== undefined) patch.signoffs = signoffs;
 
 	let regroup = false;

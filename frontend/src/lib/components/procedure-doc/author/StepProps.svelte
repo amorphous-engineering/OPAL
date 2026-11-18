@@ -6,7 +6,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { toastError } from '#lib/components/opal/index.js';
-	import { roleList, type Role } from '#lib/components/users/roles.js';
+	import { offeredIn, roleList, type Role } from '#lib/components/users/roles.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from '../controller.js';
 	import type { DocOp, DocStep } from '../types.js';
@@ -20,7 +20,7 @@
 	let roles = $state<Role[]>([]);
 	$effect(() => {
 		roleList()
-			.then((r) => (roles = r))
+			.then((r) => (roles = offeredIn(r, au.projectId)))
 			.catch(toastError);
 	});
 	const lc = (s: string) => s.toLowerCase();
