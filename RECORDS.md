@@ -79,6 +79,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 
 - A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time.
 - A step with declared sign-offs shows a slot for each. Pressing SIGN OFF is the attestation, with no dialog. Two slots need two different people.
+- When only one person is there, whoever signed an earlier slot may WAIVE a later one with a reason, if they could otherwise sign it: the slot's role and any hold still apply. The slot then reads "waived: reason, name, time" on the run view and the report, never as a signature. A waiver cannot be changed or removed; a correction is a note on the step.
 - Only the current step of the current operation is open by default. Others are one click away. SKIP and + ISSUE appear on the open step.
 - SKIP on a step with required data or a declared sign-off needs `execution.skipRequired`, or every role its slots name. Once the work is done and waits on sign-off, or a slot is signed, SKIP is gone: sign it, or close the work order short.
 - Completed steps never reopen. A correction is a note or a redline.

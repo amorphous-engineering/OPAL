@@ -35,6 +35,8 @@ export interface DocActions {
 	release?(): Promise<void>;
 	/** Sign one sign-off slot. Slot 0 carries the captured data and the old COMPLETE gate. */
 	sign?(step: DocStep, slot: number): Promise<void>;
+	/** Waive a later slot the signer of an earlier one cannot sign. Resolves to false when refused. */
+	waive?(step: DocStep, slot: number, reason: string): Promise<boolean>;
 	/** Skip a step. The reason is required. Resolves to false when the host refused it. */
 	skip?(step: DocStep, reason: string): void | Promise<boolean>;
 	/** The issue form for this step, carrying its run and step. + ISSUE opens it in a new tab. */

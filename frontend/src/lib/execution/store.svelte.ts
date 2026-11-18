@@ -296,7 +296,9 @@ export class ExecutionStore implements DocController {
 	openOrder = $derived.by(() => {
 		const doc = this.doc;
 		if (!doc?.instance.active) return null;
-		const ready = (r: WorkRow) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
+		// A waiver is the one move left for the person alone on a step they signed.
+		const ready = (r: WorkRow) =>
+			isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign || s.can_waive);
 		const pick = (rows: WorkRow[]) =>
 			rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
 		const claimed = this.workRows(this.allOps.filter((o) => o.order === this.claimedOrder));
@@ -655,6 +657,25 @@ export class ExecutionStore implements DocController {
 			} catch (e) {
 				toastError(e, 'Step not recorded');
 				await this.refresh();
+			}
+		},
+		waive: async (step, slot, reason) => {
+			// A note typed into the box goes on the record with the step, as with a signature.
+			if (!(await this.noteDraft.save(step))) return false;
+			try {
+				await opal.execution.waive({ id: this.id, stepId: step.order, slot, reason });
+				await this.changed();
+				const now = this.findStep(step.order)?.step;
+				if (now && isTerminal(now.status)) {
+					if (this.claimedOrder === step.order)
+						await opal.execution.release({ id: this.id }).catch(() => {});
+					this.advanceFrom(step.order);
+				}
+				return true;
+			} catch (e) {
+				toastError(e, 'Waiver not recorded');
+				await this.refresh();
+				return false;
 			}
 		},
 		skip: async (step, reason) => {

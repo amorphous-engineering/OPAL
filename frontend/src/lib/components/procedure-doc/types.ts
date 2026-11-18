@@ -130,7 +130,11 @@ export interface DocSignoff {
 	role: string | null;
 	signed_by: { id: number; name: string; avatar_url?: string | null } | null;
 	signed_at: string | null;
+	/** Set aside by the one person there, with a reason: a written line, never a signature. */
+	waived: { by: { id: number; name: string } | null; at: string; reason: string } | null;
 	can_sign: boolean;
+	/** The viewer signed an earlier slot and could otherwise sign this one. */
+	can_waive: boolean;
 	blockers: DocBlocker[];
 }
 

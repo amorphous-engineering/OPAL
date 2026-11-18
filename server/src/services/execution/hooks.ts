@@ -17,6 +17,7 @@ import {
 	procedure,
 	procedureVersion,
 	signoff,
+	signoffWaiver,
 	stepExecution,
 	stepNote,
 	stockRecord
@@ -72,6 +73,7 @@ registerEntity(execution, { label: 'Execution', ref: (r) => ({ label: r.woNumber
 registerEntity(stepExecution, { label: 'Execution step', parent: { table: execution, fk: 'executionId' } });
 registerEntity(adhocStep, { label: 'Redline step', parent: { table: execution, fk: 'executionId' } });
 registerEntity(signoff, { label: 'Sign-off', parent: { table: stepExecution, fk: 'stepExecutionId' } });
+registerEntity(signoffWaiver, { label: 'Sign-off waiver', parent: { table: stepExecution, fk: 'stepExecutionId' } });
 registerEntity(stepNote, { label: 'Step note', parent: { table: stepExecution, fk: 'stepExecutionId' } });
 registerEntity(executionParticipant, { label: 'Execution participant', parent: { table: execution, fk: 'executionId' } });
 registerEntity(executionOutput, { label: 'Execution output', parent: { table: execution, fk: 'executionId' } });

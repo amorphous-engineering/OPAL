@@ -25,14 +25,14 @@ import { dispState, isBlocking, ticketState } from '../issues/state.ts';
 import { holdsGate } from '../org/gates.ts';
 import { roleNamesOf, holdsSlotRole } from '../org/roles.ts';
 import { type HoldingIssue } from '../issues/holds.ts';
-import { type Blocker, blocker, completeBlockers, skipBlockers, slotGate } from './gates.ts';
+import { type Blocker, blocker, completeBlockers, skipBlockers, slotGate, waiveGate } from './gates.ts';
 import { type HoldState, blockersForBound, holdLandings, holdState } from './holds.ts';
 import { closureOf, workStarted } from './executions.ts';
 import { consumptionRows, productionRows, reconcile, struckLines, unbooked } from './material.ts';
 import { type Model, type Row, isActive, isTerminal, loadModel, progress } from './model.ts';
 import { claimsFor, cursorOf, roster, touch } from './presence.ts';
-import { initials, personRefs, signoffRecords } from './present.ts';
-import { skipRefusal } from './steps.ts';
+import { initials, personRefs, signoffRecords, waiverRecords } from './present.ts';
+import { skipRefusal, waiverOf } from './steps.ts';
 
 type Att = {
 	id: number;
@@ -139,6 +139,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 	const rosterRows = roster(db, m);
 	const stepIds = m.rows.map((r) => r.id);
 	const recs = signoffRecords(db, stepIds);
+	const waivers = waiverRecords(db, stepIds);
 	const notes = stepIds.length
 		? db.select().from(stepNote).where(inArray(stepNote.stepExecutionId, stepIds)).orderBy(asc(stepNote.createdAt), asc(stepNote.id)).all()
 		: [];
@@ -155,6 +156,7 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 	const people = personRefs(db, [
 		...claims.map((c) => c.userId),
 		...stepIds.flatMap((id) => (recs.get(id) ?? []).map((s) => s.signedById)).filter((x): x is number => x !== null),
+		...stepIds.flatMap((id) => (waivers.get(id) ?? []).map((w) => w.waivedById)).filter((x): x is number => x !== null),
 		...notes.map((n) => n.authorId).filter((x): x is number => x !== null),
 		...m.rows.map((r) => r.se.completedById).filter((x): x is number => x !== null),
 		...m.rows.map((r) => r.adhoc?.releasedById ?? null).filter((x): x is number => x !== null),
@@ -193,17 +195,23 @@ export function buildDocument(ctx: Ctx, executionId: number): ExecutionDocument 
 		const mine = new Map((recs.get(row.id) ?? []).map((r) => [r.slot, r]));
 		const skip = [...skipBlockers(m, st, row, mine.size > 0), ...(skipGate ? [blocker('role', skipGate)] : [])];
 		const signedBy = new Map([...mine].map(([n, r]) => [n, r.signedById]));
+		const waivedHere = new Map((waivers.get(row.id) ?? []).map((w) => [w.slot, w]));
+		const waivedSet = new Set(waivedHere.keys());
 		const signoffs = row.signoffs.map((d, n) => {
 			const rec = mine.get(n);
+			const w = waivedHere.get(n);
 			const roleOk = viewerRoles === null ? true : holdsSlotRole(viewerRoles, d.role);
-			const gate = slotGate(m, st, row, n, signedBy, complete, roleOk, viewer);
+			const gate = slotGate(m, st, row, n, signedBy, complete, roleOk, viewer, waivedSet);
+			const waive = waiveGate(m, st, row, n, signedBy, complete, roleOk, viewer, waivedSet);
 			return {
 				slot: n,
-				label: rec?.label ?? d.label,
-				role: rec ? rec.role : d.role,
+				label: rec?.label ?? w?.label ?? d.label,
+				role: rec ? rec.role : w ? w.role : d.role,
 				signedBy: rec?.signedById != null ? (people.get(rec.signedById) ?? null) : null,
 				signedAt: rec?.signedAt ?? null,
+				waived: w ? waiverOf(w, people) : null,
 				canSign: gate.canSign,
+				canWaive: waive.canWaive,
 				blockers: gate.blockers
 			};
 		});

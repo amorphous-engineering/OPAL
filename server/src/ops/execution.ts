@@ -38,6 +38,7 @@ export const executionImpls: Impl[] = [
 		steps.signStep(ctx, { id: i.id, stepId: i.stepId, slot: 0, dataCaptured: i.dataCaptured, notes: i.notes })
 	),
 	implement(e.sign, (ctx, i) => steps.signStep(ctx, { id: i.id, stepId: i.stepId, slot: i.slot, dataCaptured: i.dataCaptured })),
+	implement(e.waive, (ctx, i) => steps.waiveSlot(ctx, i)),
 	implement(e.signoff, (ctx, i) => steps.signNext(ctx, i)),
 	implement(e.skip, (ctx, i) => steps.skipStep(ctx, i)),
 	implement(e.addNote, (ctx, i) => steps.addNote(ctx, i)),
