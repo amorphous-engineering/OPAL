@@ -122,11 +122,12 @@ export function slotGate(
 	signed: ReadonlyMap<number, number | null>,
 	complete: Blocker[] | undefined,
 	roleOk: boolean,
-	viewer: number | null
+	viewer: number | null,
+	waived: ReadonlySet<number> = new Set()
 ): { canSign: boolean; blockers: Blocker[] } {
 	if (!isActive(m.exec)) return { canSign: false, blockers: [] };
 	const status = row.se.status;
-	if (signed.has(slot) || isTerminal(status)) return { canSign: false, blockers: [] };
+	if (signed.has(slot) || waived.has(slot) || isTerminal(status)) return { canSign: false, blockers: [] };
 	let blockers: Blocker[];
 	if (slot === 0) {
 		blockers = status === 'pending' ? (complete ?? completeBlockers(m, st, row)) : heldScopeBlockers(st, row);
@@ -142,6 +143,19 @@ export function slotGate(
 	const own = viewer === null ? undefined : [...signed].find(([, by]) => by === viewer);
 	if (own) blockers = [...blockers, blocker('same_person', `Needs a different person from ${row.signoffs[own[0]]!.label}`)];
 	return { canSign: blockers.length === 0, blockers };
+}
+
+/**
+ * A waiver is for the one person there: they could sign this slot but for having signed an earlier
+ * one. It is the slot's own gate with that one rule set aside, so the first signature, the held
+ * scope and the slot's role still stand (no side door). Someone who can sign the slot signs it.
+ */
+export function waiveGate(...args: Parameters<typeof slotGate>): { canWaive: boolean; blockers: Blocker[] } {
+	const [, , , slot] = args;
+	const gate = slotGate(...args);
+	if (slot === 0 || gate.canSign) return { canWaive: false, blockers: [] };
+	const sameOnly = gate.blockers.length > 0 && gate.blockers.every((b) => b.kind === 'same_person');
+	return { canWaive: sameOnly, blockers: gate.blockers.filter((b) => b.kind !== 'same_person') };
 }
 
 export function describeBlockers(verb: string, blockers: Blocker[]): string {

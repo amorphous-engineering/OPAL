@@ -4,7 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { zExecStepState } from '@opal/shared';
 import type { Db } from '../../db/client.ts';
-import { signoff, user } from '../../db/schema/index.ts';
+import { signoff, signoffWaiver, user } from '../../db/schema/index.ts';
 import { personRefs } from '../org/people.ts';
 import type { Model, Row } from './model.ts';
 
@@ -78,6 +78,21 @@ export function signoffRecords(db: Db, stepIds: number[]) {
 export function signedSlots(db: Db, stepId: number): Map<number, typeof signoff.$inferSelect> {
 	return new Map(
 		db.select().from(signoff).where(eq(signoff.stepExecutionId, stepId)).all().map((s) => [s.slot, s])
+	);
+}
+
+export function waiverRecords(db: Db, stepIds: number[]) {
+	const out = new Map<number, (typeof signoffWaiver.$inferSelect)[]>();
+	if (!stepIds.length) return out;
+	for (const w of db.select().from(signoffWaiver).where(inArray(signoffWaiver.stepExecutionId, stepIds)).orderBy(signoffWaiver.slot).all()) {
+		out.set(w.stepExecutionId, [...(out.get(w.stepExecutionId) ?? []), w]);
+	}
+	return out;
+}
+
+export function waivedSlots(db: Db, stepId: number): Map<number, typeof signoffWaiver.$inferSelect> {
+	return new Map(
+		db.select().from(signoffWaiver).where(eq(signoffWaiver.stepExecutionId, stepId)).all().map((w) => [w.slot, w])
 	);
 }
 

@@ -82,7 +82,9 @@ const previewSlots = (defs: { label: string; role: string | null }[]): DocSignof
 		role: d.role ?? null,
 		signed_by: null,
 		signed_at: null,
+		waived: null,
 		can_sign: true,
+		can_waive: false,
 		blockers: []
 	}));
 

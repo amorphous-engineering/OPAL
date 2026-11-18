@@ -223,13 +223,42 @@ export type CutPreview = z.infer<typeof zCutPreview>;
 
 // ---------------------------------------------------------------- the document
 
+/**
+ * A later slot that the person who could sign it set aside, because the only signature it waited
+ * on was their own second one. A record of its own, never a signature: it reads as a line written
+ * on the slot. It stands as written; a correction is a note on the step.
+ */
+export const zSignoffWaiver = z.object({
+	by: zPersonRef.nullable(),
+	at: zTimestamp,
+	reason: z.string()
+});
+export type SignoffWaiver = z.infer<typeof zSignoffWaiver>;
+
+/**
+ * How a waiver reads wherever the slot is shown or printed, like a line written on the form:
+ * `Secondary buyoff waived: no second tech on shift, Ada Lane, 2026-11-17 14:02`. The caller
+ * formats the time its own way. `waivedText` is the same line after the label, for a row that
+ * already names the slot.
+ */
+export function waivedText(w: { by: string | null; at: string; reason: string }): string {
+	return `waived: ${w.reason.trim()}, ${w.by ?? 'unknown'}, ${w.at}`;
+}
+
+export function waiverLine(label: string, w: { by: string | null; at: string; reason: string }): string {
+	return `${label} ${waivedText(w)}`;
+}
+
 export const zDocSignoff = z.object({
 	slot: z.number().int(),
 	label: z.string(),
 	role: z.string().nullable(),
 	signedBy: zPersonRef.nullable(),
 	signedAt: zTimestamp.nullable(),
+	waived: zSignoffWaiver.nullable(),
 	canSign: z.boolean(),
+	/** The viewer could sign this slot but for having signed an earlier one: they may waive it. */
+	canWaive: z.boolean(),
 	blockers: z.array(zExecBlocker)
 });
 
@@ -566,7 +595,8 @@ export const zSignResult = z.object({
 			label: z.string(),
 			role: z.string().nullable(),
 			signedBy: zPersonRef.nullable(),
-			signedAt: zTimestamp.nullable()
+			signedAt: zTimestamp.nullable(),
+			waived: zSignoffWaiver.nullable()
 		})
 	)
 });
@@ -708,7 +738,8 @@ export const zExecutionReport = z.object({
 					label: z.string(),
 					role: z.string().nullable(),
 					signedBy: z.string().nullable(),
-					signedAt: zTimestamp.nullable()
+					signedAt: zTimestamp.nullable(),
+					waived: z.object({ by: z.string().nullable(), at: zTimestamp, reason: z.string() }).nullable()
 				})
 			)
 		})
@@ -986,11 +1017,27 @@ export const execution = {
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/signoffs/:slot',
 		summary:
-			'Sign one slot of a step sign-off list. A step is complete when its last slot is signed. Two slots need two different people. Data capture rides with slot 0.',
+			'Sign one slot of a step sign-off list. A step is complete when its last slot is signed or waived. Two slots need two different people. Data capture rides with slot 0.',
 		input: z.object({
 			...zStepPath,
 			slot: z.coerce.number().int().min(0),
 			dataCaptured: zJsonObject().nullish()
+		}),
+		output: zSignResult,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	waive: op({
+		name: 'execution.waive',
+		method: 'POST',
+		path: '/executions/:id/steps/:stepId/signoffs/:slot/waive',
+		summary:
+			'Waive a later sign-off slot when no second person is there to sign it. A reason is required. Only someone who could sign the slot but for having signed an earlier one may waive it: the first slot must be signed, holds and the slot role still apply. The waiver is recorded with who, when and why, and cannot be changed or removed. A step is complete when every slot is signed or waived.',
+		input: z.object({
+			...zStepPath,
+			slot: z.coerce.number().int().min(1),
+			reason: z.string().trim().min(1).max(2000)
 		}),
 		output: zSignResult,
 		access: 'signed-in',

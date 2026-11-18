@@ -166,6 +166,29 @@ export const signoff = sqliteTable(
 	(t) => [uniqueIndex('signoff_slot_uq').on(t.stepExecutionId, t.slot)]
 );
 
+/**
+ * A later slot set aside by the one person there, who could not sign it twice. Its own record,
+ * never a signature row: every reader of `signoff` takes a row there as a person attesting. Label
+ * and role are copied as a signature's are. No update or delete: it stands as written.
+ */
+export const signoffWaiver = sqliteTable(
+	'signoff_waiver',
+	{
+		id: id(),
+		stepExecutionId: integer('step_execution_id')
+			.notNull()
+			.references(() => stepExecution.id, { onDelete: 'cascade' }),
+		slot: integer('slot').notNull(),
+		label: text('label').notNull(),
+		role: text('role'),
+		reason: text('reason').notNull(),
+		waivedById: integer('waived_by_id').references(() => user.id, { onDelete: 'set null' }),
+		waivedAt: text('waived_at').notNull(),
+		createdAt: createdAt()
+	},
+	(t) => [uniqueIndex('signoff_waiver_slot_uq').on(t.stepExecutionId, t.slot)]
+);
+
 /** Append-only operator note. Files attach through the platform (owner type `step_note`). */
 export const stepNote = sqliteTable(
 	'step_note',

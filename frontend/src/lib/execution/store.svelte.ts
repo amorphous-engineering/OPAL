@@ -656,6 +656,25 @@ export class ExecutionStore implements DocController {
 				await this.refresh();
 			}
 		},
+		waive: async (step, slot, reason) => {
+			// A note typed into the box goes on the record with the step, as with a signature.
+			if (!(await this.noteDraft.save(step))) return false;
+			try {
+				await opal.execution.waive({ id: this.id, stepId: step.order, slot, reason });
+				await this.changed();
+				const now = this.findStep(step.order)?.step;
+				if (now && isTerminal(now.status)) {
+					if (this.claimedOrder === step.order)
+						await opal.execution.release({ id: this.id }).catch(() => {});
+					this.advanceFrom(step.order);
+				}
+				return true;
+			} catch (e) {
+				toastError(e, 'Waiver not recorded');
+				await this.refresh();
+				return false;
+			}
+		},
 		skip: async (step, reason) => {
 			if (!(await this.noteDraft.save(step))) return false;
 			try {

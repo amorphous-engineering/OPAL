@@ -134,7 +134,9 @@ function step(s: DocStepOut, parentOrder: number | null): DocStep {
 			role: g.role,
 			signed_by: person(g.signedBy),
 			signed_at: g.signedAt,
+			waived: g.waived && { by: person(g.waived.by), at: g.waived.at, reason: g.waived.reason },
 			can_sign: g.canSign,
+			can_waive: g.canWaive,
 			blockers: g.blockers.map(blocker)
 		})),
 		attachments: s.attachments.map(attachment),
