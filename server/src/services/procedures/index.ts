@@ -6,7 +6,8 @@ import {
 	type zProcedure,
 	conflict,
 	notFound,
-	parseQty
+	parseQty,
+	type CalloutKind
 } from '@opal/shared';
 import { and, eq, inArray, like, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -350,7 +351,7 @@ interface BuildInput {
 		requiredRole?: string | null;
 		requiresSignoff?: boolean;
 		signoffs?: { label?: string; role?: string | null }[] | null;
-		callouts?: { kind: 'caution' | 'info'; text: string }[] | null;
+		callouts?: { kind: CalloutKind; text: string }[] | null;
 		strictSequence?: boolean;
 		estimatedDurationMinutes?: number | null;
 		workcenterId?: number | null;

@@ -26,7 +26,12 @@ export type ProcedureType = (typeof PROCEDURE_TYPES)[number];
 /** consume: stock is used up. tooling: used and returned. */
 export const KIT_USAGES = ['consume', 'tooling'] as const;
 export type KitUsage = (typeof KIT_USAGES)[number];
-export const CALLOUT_KINDS = ['caution', 'info'] as const;
+/**
+ * Callout kinds, most serious first, which is the order a step shows them in.
+ * warning: a person can be hurt. caution: hardware or the work can be damaged. info: no hazard.
+ */
+export const CALLOUT_KINDS = ['warning', 'caution', 'info'] as const;
+export type CalloutKind = (typeof CALLOUT_KINDS)[number];
 /** `boolean` is answered TRUE or FALSE (shown as a choice). Older data says `checkbox`. */
 export const DATA_FIELD_TYPES = ['text', 'number', 'boolean', 'select', 'textarea', 'photo'] as const;
 export const PROCEDURE_SORT_KEYS = [

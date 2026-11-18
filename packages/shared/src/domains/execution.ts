@@ -16,7 +16,7 @@ import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 import { zPersonRef } from './org.ts';
-import { zProcedureDataSchema } from './procedures.ts';
+import { CALLOUT_KINDS, zProcedureDataSchema } from './procedures.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP, MAX_TOKEN, zJsonObject } from '../limits.ts';
 
 /**
@@ -333,7 +333,7 @@ export const zDocStep = z.object({
 	parentId: z.number().int().nullable(),
 	status: z.enum(EXEC_STEP_STATUSES),
 	instructions: z.string().nullable(),
-	callouts: z.array(z.object({ kind: z.enum(['caution', 'info']), text: z.string() })),
+	callouts: z.array(z.object({ kind: z.enum(CALLOUT_KINDS), text: z.string() })),
 	role: z.string().nullable(),
 	requiresSignoff: z.boolean(),
 	isContingency: z.boolean(),
@@ -376,7 +376,7 @@ export const zDocOp = z.object({
 	title: z.string(),
 	status: z.enum(EXEC_STEP_STATUSES),
 	instructions: z.string().nullable(),
-	callouts: z.array(z.object({ kind: z.enum(['caution', 'info']), text: z.string() })),
+	callouts: z.array(z.object({ kind: z.enum(CALLOUT_KINDS), text: z.string() })),
 	role: z.string().nullable(),
 	signoffs: z.array(zDocSignoff),
 	strictSequence: z.boolean(),

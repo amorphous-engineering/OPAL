@@ -23,7 +23,7 @@ export { default as CaptureFields } from './CaptureFields.svelte';
 export { default as CaptureReadout } from './CaptureReadout.svelte';
 export { default as CalloutBlock } from './CalloutBlock.svelte';
 export { default as CalloutList } from './CalloutList.svelte';
-export { calloutsOf } from './callouts.js';
+export { calloutsOf, orderCallouts } from './callouts.js';
 export { default as CursorChips } from './CursorChips.svelte';
 export { default as GateReason } from './GateReason.svelte';
 export { attachmentUrl, gallery } from './viewer.js';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// + CAUTION / + INFO: append an empty callout to the step and focus its box.
+	// + WARNING / + CAUTION / + INFO: append an empty callout to the step and focus its box.
 	import * as Toolbar from '#lib/components/ui/toolbar/index.js';
 	import { useDoc } from '../controller.js';
 	import type { Callout, DocStep } from '../types.js';
@@ -17,8 +17,17 @@
 	}
 </script>
 
-<Toolbar.Button size="sm" class="font-mono text-xs" onclick={() => add('caution')}
-	>+ CAUTION</Toolbar.Button
+<Toolbar.Button
+	size="sm"
+	class="font-mono text-xs"
+	title="A person can be hurt"
+	onclick={() => add('warning')}>+ WARNING</Toolbar.Button
+>
+<Toolbar.Button
+	size="sm"
+	class="font-mono text-xs"
+	title="Hardware or the work can be damaged"
+	onclick={() => add('caution')}>+ CAUTION</Toolbar.Button
 >
 <Toolbar.Button size="sm" class="font-mono text-xs" onclick={() => add('info')}
 	>+ INFO</Toolbar.Button

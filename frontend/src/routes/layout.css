@@ -231,6 +231,17 @@
 	.label {
 		@apply font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase;
 	}
+	/* Hazard stripe: a person can be hurt. Only on the WARNING label, beside the word, never behind
+	   it. A pattern, so it still reads when glare or a mono printer takes the red away. */
+	.hazard {
+		background-image: repeating-linear-gradient(
+			135deg,
+			var(--error-fill) 0 3px,
+			var(--background) 3px 6px
+		);
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
 }
 
 /* Rendered markdown (authored content). */

@@ -28,8 +28,9 @@ Each mark has one meaning.
 | Hard 2px shadow, no blur | A key you can press, and the menu it opens. Never a panel |
 | Black fill | You are here: the current nav item, step or tab, and the active choice of a toggle |
 | Yellow edge, 4px, on an OP card | A contingency OP that someone has entered. Before that it is quiet: its number (C901, C902, in a series of its own) and the word CONTINGENCY |
+| Hazard stripe | A person can be hurt. Only as a tab beside the WARNING word, whose black fill it sets apart from you-are-here |
 
-No rounded corners, gradients or emoji.
+No rounded corners, gradients or emoji. The hazard stripe is a pattern, not a gradient.
 
 ## Importance sets contrast
 
