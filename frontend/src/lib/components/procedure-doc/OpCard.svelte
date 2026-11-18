@@ -28,6 +28,8 @@
 	import TitleInput from './author/TitleInput.svelte';
 	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
 	import { isBlocked, isTerminal, type DocOp } from './types.js';
+	import StepUnits from '#lib/components/units/StepUnits.svelte';
+	import UnitSlotsEditor from '#lib/components/units/UnitSlotsEditor.svelte';
 
 	let { op }: { op: DocOp } = $props();
 	const ctl = useDoc();
@@ -258,6 +260,7 @@
 					</MarkdownEditor>
 					<SignoffEditor step={op.step} {op} />
 					<StepProps step={op.step} {op} isOp={true} />
+					<UnitSlotsEditor step={op.step} />
 				</div>
 			{:else if op.callouts?.length || op.instructions}
 				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
@@ -268,6 +271,12 @@
 							{@html markdown(op.instructions)}
 						</div>
 					{/if}
+				</div>
+			{/if}
+			{#if !au && op.step.unit_record}
+				<!-- The units an OP with sub-steps names: a leaf OP shows them through StepBody. -->
+				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
+					<StepUnits step={op.step} {op} />
 				</div>
 			{/if}
 			{#if op.redline && !au}

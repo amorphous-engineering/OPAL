@@ -123,15 +123,15 @@
 {#snippet unitCell(u: ExecUnit)}
 	{#if u.borrowed}
 		<span class="font-mono">BORROWED</span>
-		{u.borrowed.name}{#if u.borrowed.serial}<span class="font-mono">
+		{u.borrowed.name}{#if u.borrowed.serial}<span class="ml-1 font-mono">
 				SN {u.borrowed.serial}</span
-			>{/if}{#if u.borrowed.lentBy}<span class="text-muted-foreground">
+			>{/if}{#if u.borrowed.lentBy}<span class="ml-1 text-muted-foreground">
 				from {u.borrowed.lentBy}</span
 			>{/if}
 	{:else}
 		<a class="font-mono text-info hover:underline" href={`/inventory/opal/${u.opalNumber}`}
 			>{u.opalNumber}</a
-		>{#if u.serialNumber}<span class="font-mono"> SN {u.serialNumber}</span>{/if}
+		>{#if u.serialNumber}<span class="ml-1 font-mono">SN {u.serialNumber}</span>{/if}
 		{#if u.partNumber && u.slot === null}<span class="text-muted-foreground">
 				{u.partNumber} {u.partName}</span
 			>{/if}
