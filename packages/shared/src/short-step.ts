@@ -27,7 +27,7 @@ export interface StepContent {
 export function hasOnlyDefaultSignoff(
 	signoffs: readonly { role: string | null }[] | null | undefined
 ): boolean {
-	return signoffs?.length === 1 && !signoffs[0].role;
+	return signoffs?.length === 1 && !signoffs[0]?.role;
 }
 
 /** Title and nothing else: no instructions, pictures, parts, data fields, callouts or declared sign-off. */

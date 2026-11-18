@@ -3,8 +3,11 @@
 	// into its body. The host decides `open`. Actions live in the body, not on the line.
 	// In author mode the title is a field and the line carries structure tools.
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
+	import Check from 'phosphor-svelte/lib/Check';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
+	import GateReason from './GateReason.svelte';
 	import CursorChips from './CursorChips.svelte';
 	import StepBody from './StepBody.svelte';
 	import StepBadges from './StepBadges.svelte';
@@ -14,7 +17,7 @@
 	import SaveBadge from './author/SaveBadge.svelte';
 	import TitleInput from './author/TitleInput.svelte';
 	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
-	import { isBlocked, isTerminal, type DocOp, type DocStep } from './types.js';
+	import { isBlocked, isShort, isTerminal, type DocOp, type DocStep } from './types.js';
 
 	let {
 		step,
@@ -40,6 +43,27 @@
 	const nAtt = $derived(step.attachments.length);
 	const nNote = $derived(step.notes.length);
 	const count = 'shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground';
+
+	// A short step (title and nothing else) completes from one tick on its row. The tick is the
+	// primary key only on the current step. Elsewhere it shows when it will work, and when it will
+	// not it shows, inert with the reason, only on the step the work is waiting on.
+	const slot = $derived(step.signoffs?.[0]);
+	const workable = $derived(step.status === 'pending' || step.status === 'in_progress');
+	const short = $derived(ctl.mode === 'execute' && isShort(step, op));
+	const canTick = $derived(
+		short && ctl.active && workable && !!ctl.actions.sign && !!slot && (slot.can_sign || current)
+	);
+	let busy = $state(false);
+
+	async function tick() {
+		if (!ctl.actions.sign || busy) return;
+		busy = true;
+		try {
+			await ctl.actions.sign(step, 0);
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <div
@@ -95,7 +119,8 @@
 		{:else}
 			<span
 				class={cn(
-					'min-w-0 truncate text-sm',
+					// A short step's title is the whole step, so it wraps in place instead of truncating.
+					short ? 'min-w-0 flex-1 basis-64 text-sm' : 'min-w-0 truncate text-sm',
 					terminal && 'line-through',
 					current && 'font-semibold'
 				)}>{step.title}</span
@@ -121,13 +146,31 @@
 				<span class={count} title="Attachments">{nAtt} {nAtt === 1 ? 'FILE' : 'FILES'}</span>
 			{/if}
 		{/if}
-		{#if !au}<span class="flex-1"></span>{/if}
+		{#if !au && !short}<span class="flex-1"></span>{/if}
 		{#if au}<AuthorChips {step} />{/if}
 		<CursorChips cursors={step.cursors} viewerId={ctl.viewerId} />
 		{#if au}
 			<SaveBadge {step} quiet />
 			<RowTools {step} {op} isOp={false} />
 		{:else}
+			{#if canTick && slot}
+				{#if !slot.can_sign}<GateReason blockers={slot.blockers} />{/if}
+				<span
+					class="shrink-0"
+					role="presentation"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+					><Button
+						size="icon"
+						variant={current ? 'default' : 'outline'}
+						disabled={!slot.can_sign || busy}
+						aria-label={`Complete ${step.number}`}
+						title="Complete"
+						data-tick={step.order}
+						onclick={tick}><Check weight="bold" /></Button
+					></span
+				>
+			{/if}
 			<StepStamp {step} />
 		{/if}
 	</div>

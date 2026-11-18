@@ -4,7 +4,7 @@
  * gates), the template editor will fill only the authoring fields and leave the
  * rest at their empty defaults.
  */
-import type { Spec } from '@opal/shared';
+import { isShortStep, type Spec } from '@opal/shared';
 
 /**
  * execute: operator controls. readonly: facts only. author: the template editor; every
@@ -283,6 +283,25 @@ export function isRoutine(step: DocStep, op: DocOp): boolean {
 	const leaf = step.order !== op.order || op.steps.length === 0;
 	const slots = step.signoffs ?? [];
 	return leaf && slots.length === 1 && !slots[0].role;
+}
+
+/**
+ * A short step: a sub-step with a title and nothing else (the rule is `isShortStep` in shared, which
+ * the printed traveler asks too). It is one row with a tick; notes, file, SKIP and + ISSUE open
+ * behind the row. An OP's own row is never short, and neither is a leaf OP.
+ */
+export function isShort(step: DocStep, op: DocOp): boolean {
+	return (
+		step.order !== op.order &&
+		isShortStep({
+			instructions: step.instructions,
+			callouts: step.callouts,
+			images: step.images,
+			fieldCount: step.data_schema?.fields?.length ?? 0,
+			kitCount: step.step_kit.length,
+			signoffs: step.signoffs
+		})
+	);
 }
 
 /** Can the operator work this step right now? */

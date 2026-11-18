@@ -4,6 +4,7 @@
 	import { specText, unitSymbol } from '@opal/shared';
 	import { datetime, qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
+	import { stepRuns } from '#lib/components/procedures/runs.js';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
@@ -118,18 +119,46 @@
 			{@render body(g.op)}
 			{#if g.subs.length === 0}{@render signLines(g.op)}{/if}
 		</div>
-		{#each g.subs as s (s.id)}
-			<div class="break-inside-avoid border-t border-black px-2.5 py-2 pl-6">
-				<div class="flex items-baseline gap-2 font-bold">
-					<span>{s.number}</span>
-					<span>{s.title}</span>
-					{#if s.estimatedDurationMinutes}
-						<span class="ml-auto text-[9pt] font-normal">EST {s.estimatedDurationMinutes} min</span>
-					{/if}
-				</div>
-				{@render body(s)}
-				{@render signLines(s)}
-			</div>
+		{#each stepRuns(g.subs) as run (run.steps[0].id)}
+			{#if run.short}
+				<!-- Title-only steps: a tick, the number, the title and a blank for initials. -->
+				<table class="w-full border-collapse border-t border-black text-[10pt]" data-short-run>
+					<tbody>
+						{#each run.steps as s (s.id)}
+							<tr class="break-inside-avoid border-t border-dotted border-neutral-500 first:border-t-0">
+								<td class="w-10 py-1 pl-6"
+									><span class="inline-block size-4 border-2 border-black align-middle"></span></td
+								>
+								<td class="w-12 py-1 pr-2 font-bold">{s.number}</td>
+								<td class="py-1"
+									>{s.title}{#if s.estimatedDurationMinutes}<span class="ml-2 text-[9pt]"
+											>EST {s.estimatedDurationMinutes} min</span
+										>{/if}</td
+								>
+								<td class="w-20 py-1 pr-2 pl-3 text-[9pt]"
+									><span class="flex items-baseline gap-1"
+										>Init <span class="inline-block flex-1 border-b border-black">&nbsp;</span></span
+									></td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{:else}
+				{#each run.steps as s (s.id)}
+					<div class="break-inside-avoid border-t border-black px-2.5 py-2 pl-6">
+						<div class="flex items-baseline gap-2 font-bold">
+							<span>{s.number}</span>
+							<span>{s.title}</span>
+							{#if s.estimatedDurationMinutes}
+								<span class="ml-auto text-[9pt] font-normal">EST {s.estimatedDurationMinutes} min</span>
+							{/if}
+						</div>
+						{@render body(s)}
+						{@render signLines(s)}
+					</div>
+				{/each}
+			{/if}
 		{/each}
 		{#if g.subs.length > 0}
 			<div class="border-t border-black px-2.5 pb-1">{@render signLines(g.op)}</div>
