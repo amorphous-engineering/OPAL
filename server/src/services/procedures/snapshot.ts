@@ -69,6 +69,7 @@ export function buildSnapshot(ctx: Pick<Ctx, 'db'>, procedureId: number): Proced
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			workcenterId: s.workcenterId,
 			signoffs: s.signoffs,
+			...(s.performer ? { performer: { ...s.performer } } : {}),
 			callouts: s.callouts.map((c) => ({ ...c })),
 			dependsOn: s.dependsOn,
 			images: images.get(s.id) ?? [],
@@ -112,6 +113,8 @@ export function normalized(s: ProcedureSnapshot) {
 			estimatedDurationMinutes: x.estimatedDurationMinutes,
 			workcenterId: x.workcenterId,
 			signoffs: relabel(x.signoffs),
+			// The name only: a role recoloured after publish is not a change to the procedure.
+			performer: x.performer?.name,
 			callouts: x.callouts,
 			dependsOn: x.dependsOn.map((d) => numberOf.get(d) ?? null).sort(),
 			images: x.images.map((i) => [i.sha256, i.caption]),

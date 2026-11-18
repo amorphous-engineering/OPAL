@@ -9,6 +9,7 @@ import {
 	type ComponentRemoval,
 	type DocUnitSlot,
 	type ExecUnit,
+	type RoleMark,
 	type Spec,
 	type UnitSlot
 } from '@opal/shared';
@@ -193,7 +194,10 @@ export interface DocStep {
 	status: StepStatus | string;
 	instructions: string | null;
 	callouts: Callout[];
+	/** The role of the first sign-off slot. */
 	role: string | null;
+	/** The role that does the step, as its mark. Gates nothing. */
+	performer?: RoleMark | null;
 	requires_signoff: boolean;
 	is_contingency: boolean;
 	estimated_duration_minutes?: number | null;

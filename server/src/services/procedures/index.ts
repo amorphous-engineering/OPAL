@@ -31,6 +31,7 @@ import { type ProcedureRow, draftRow, presentDraft, procedureRow, stepRows } fro
 import { buildSnapshot, snapshotsEquivalent } from './snapshot.ts';
 import { checkWorkcenter, copyAttachment, copyStepContent, invalid, normalizeCallouts, removeStepDeep } from './steps.ts';
 import { writeSignoffs } from './signoffs.ts';
+import { canonicalRoleName } from '../org/roles.ts';
 
 export type ProcedureOut = z.output<typeof zProcedure>;
 
@@ -300,6 +301,7 @@ export function clone(
 			instructions: s.instructions,
 			dataSchema: s.dataSchema ? structuredClone(s.dataSchema) : null,
 			signoffs: s.signoffs ? structuredClone(s.signoffs) : null,
+			performer: s.performer,
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			callouts: structuredClone(s.callouts ?? []),
 			strictSequence: s.strictSequence,
@@ -352,6 +354,7 @@ interface BuildInput {
 		requiredRole?: string | null;
 		requiresSignoff?: boolean;
 		signoffs?: { label?: string; role?: string | null }[] | null;
+		performer?: string | null;
 		callouts?: { kind: CalloutKind; text: string }[] | null;
 		strictSequence?: boolean;
 		estimatedDurationMinutes?: number | null;
@@ -399,6 +402,7 @@ export function build(ctx: Ctx, input: BuildInput) {
 			title: s.title,
 			instructions: s.instructions ?? null,
 			signoffs: writeSignoffs(ctx.db, null, false, s) ?? null,
+			performer: canonicalRoleName(ctx.db, s.performer),
 			estimatedDurationMinutes: s.estimatedDurationMinutes ?? null,
 			callouts: normalizeCallouts(s.callouts),
 			strictSequence: s.strictSequence ?? false,

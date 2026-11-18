@@ -9,7 +9,7 @@
  * will be a different set of actions on the same components.
  */
 import { getContext, setContext } from 'svelte';
-import type { ExecUnit, InstalledComponent, UnitSlot } from '@opal/shared';
+import type { ExecUnit, InstalledComponent, RoleMark, UnitSlot } from '@opal/shared';
 import type { Callout, DocLabor, DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
 
 export interface StockRecord {
@@ -121,6 +121,8 @@ export interface StepEdit {
 	role?: string | null;
 	requires_signoff?: boolean;
 	signoffs?: SignoffDef[] | null;
+	/** The role that does the step. Saved by name. */
+	performer?: RoleMark | null;
 	estimated_duration_minutes?: number | null;
 	is_contingency?: boolean;
 	strict_sequence?: boolean;

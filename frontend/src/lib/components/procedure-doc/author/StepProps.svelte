@@ -5,6 +5,8 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
+	import { toastError } from '#lib/components/opal/index.js';
+	import { roleList, type Role } from '#lib/components/users/roles.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from '../controller.js';
 	import type { DocOp, DocStep } from '../types.js';
@@ -14,6 +16,22 @@
 	const pid = $derived(`prop-${step.order}`);
 
 	const others = $derived(au.ops().filter((o) => o.order !== op.order));
+
+	let roles = $state<Role[]>([]);
+	$effect(() => {
+		roleList()
+			.then((r) => (roles = r))
+			.catch(toastError);
+	});
+	const lc = (s: string) => s.toLowerCase();
+	const current = $derived(step.performer?.name ?? '');
+	/** The step's own role when it no longer exists, so the select still shows it. */
+	const gone = $derived(current && !roles.some((r) => lc(r.name) === lc(current)) ? current : '');
+	function setPerformer(name: string) {
+		if (!name) return au.edit(step, { performer: null });
+		const r = roles.find((x) => x.name === name);
+		if (r) au.edit(step, { performer: { name: r.name, code: r.code, color: r.color } });
+	}
 	const waits = $derived(new Set(op.depends_on ?? []));
 
 	function toggleWait(id: number) {
@@ -26,6 +44,20 @@
 </script>
 
 <div class="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-x-4 gap-y-3">
+	<div class="grid grid-cols-1 content-start gap-1">
+		<label for={`${pid}-role`} class="label">Role</label>
+		<NativeSelect
+			id={`${pid}-role`}
+			class="w-full"
+			value={roles.find((r) => lc(r.name) === lc(current))?.name ?? current}
+			onkeydown={(e) => e.stopPropagation()}
+			onchange={(e) => setPerformer(e.currentTarget.value)}
+		>
+			<option value="">—</option>
+			{#each roles as r (r.id)}<option value={r.name}>{r.code} {r.name}</option>{/each}
+			{#if gone}<option value={gone} disabled>{gone} (no such role)</option>{/if}
+		</NativeSelect>
+	</div>
 	<div class="grid grid-cols-1 content-start gap-1">
 		<label for={`${pid}-est`} class="label">Estimate (min)</label>
 		<Input

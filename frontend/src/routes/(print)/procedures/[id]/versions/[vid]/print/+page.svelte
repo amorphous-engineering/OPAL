@@ -4,6 +4,7 @@
 	import { hasOnlyDefaultSignoff, specText, unitSymbol } from '@opal/shared';
 	import { datetime, qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
+	import { RoleMark } from '#lib/components/opal/index.js';
 	import { stepRuns } from '#lib/components/procedures/runs.js';
 	import { orderCallouts } from '#lib/components/procedure-doc/callouts.js';
 	import UnitSlotsPrint from '#lib/components/units/UnitSlotsPrint.svelte';
@@ -137,6 +138,7 @@
 			class="flex items-center gap-2 border-b border-black bg-neutral-200 px-2.5 py-1.5 font-bold"
 		>
 			<span class="text-[13pt]">OP {g.op.number}</span>
+			{#if g.op.performer}<RoleMark mark={g.op.performer} />{/if}
 			<span>{g.op.title}</span>
 			{#if g.op.estimatedDurationMinutes}
 				<span class="ml-auto text-[9pt] font-normal">EST {g.op.estimatedDurationMinutes} min</span>
@@ -161,7 +163,10 @@
 								>
 								<td class="w-12 py-1 pr-2 font-bold">{s.number}</td>
 								<td class="py-1"
-									>{s.title}{#if s.estimatedDurationMinutes}<span class="ml-2 text-[9pt]"
+									>{#if s.performer}<RoleMark
+											mark={s.performer}
+											class="mr-2 align-middle"
+										/>{/if}{s.title}{#if s.estimatedDurationMinutes}<span class="ml-2 text-[9pt]"
 											>EST {s.estimatedDurationMinutes} min</span
 										>{/if}</td
 								>
@@ -180,6 +185,7 @@
 					<div class="break-inside-avoid border-t border-black px-2.5 py-2 pl-6">
 						<div class="flex items-baseline gap-2 font-bold">
 							<span>{s.number}</span>
+							{#if s.performer}<RoleMark mark={s.performer} class="self-center" />{/if}
 							<span>{s.title}</span>
 							{#if s.estimatedDurationMinutes}
 								<span class="ml-auto text-[9pt] font-normal"

@@ -29,6 +29,7 @@ Each mark has one meaning.
 | Black fill | You are here: the current nav item, step or tab, and the active choice of a toggle |
 | Yellow edge, 4px, on an OP card | A contingency OP that someone has entered. Before that it is quiet: its number (C901, C902, in a series of its own) and the word CONTINGENCY |
 | Hazard stripe | A person can be hurt. Only as a tab beside the WARNING word, whose black fill it sets apart from you-are-here |
+| Role mark | The role that does a step: its letters (LD, LO) in a square filled with the role's colour, between the step number and the title. Outlined when the role no longer exists |
 
 No rounded corners, gradients or emoji. The hazard stripe is a pattern, not a gradient.
 
@@ -56,6 +57,8 @@ from most to least important.
 - No tints, because they are the first thing glare removes. The risk matrix is the one exception, because its
   bands are the information.
 - Accent blue marks identifiers and actions, never content.
+- Role marks are the one use of colour that is not state. Their palette (purple, teal, brown, magenta,
+  slate) stays clear of red, amber, green, blue and yellow, and the letters carry the role.
 
 Every colour clears 4.5:1 on the background it sits on. Quiet stays at about 7:1 in day and night,
 because it still has to be read.

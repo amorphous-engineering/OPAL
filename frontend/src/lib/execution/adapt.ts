@@ -84,6 +84,7 @@ function step(s: DocStepOut, parentOrder: number | null): DocStep {
 		instructions: s.instructions,
 		callouts: s.callouts,
 		role: s.role,
+		performer: s.performer,
 		requires_signoff: s.requiresSignoff,
 		is_contingency: s.isContingency,
 		estimated_duration_minutes: s.estimatedDurationMinutes,

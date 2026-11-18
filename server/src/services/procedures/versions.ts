@@ -253,6 +253,7 @@ export function restoreVersion(ctx: Ctx, procedureId: number, versionId: number)
 			instructions: s.instructions,
 			dataSchema: s.dataSchema,
 			signoffs: s.signoffs.map((x) => ({ role: x.role })),
+			performer: s.performer?.name ?? null,
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			callouts: s.callouts.map((c) => ({ ...c })),
 			strictSequence: s.strictSequence,

@@ -39,6 +39,8 @@ export interface Row {
 	instructions: string | null;
 	dataSchema: SnapshotStep['dataSchema'];
 	signoffs: { label: string; role: string | null }[];
+	/** The role that does the step, as frozen at publish. Redline steps have none. */
+	performer: SnapshotStep['performer'] | null;
 	isContingency: boolean;
 	strictSequence: boolean;
 	/** Step execution ids of the OPs this OP waits on. */
@@ -113,6 +115,7 @@ export function loadModel(db: Db, executionId: number): Model {
 			instructions: s.instructions,
 			dataSchema: s.dataSchema,
 			signoffs: s.signoffs.map((x) => ({ label: x.label, role: x.role })),
+			performer: s.performer ?? null,
 			isContingency: s.isContingency,
 			strictSequence: s.strictSequence,
 			dependsOn: s.dependsOn.map((d) => seOfTemplate.get(d)).filter((x): x is number => x !== undefined),
@@ -145,6 +148,7 @@ export function loadModel(db: Db, executionId: number): Model {
 			instructions: a.instructions,
 			dataSchema: a.dataSchema ?? null,
 			signoffs: effectiveSignoffs(a.signoffs ?? null, hasKids).map((x) => ({ label: x.label, role: x.role })),
+			performer: null,
 			isContingency: false,
 			strictSequence: false,
 			dependsOn: [],

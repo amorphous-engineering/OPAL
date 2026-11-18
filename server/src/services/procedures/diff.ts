@@ -12,6 +12,7 @@ const STEP_FIELDS = [
 	'callouts',
 	'dataSchema',
 	'signoffs',
+	'performer',
 	'strictSequence',
 	'dependsOn',
 	'kit',
@@ -35,6 +36,8 @@ function comparable(s: SnapshotStep, numberOf: Map<number, string>) {
 	return {
 		...s,
 		signoffs: relabel(s.signoffs),
+		// The role, not how it was drawn on the day.
+		performer: s.performer?.name ?? null,
 		dependsOn: s.dependsOn.map((d) => numberOf.get(d) ?? `#${d}`).sort(),
 		images: s.images.map((i) => ({ sha256: i.sha256, caption: i.caption })),
 		kit: [...s.kit].sort((x, y) => x.partId - y.partId),

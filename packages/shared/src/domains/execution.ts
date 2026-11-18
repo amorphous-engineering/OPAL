@@ -18,6 +18,7 @@ import { zTimestamp } from '../time.ts';
 import { zPersonRef } from './org.ts';
 import { CALLOUT_KINDS, zProcedureDataSchema } from './procedures.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP, MAX_TOKEN, zJsonObject } from '../limits.ts';
+import { zRoleMark } from '../role-marks.ts';
 
 /**
  * Status follows from the work done. `void` and `closed_short` are the two strikes: a work order
@@ -414,7 +415,10 @@ export const zDocStep = z.object({
 	status: z.enum(EXEC_STEP_STATUSES),
 	instructions: z.string().nullable(),
 	callouts: z.array(z.object({ kind: z.enum(CALLOUT_KINDS), text: z.string() })),
+	/** The role of the first sign-off slot. */
 	role: z.string().nullable(),
+	/** The role that does the step, as its mark. Gates nothing. */
+	performer: zRoleMark.nullable(),
 	requiresSignoff: z.boolean(),
 	isContingency: z.boolean(),
 	estimatedDurationMinutes: z.number().int().nullable(),
@@ -463,6 +467,7 @@ export const zDocOp = z.object({
 	instructions: z.string().nullable(),
 	callouts: z.array(z.object({ kind: z.enum(CALLOUT_KINDS), text: z.string() })),
 	role: z.string().nullable(),
+	performer: zRoleMark.nullable(),
 	signoffs: z.array(zDocSignoff),
 	strictSequence: z.boolean(),
 	isContingency: z.boolean(),

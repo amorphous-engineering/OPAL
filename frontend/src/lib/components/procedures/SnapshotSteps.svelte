@@ -5,7 +5,7 @@
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import { tick } from 'svelte';
 	import { cn } from '#lib/utils.js';
-	import { EmptyLine, Section } from '#lib/components/opal/index.js';
+	import { EmptyLine, RoleMark, Section } from '#lib/components/opal/index.js';
 	import { duration, qty } from '#lib/format.js';
 	import { CalloutList } from '#lib/components/procedure-doc/index.js';
 	import { specText, unitSymbol } from '@opal/shared';
@@ -152,6 +152,7 @@
 				aria-hidden="true"
 			/>
 			<span class="font-mono font-medium">OP {g.op.number}</span>
+			{#if g.op.performer}<RoleMark mark={g.op.performer} />{/if}
 			<span class="font-medium">{g.op.title}</span>
 			<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground">
 				<span>{g.subs.length} {g.subs.length === 1 ? 'step' : 'steps'}</span>
@@ -166,6 +167,7 @@
 			<div class="border-t border-border px-3 py-1.5 pl-8">
 				<div class="flex items-baseline gap-3">
 					<span class="font-mono text-xs text-muted-foreground">{s.number}</span>
+					{#if s.performer}<RoleMark mark={s.performer} />{/if}
 					<span>{s.title}</span>
 					<span class="ml-auto flex gap-3 font-mono text-xs text-muted-foreground uppercase">
 						{#if s.dataSchema?.fields?.length}<span>data</span>{/if}

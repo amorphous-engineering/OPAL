@@ -4,6 +4,7 @@
 	// In author mode the title is a field and the line carries structure tools.
 	import CaretRight from 'phosphor-svelte/lib/CaretRight';
 	import Check from 'phosphor-svelte/lib/Check';
+	import { RoleMark } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
 	import { useDoc } from './controller.js';
@@ -118,6 +119,7 @@
 				>{step.number}</span
 			></span
 		>
+		{#if step.performer}<RoleMark mark={step.performer} />{/if}
 		{#if au}
 			<TitleInput {step} />
 		{:else}

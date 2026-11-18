@@ -11,6 +11,7 @@ export * from './units.ts';
 export * from './specs.ts';
 export * from './spec-from-label.ts';
 export * from './short-step.ts';
+export * from './role-marks.ts';
 export * from './client.ts';
 export * from './contracts.ts';
 export * from './domains/parts.ts';

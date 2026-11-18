@@ -43,6 +43,7 @@ import {
 	type TreeNode
 } from './tree.ts';
 import { writeSignoffs } from './signoffs.ts';
+import { canonicalRoleName } from '../org/roles.ts';
 import { checkUnits } from './units.ts';
 
 export const invalid = (code: string, message: string, fields?: Record<string, string>) =>
@@ -174,6 +175,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 		instructions: input.instructions ?? null,
 		dataSchema: normalizeSchema(input.dataSchema),
 		signoffs,
+		performer: canonicalRoleName(ctx.db, input.performer),
 		estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
 		callouts: normalizeCallouts(input.callouts),
 		strictSequence: parentId === null ? (input.strictSequence ?? false) : false,
@@ -198,6 +200,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	if (input.dataSchema) checkDataFields(input.dataSchema, step.dataSchema);
 	if (input.dataSchema !== undefined) patch.dataSchema = normalizeSchema(input.dataSchema);
 	if (input.estimatedDurationMinutes !== undefined) patch.estimatedDurationMinutes = input.estimatedDurationMinutes;
+	if (input.performer !== undefined) patch.performer = canonicalRoleName(ctx.db, input.performer);
 	if (input.workcenterId !== undefined) {
 		checkWorkcenter(ctx.db, input.workcenterId);
 		patch.workcenterId = input.workcenterId;
@@ -321,6 +324,7 @@ export function duplicateStep(ctx: Ctx, procedureId: number, stepId: number): Pr
 			instructions: src.instructions,
 			dataSchema: src.dataSchema ? structuredClone(src.dataSchema) : null,
 			signoffs: src.signoffs ? structuredClone(src.signoffs) : null,
+			performer: src.performer,
 			estimatedDurationMinutes: src.estimatedDurationMinutes,
 			callouts: structuredClone(src.callouts ?? []),
 			strictSequence: src.strictSequence,

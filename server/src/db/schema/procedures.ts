@@ -87,6 +87,8 @@ export const procedureStep = sqliteTable(
 		 * sub-steps none). Labels come from the slot position and are never stored.
 		 */
 		signoffs: text('signoffs', { mode: 'json' }).$type<{ role: string | null }[]>(),
+		/** The role that does the step, by name, as sign-off slots name theirs. Gates nothing. */
+		performer: text('performer'),
 		estimatedDurationMinutes: integer('estimated_duration_minutes'),
 		callouts: text('callouts', { mode: 'json' }).$type<ProcedureCallout[]>().notNull().default(sql`'[]'`),
 		/** OPs only: sub-steps must start in order. */

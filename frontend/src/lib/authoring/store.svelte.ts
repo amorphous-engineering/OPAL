@@ -276,6 +276,11 @@ export class AuthorStore implements DocController {
 					st.signoffs = previewSlots(defs);
 				}
 			}
+			if (
+				!dirty(d.id, 'performer') &&
+				JSON.stringify(st.performer ?? null) !== JSON.stringify(d.performer)
+			)
+				st.performer = d.performer;
 			set('estimated_duration_minutes', 'estimated_duration_minutes', d.estimatedDurationMinutes);
 			set('is_contingency', 'is_contingency', d.isContingency);
 			set('workcenter_id', 'workcenter_id', d.workcenterId);
@@ -359,6 +364,7 @@ export class AuthorStore implements DocController {
 			instructions: d.instructions,
 			callouts: (d.callouts ?? []).map((c) => ({ ...c })),
 			role: d.requiredRole,
+			performer: d.performer,
 			requires_signoff: d.requiresSignoff,
 			is_contingency: d.isContingency,
 			estimated_duration_minutes: d.estimatedDurationMinutes,
@@ -549,6 +555,7 @@ export class AuthorStore implements DocController {
 			body.requiresSignoff = patch.requires_signoff;
 		if ('signoffs' in patch)
 			body.signoffs = patch.signoffs ? patch.signoffs.map((x) => ({ role: norm(x.role) })) : null;
+		if ('performer' in patch) body.performer = patch.performer?.name ?? null;
 		if ('estimated_duration_minutes' in patch)
 			body.estimatedDurationMinutes = patch.estimated_duration_minutes ?? null;
 		if ('is_contingency' in patch) body.isContingency = patch.is_contingency;

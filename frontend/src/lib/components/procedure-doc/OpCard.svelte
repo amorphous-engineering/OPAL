@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ActionLink, State, Timestamp } from '#lib/components/opal/index.js';
+	import { ActionLink, RoleMark, State, Timestamp } from '#lib/components/opal/index.js';
 	// One OP: a card with a header bar (number, title, what is exceptional, claim, count) over
 	// its steps. An OP without sub-steps is its own single step and shows that step's body
 	// directly, with its stamp in place of the count.
@@ -149,6 +149,7 @@
 				current && 'bg-foreground px-1 py-px text-background'
 			)}>OP {op.number}</span
 		>
+		{#if op.step.performer}<RoleMark mark={op.step.performer} />{/if}
 		{#if au}
 			<TitleInput step={op.step} class="font-medium" />
 		{:else}

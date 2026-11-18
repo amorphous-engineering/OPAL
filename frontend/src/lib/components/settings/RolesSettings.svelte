@@ -8,6 +8,7 @@
 		DetailRow,
 		DetailTable,
 		EmptyLine,
+		RoleMark,
 		Section,
 		confirm,
 		toast,
@@ -18,7 +19,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { opal } from '#lib/api.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import type { GateInfo } from '@opal/shared';
+	import { ROLE_COLORS, type GateInfo, type RoleColor } from '@opal/shared';
 	import {
 		resetRoleNames,
 		sortRoles,
@@ -79,6 +80,7 @@
 	}
 
 	const columns: Column<Role>[] = [
+		{ key: 'code', label: 'Mark' },
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'description', label: 'Description' },
 		{ key: 'memberCount', label: 'Members', align: 'right', mono: true, sortable: true }
@@ -96,15 +98,24 @@
 	let newDescription = $state('');
 	let name = $state('');
 	let description = $state('');
+	let code = $state('');
+	let color = $state<RoleColor>('purple');
 	let busy = $state(false);
 
 	// Editing fields follow the selected role.
 	$effect(() => {
 		name = selected?.name ?? '';
 		description = selected?.description ?? '';
+		code = selected?.code ?? '';
+		color = selected?.color ?? 'purple';
 	});
+	const codeOk = $derived(/^[A-Za-z0-9]{1,3}$/.test(code.trim()));
 	const dirty = $derived(
-		!!selected && (name.trim() !== selected.name || description !== (selected.description ?? ''))
+		!!selected &&
+			(name.trim() !== selected.name ||
+				description !== (selected.description ?? '') ||
+				code.trim().toUpperCase() !== selected.code ||
+				color !== selected.color)
 	);
 
 	async function create(e: SubmitEvent) {
@@ -131,13 +142,15 @@
 
 	async function save(e: SubmitEvent) {
 		e.preventDefault();
-		if (busy || !selected || !dirty || !name.trim()) return;
+		if (busy || !selected || !dirty || !name.trim() || !codeOk) return;
 		busy = true;
 		try {
 			await opal.org.roles.update({
 				id: selected.id,
 				name: name.trim(),
-				description: description.trim() || null
+				description: description.trim() || null,
+				code: code.trim(),
+				color
 			});
 			resetRoleNames();
 			toast.success('Role saved');
@@ -212,7 +225,9 @@
 			emptyLabel="roles"
 		>
 			{#snippet cell(r, col)}
-				{#if col.key === 'name'}
+				{#if col.key === 'code'}
+					<RoleMark mark={r} />
+				{:else if col.key === 'name'}
 					<span class="font-medium">{r.name}</span>
 					{#if r.isSystem}
 						<span class="ml-2 font-mono text-xs tracking-wider text-muted-foreground">SYSTEM</span>
@@ -294,10 +309,36 @@
 								bind:value={description}
 							/>
 						</DetailRow>
+						<DetailRow label="Mark">
+							<div class="flex flex-wrap items-center gap-2">
+								<Input
+									aria-label="Mark letters"
+									class="h-7 w-16 font-mono uppercase"
+									maxlength={3}
+									bind:value={code}
+								/>
+								{#each ROLE_COLORS as c (c)}
+									<button
+										type="button"
+										class="p-0.5 outline-offset-1 aria-pressed:outline-2 aria-pressed:outline-foreground"
+										aria-pressed={color === c}
+										aria-label={c}
+										title={c}
+										onclick={() => (color = c)}
+										><RoleMark
+											mark={{ name: c, code: code.trim().toUpperCase() || '?', color: c }}
+										/></button
+									>
+								{/each}
+							</div>
+						</DetailRow>
 					</DetailTable>
 					<div class="flex border-t border-border px-3 py-1.5">
-						<Button type="submit" size="sm" class="flex-1" disabled={busy || !dirty || !name.trim()}
-							>SAVE</Button
+						<Button
+							type="submit"
+							size="sm"
+							class="flex-1"
+							disabled={busy || !dirty || !name.trim() || !codeOk}>SAVE</Button
 						>
 					</div>
 				</form>
@@ -305,6 +346,7 @@
 				<DetailTable>
 					<DetailRow label="Name" value={selected.name} />
 					<DetailRow label="Description" value={selected.description} />
+					<DetailRow label="Mark"><RoleMark mark={selected} /></DetailRow>
 				</DetailTable>
 			{/if}
 		</Section>

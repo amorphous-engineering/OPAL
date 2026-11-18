@@ -17,6 +17,7 @@ import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
+import { zRoleMark } from '../role-marks.ts';
 
 export const PROCEDURE_STATUSES = ['draft', 'released', 'obsolete'] as const;
 export type ProcedureStatus = (typeof PROCEDURE_STATUSES)[number];
@@ -194,6 +195,8 @@ export const zProcedureStep = z.object({
 	/** Derived from `signoffs`: the role of the first slot. */
 	requiredRole: z.string().nullable(),
 	signoffs: z.array(zProcedureSignoff),
+	/** The role that does the step, as its mark. A label for the people at work: it gates nothing. */
+	performer: zRoleMark.nullable(),
 	estimatedDurationMinutes: z.number().int().nullable(),
 	callouts: z.array(zProcedureCallout),
 	strictSequence: z.boolean(),
@@ -273,6 +276,11 @@ export const zSnapshotStep = z.object({
 	workcenterId: z.number().int().nullable(),
 	/** Effective slots in order. A leaf has at least one. An OP with sub-steps may have none. */
 	signoffs: z.array(zProcedureSignoff),
+	/**
+	 * The role that does the step, frozen with its code and colour at publish so a later change to
+	 * the role leaves the version as it was. Absent when none is set.
+	 */
+	performer: zRoleMark.optional(),
 	callouts: z.array(zProcedureCallout),
 	/** Ids of the OPs this OP waits on. Only OPs (level 0) have any. */
 	dependsOn: z.array(z.number().int()),
@@ -389,6 +397,8 @@ const stepFields = {
 	signoffs: z.array(zProcedureSignoffInput).nullable().optional(),
 	/** Sets the role of the first slot. `signoffs` wins when both are sent. */
 	requiredRole: z.string().max(50).nullable().optional(),
+	/** The role that does the step, by name: shown as the role's mark. It gates nothing. */
+	performer: z.string().max(50).nullable().optional(),
 	/** On: a leaf gets a second slot, an OP with sub-steps a first. Off: drops the slots after the first. */
 	requiresSignoff: z.boolean().optional(),
 	callouts: z.array(zProcedureCallout).nullable().optional(),
@@ -425,6 +435,7 @@ const zBuildStep = z.object({
 	title: z.string().trim().min(1).max(255),
 	instructions: z.string().max(MAX_MARKDOWN).nullable().optional(),
 	requiredRole: z.string().max(50).nullable().optional(),
+	performer: z.string().max(50).nullable().optional(),
 	requiresSignoff: z.boolean().optional(),
 	signoffs: z.array(zProcedureSignoffInput).nullable().optional(),
 	callouts: z.array(zProcedureCallout).nullable().optional(),

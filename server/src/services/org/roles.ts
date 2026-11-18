@@ -6,7 +6,7 @@
  * role can be signed only by a holder, or by an admin.
  */
 import { OpalError, conflict, notFound, now } from '@opal/shared';
-import type { GateInfo, Role } from '@opal/shared';
+import { defaultRoleColor, roleInitials, type GateInfo, type Role, type RoleColor, type RoleMark } from '@opal/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
@@ -96,6 +96,18 @@ export function canonicalRoleName(db: Db, name: string | null | undefined): stri
 	return r.name;
 }
 
+/**
+ * The mark of the role a step names. A name no role answers to any more (renamed or deleted)
+ * still shows, as its initials with no colour.
+ */
+export function roleMark(db: Db, name: string | null | undefined): RoleMark | null {
+	const cleaned = (name ?? '').trim();
+	if (!cleaned) return null;
+	const r = findRole(db, cleaned);
+	if (!r) return { name: cleaned, code: roleInitials(cleaned), color: null };
+	return { name: r.name, code: r.code ?? roleInitials(r.name), color: r.color ?? defaultRoleColor(r.id) };
+}
+
 function memberCounts(db: Db): Map<number, number> {
 	const rows = db
 		.select({ roleId: userRole.roleId, n: sql<number>`count(*)` })
@@ -119,6 +131,8 @@ function toRole(r: RoleRow, counts: Map<number, number>): Role {
 		description: r.description,
 		key: r.key,
 		isSystem: r.isSystem,
+		code: r.code ?? roleInitials(r.name),
+		color: r.color ?? defaultRoleColor(r.id),
 		memberCount: counts.get(r.id) ?? 0,
 		createdAt: r.createdAt,
 		updatedAt: r.updatedAt
@@ -169,15 +183,24 @@ export function getRole(ctx: Pick<Ctx, 'db'>, id: number) {
 	return { ...toRole(r, new Map([[r.id, members.length]])), members };
 }
 
-export function createRole(ctx: Ctx, input: { name: string; description?: string | null }): Role {
+type MarkInput = { code?: string; color?: RoleColor };
+
+export function createRole(ctx: Ctx, input: { name: string; description?: string | null } & MarkInput): Role {
 	ensureSystemRoles(ctx.db);
 	const existing = findRole(ctx.db, input.name);
 	if (existing) throw conflict('duplicate', `Role '${existing.name}' already exists`);
-	const row = insert(ctx, role, { name: input.name, description: input.description ?? null, key: null, isSystem: false });
+	const row = insert(ctx, role, {
+		name: input.name,
+		description: input.description ?? null,
+		key: null,
+		isSystem: false,
+		code: input.code ?? null,
+		color: input.color ?? null
+	});
 	return toRole(row, new Map());
 }
 
-export function updateRole(ctx: Ctx, input: { id: number; name?: string; description?: string | null }): Role {
+export function updateRole(ctx: Ctx, input: { id: number; name?: string; description?: string | null } & MarkInput): Role {
 	const r = getRow(ctx.db, input.id);
 	if (r.isSystem && input.name !== undefined && input.name !== r.name) {
 		throw new OpalError(400, 'system_role', `${r.name} is a system role; it cannot be renamed`);
@@ -189,6 +212,8 @@ export function updateRole(ctx: Ctx, input: { id: number; name?: string; descrip
 	const patch: Partial<typeof role.$inferInsert> = {};
 	if (input.name !== undefined) patch.name = input.name;
 	if (input.description !== undefined) patch.description = input.description;
+	if (input.code !== undefined) patch.code = input.code;
+	if (input.color !== undefined) patch.color = input.color;
 	return toRole(update(ctx, role, r.id, patch), memberCounts(ctx.db));
 }
 

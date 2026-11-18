@@ -56,6 +56,13 @@
 	--error-fill: #c8001e;
 	--error-on: #ffffff;
 	--info: #002dce;
+	/* Role marks: a fill behind the role's letters. Outside the state colours on purpose. */
+	--role-purple: #6a1b9a;
+	--role-teal: #00687a;
+	--role-brown: #6d4c41;
+	--role-magenta: #ad1457;
+	--role-slate: #455a64;
+	--role-on: #ffffff;
 	--brand: oklch(0.553 0.195 38.402);
 	--dev: #002dce;
 	--chart-1: #002dce;
@@ -109,6 +116,12 @@
 	--error-fill: #ff5c5c;
 	--error-on: #000000;
 	--info: #8ab4ff;
+	--role-purple: #ce93d8;
+	--role-teal: #4dd0e1;
+	--role-brown: #bcaaa4;
+	--role-magenta: #f48fb1;
+	--role-slate: #b0bec5;
+	--role-on: #000000;
 	--brand: #fb923c;
 	--dev: #8ab4ff;
 	--chart-1: #8ab4ff;
@@ -172,6 +185,12 @@
 	--color-error: var(--error);
 	--color-error-muted: var(--error-muted);
 	--color-info: var(--info);
+	--color-role-purple: var(--role-purple);
+	--color-role-teal: var(--role-teal);
+	--color-role-brown: var(--role-brown);
+	--color-role-magenta: var(--role-magenta);
+	--color-role-slate: var(--role-slate);
+	--color-role-on: var(--role-on);
 	--color-ok-fill: var(--ok-fill);
 	--color-ok-on: var(--ok-on);
 	--color-tan: var(--tan);
@@ -241,6 +260,20 @@
 		);
 		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
+	}
+	/* A role mark keeps its fill on paper: white letters on a dropped fill would vanish. */
+	.role-mark {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+	/* Paper is a day page whatever the app theme. */
+	.paper {
+		--role-purple: #6a1b9a;
+		--role-teal: #00687a;
+		--role-brown: #6d4c41;
+		--role-magenta: #ad1457;
+		--role-slate: #455a64;
+		--role-on: #ffffff;
 	}
 }
 
