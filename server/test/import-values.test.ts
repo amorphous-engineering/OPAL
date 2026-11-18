@@ -127,18 +127,22 @@ describe('a record that imports opens', () => {
 		out.close();
 	});
 
-	test('a callout of another kind opens, and keeps its words', async () => {
+	test('a warning stays a warning in any case; a callout of another kind opens, and keeps its words', async () => {
 		const { report, out } = await importedWith((old) => {
-			old.run(`UPDATE procedure_step SET callouts = '[{"kind":"warning","text":"Hot"},{"kind":"tip","text":"Wear gloves"}]' WHERE id = (SELECT MIN(id) FROM procedure_step)`);
+			old.run(`UPDATE procedure_step SET callouts = '[{"kind":"warning","text":"Hot"},{"kind":"WARNING","text":"Stand clear"},{"kind":"tip","text":"Wear gloves"}]' WHERE id = (SELECT MIN(id) FROM procedure_step)`);
 			const v = old.query('SELECT id, content FROM procedure_version ORDER BY id LIMIT 1').get() as { id: number; content: string };
 			const content = JSON.parse(v.content);
-			content.steps[0].callouts = [{ kind: 'warning', text: 'Hot' }, { kind: 'tip', text: 'Wear gloves' }];
+			content.steps[0].callouts = [{ kind: 'warning', text: 'Hot' }, { kind: 'WARNING', text: 'Stand clear' }, { kind: 'tip', text: 'Wear gloves' }];
 			old.query('UPDATE procedure_version SET content = ? WHERE id = ?').run(JSON.stringify(content), v.id);
 		});
 		expect(report.failedRows.filter((f) => f.table === 'procedure_version' && f.reason.includes('callouts'))).toEqual([]);
 		expect(warned(report, 'procedure_version', 'tip', 'info')).toBe(true);
 		const step = out.query('SELECT callouts FROM procedure_step ORDER BY id LIMIT 1').get() as { callouts: string };
-		expect(JSON.parse(step.callouts)).toEqual([{ kind: 'caution', text: 'Hot' }, { kind: 'info', text: 'tip: Wear gloves' }]);
+		const kinds = [{ kind: 'warning', text: 'Hot' }, { kind: 'warning', text: 'Stand clear' }, { kind: 'info', text: 'tip: Wear gloves' }];
+		expect(JSON.parse(step.callouts)).toEqual(kinds);
+		expect(warned(report, 'WARNING')).toBe(false);
+		const version = out.query('SELECT content FROM procedure_version ORDER BY id LIMIT 1').get() as { content: string };
+		expect(JSON.parse(version.content).steps[0].callouts).toEqual(kinds);
 		out.close();
 	});
 

@@ -5,7 +5,8 @@ import {
 	type zStepUpdate,
 	isUnitCode,
 	notFound,
-	OpalError
+	OpalError,
+	type CalloutKind
 } from '@opal/shared';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -50,7 +51,7 @@ type AddInput = z.output<typeof zStepAdd>;
 type UpdateInput = z.output<typeof zStepUpdate>;
 
 /** Callouts the server keeps: trimmed text, empty boxes dropped. Order is kept. */
-export function normalizeCallouts(value: { kind: 'caution' | 'info'; text: string }[] | null | undefined) {
+export function normalizeCallouts(value: { kind: CalloutKind; text: string }[] | null | undefined) {
 	return (value ?? [])
 		.map((c) => ({ kind: c.kind, text: c.text.trim() }))
 		.filter((c) => c.text);

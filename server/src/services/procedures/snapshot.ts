@@ -7,7 +7,8 @@ import {
 	type ProcedureSnapshot,
 	type Qty,
 	type SnapshotStep,
-	formatQty
+	formatQty,
+	type CalloutKind
 } from '@opal/shared';
 import { eq, inArray } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
@@ -134,7 +135,7 @@ interface LegacyStep {
 	signoffs?: { label?: string; role?: string | null }[] | null;
 	estimated_duration_minutes?: number | null;
 	required_role?: string | null;
-	callouts?: { kind: 'caution' | 'info'; text: string }[] | null;
+	callouts?: { kind: CalloutKind; text: string }[] | null;
 	caution?: string | null;
 	strict_sequence?: boolean;
 	workcenter_id?: number | null;

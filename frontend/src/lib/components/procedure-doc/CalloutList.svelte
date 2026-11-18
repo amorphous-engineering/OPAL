@@ -1,13 +1,12 @@
 <script lang="ts">
-	// A step's callouts as a tight stack: cautions before notes, as procedures order them, and in
-	// author order within each.
+	// A step's callouts as a tight stack: warnings, then cautions, then notes, as procedures order
+	// them, and in author order within each.
 	import CalloutBlock from './CalloutBlock.svelte';
+	import { orderCallouts } from './callouts.js';
 	import type { Callout } from './types.js';
 
 	let { callouts }: { callouts: Callout[] } = $props();
-	const ordered = $derived(
-		[...callouts].sort((a, b) => Number(a.kind !== 'caution') - Number(b.kind !== 'caution'))
-	);
+	const ordered = $derived(orderCallouts(callouts));
 </script>
 
 {#if ordered.length}

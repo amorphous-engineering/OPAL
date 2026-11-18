@@ -54,7 +54,7 @@ export interface DocImage {
 	caption: string | null;
 }
 
-export type Callout = { kind: 'caution' | 'info'; text: string };
+export type Callout = { kind: 'warning' | 'caution' | 'info'; text: string };
 
 export interface DocStepKitItem {
 	/** StepKit id; present when authoring. */

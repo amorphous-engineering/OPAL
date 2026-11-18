@@ -4,6 +4,7 @@
 	import { specText, unitSymbol } from '@opal/shared';
 	import { datetime, qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
+	import { orderCallouts } from '#lib/components/procedure-doc/callouts.js';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
@@ -67,14 +68,22 @@
 {/snippet}
 
 {#snippet body(s: SnapshotStep)}
-	{#each s.callouts as c, i (i)}
+	{#each orderCallouts(s.callouts) as c, i (i)}
 		<p
 			class={[
-				'my-1 border-black px-2 py-1 text-[10pt]',
-				c.kind === 'caution' ? 'border-2' : 'border'
+				'my-1 break-inside-avoid border-black px-2 py-1 text-[10pt]',
+				{ warning: 'border-[3px]', caution: 'border-2', info: 'border' }[c.kind]
 			]}
 		>
-			<b>{c.kind === 'caution' ? 'CAUTION' : 'INFO'}</b>
+			{#if c.kind === 'warning'}
+				<b class="mr-1 inline-flex align-baseline"
+					><span class="hazard w-2 border border-r-0 border-black"></span><span
+						class="bg-black px-1 text-white [print-color-adjust:exact]">WARNING</span
+					></b
+				>
+			{:else}
+				<b>{c.kind === 'caution' ? 'CAUTION' : 'INFO'}</b>
+			{/if}
 			{c.text}
 		</p>
 	{/each}
