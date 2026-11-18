@@ -31,7 +31,7 @@ export const ACTIVE_STATES = 'pending,in_work,in_review';
 
 export const TYPE_ABBREV: Record<string, string> = {
 	non_conformance: 'NC',
-	bug: 'BUG',
+	anomaly: 'ANOM',
 	task: 'TASK',
 	improvement: 'IMPR'
 };

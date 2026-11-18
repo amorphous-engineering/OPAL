@@ -85,6 +85,8 @@ visible, because a missing indicator proves nothing.
 ## Pages
 
 - Dense and explicit. Detail rows for facts, headed tables for collections.
+- A record's state word sits at the right end of the breadcrumb bar: the same spot on every record
+  page, whatever the title.
 - Filters and search are solid, because they are not part of a record. Fields in a form are dashed.
 - An empty section that applies shows its header and one line saying it is empty. A section that does
   not apply is absent.

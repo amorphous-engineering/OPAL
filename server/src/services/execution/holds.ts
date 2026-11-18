@@ -98,3 +98,29 @@ export const blockersForBound = (st: HoldState, row: Row): HoldingIssue[] => st.
 /** Whether anything holds the row's complete, bound or raised. */
 export const rowHeld = (st: HoldState, row: Row): boolean =>
 	blockersForComplete(st, row).length > 0 || blockersForBound(st, row).length > 0;
+
+/**
+ * Where each holding issue's hold lands, for the issue list: the step or OP it must be
+ * dispositioned by, or the work order. `now` when nothing earlier is left to do before it, so
+ * the hold is what stops the work.
+ */
+export function holdLandings(m: Model, st: HoldState): Map<number, { kind: 'step' | 'op' | 'wo'; row: Row | null; op: Row | null; now: boolean }> {
+	const out = new Map<number, { kind: 'step' | 'op' | 'wo'; row: Row | null; op: Row | null; now: boolean }>();
+	const openBefore = (op: Row, row: Row | null) =>
+		(m.children.get(op.id) ?? []).some((c) => !isTerminal(c.se.status) && (row === null ? c.id !== op.id : c.seq < row.seq));
+	for (const [rowId, list] of [...st.completeBlocked, ...st.startBlocked]) {
+		const row = m.byId.get(rowId);
+		if (!row) continue;
+		const op = opRowOf(m, row);
+		const now = !isTerminal(row.se.status) && (row === op ? !openBefore(op, null) : !openBefore(op, row));
+		for (const i of list) if (!out.has(i.id)) out.set(i.id, { kind: row === op ? 'op' : 'step', row, op, now });
+	}
+	for (const [opId, list] of st.opCompleteBlocked) {
+		const op = m.byId.get(opId);
+		if (!op) continue;
+		for (const i of list) if (!out.has(i.id)) out.set(i.id, { kind: 'op', row: null, op, now: !openBefore(op, null) });
+	}
+	const allOpen = m.rows.some((r) => !r.hasChildren && !isTerminal(r.se.status) && !r.isContingency);
+	for (const i of st.woBlocked) if (!out.has(i.id)) out.set(i.id, { kind: 'wo', row: null, op: null, now: !allOpen });
+	return out;
+}

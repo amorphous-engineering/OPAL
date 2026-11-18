@@ -55,7 +55,8 @@ function write(key: string, value: unknown) {
 
 /** The one form open on the page. It sits inline: nothing here covers the document. */
 export type OpenPanel =
-	{ kind: 'redline'; op: DocOp; issueId?: number } | { kind: 'closeShort' } | null;
+	/** `op` is the host OP; `draft` the draft redline being rewritten, when editing one. */
+	{ kind: 'redline'; op: DocOp; issueId?: number; draft?: DocOp } | { kind: 'closeShort' } | null;
 
 type WorkRow = { op: DocOp; step: DocStep };
 
@@ -679,6 +680,19 @@ export class ExecutionStore implements DocController {
 				toastError(e, 'Failed to delete redline');
 			}
 		},
+		editRedline: (op) => {
+			const host = this.allOps.find((o) => o.order === op.redline?.host_order);
+			if (host)
+				this.panel = { kind: 'redline', op: host, issueId: op.redline!.issue_id, draft: op };
+		},
+		releaseRedline: async (op) => {
+			try {
+				await opal.execution.releaseRedline({ id: this.id, redlineId: op.step.execution_id! });
+				await this.changed();
+			} catch (e) {
+				toastError(e, 'Redline not released');
+			}
+		},
 		addNote: async (step, body, files = []) => {
 			try {
 				const note = await opal.execution.addNote({ id: this.id, stepId: step.order, body });
@@ -783,12 +797,22 @@ export class ExecutionStore implements DocController {
 		return `/issues/new?execution=${this.id}&executionLabel=${label}&projectId=${inst?.project.id ?? ''}${at}`;
 	}
 
-	async createRedline(body: {
+	/** Write a draft redline, or rewrite one (`redlineId`). */
+	async saveRedline(body: {
+		redlineId?: number;
 		issueId: number;
 		title: string;
-		steps: { title: string; instructions: string | null; requiresSignoff: boolean }[];
+		steps: {
+			title: string;
+			instructions: string | null;
+			requiresSignoff: boolean;
+			kit: { partId: number; quantity: string }[];
+		}[];
+		strikes: { stepId: number | null; partId: number }[];
 	}) {
-		await opal.execution.createRedline({ id: this.id, ...body });
+		const { redlineId, issueId, ...rest } = body;
+		if (redlineId) await opal.execution.updateRedline({ id: this.id, redlineId, ...rest });
+		else await opal.execution.createRedline({ id: this.id, issueId, ...rest });
 		await this.changed();
 	}
 

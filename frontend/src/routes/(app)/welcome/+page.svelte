@@ -166,8 +166,8 @@
 				<DetailRow label="Non-conformance"
 					>Hardware does not meet spec: a should-be and an actual.</DetailRow
 				>
-				<DetailRow label="Bug / task / improvement"
-					>Defects, general work items, and requested enhancements.</DetailRow
+				<DetailRow label="Anomaly / task / improvement"
+					>Unexpected behavior under investigation, general work items, and requested enhancements.</DetailRow
 				>
 				<DetailRow label="From execution"
 					>A non-conformance logged during a run creates a linked issue and can hold the run.</DetailRow

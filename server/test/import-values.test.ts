@@ -93,6 +93,13 @@ describe('a value that does not survive gets a line', () => {
 	});
 });
 
+test('a 1.x bug imports as an anomaly, with nothing to report', async () => {
+	const { report, out } = await importedWith((old) => void old.run("UPDATE issue SET issue_type = 'bug' WHERE id = 1"));
+	expect(out.query('SELECT issue_type FROM issue WHERE id = 1').get()).toEqual({ issue_type: 'anomaly' });
+	expect(warned(report, 'issue 1 issue_type')).toBe(false);
+	out.close();
+});
+
 describe('a record that imports opens', () => {
 	test('a dataset schema with no fields does not stop the list, and what was stored is kept', async () => {
 		const { report, out } = await importedWith((old) => void old.run(`UPDATE dataset SET schema = '{"columns":["a"]}' WHERE id = 1`));

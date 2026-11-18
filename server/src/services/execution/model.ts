@@ -50,6 +50,8 @@ export interface Row {
 	hasChildren: boolean;
 	/** A redline OP: the issue it answers and the OP it gates. */
 	redline: { issueId: number; hostId: number | null } | null;
+	/** A redline OP or step not yet released: pencil, which the floor cannot work. */
+	draft: boolean;
 	/** Index in document order. */
 	seq: number;
 }
@@ -114,9 +116,11 @@ export function loadModel(db: Db, executionId: number): Model {
 			kit: s.kit,
 			hasChildren: snapHasChildren.has(s.id),
 			redline: null,
+			draft: false,
 			seq: 0
 		};
 	};
+	const adhocById = new Map(adhocs.map((a) => [a.id, a]));
 	const fromAdhoc = (a: AdhocRow): Row | null => {
 		const seId = seOfAdhoc.get(a.id);
 		if (seId === undefined) return null;
@@ -140,9 +144,10 @@ export function loadModel(db: Db, executionId: number): Model {
 			workcenterId: null,
 			callouts: [],
 			images: [],
-			kit: [],
+			kit: (a.kit ?? []).map((k) => ({ partId: k.partId, quantity: k.quantity, usage: 'consume' as const, notes: null })),
 			hasChildren: hasKids,
 			redline: a.parentId === null ? { issueId: a.issueId, hostId: a.hostStepId === null ? null : (seOfTemplate.get(a.hostStepId) ?? null) } : null,
+			draft: (a.parentId === null ? a : adhocById.get(a.parentId))?.releasedAt == null,
 			seq: 0
 		};
 	};
@@ -191,7 +196,7 @@ export const opRowOf = (m: Model, row: Row): Row => (row.level === 0 || row.pare
 
 /** Leaf rows that count toward progress: contingency work is optional. */
 export function progress(m: Model): { done: number; total: number } {
-	const counted = m.rows.filter((r) => !r.hasChildren && !r.isContingency);
+	const counted = m.rows.filter((r) => !r.hasChildren && !r.isContingency && !r.draft);
 	return { done: counted.filter((r) => isTerminal(r.se.status)).length, total: counted.length };
 }
 

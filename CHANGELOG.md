@@ -4,6 +4,19 @@ All notable user-visible changes to OPAL. Dates are release dates.
 
 ## Unreleased
 
+### Changed
+- **Every non-conformance takes a disposition**, whether or not it holds a work order. Use as is, rework, repair, scrap, return to supplier or no defect is filled in and signed under EDIT, and signing it starts the work. A non-conformance can no longer close without one. One already started without a disposition stays in work and needs a signed disposition before review.
+- **An issue's type can change only until work starts** or a disposition is signed, since the type decides which steps the issue goes through.
+- **RETURN sits beside SIGN OFF** on an issue in review, no longer under MORE.
+- **The bug issue type is now called anomaly**: something behaved in a way nobody expected, and the cause is still being found. Existing bugs, and bugs imported from 1.x, become anomalies. "Actual behavior" reads "Observed behavior".
+- **A record's state sits at the right end of the breadcrumb bar**, in the same place on every record page, no longer after the title.
+- **Redlines are written as drafts and released by the disposition signature.** A draft sits dashed above the OP it gates, where it is written, and the floor cannot work it. Signing the issue's rework or repair disposition releases its drafts, so the hold passes straight to the redline gate and the OP never runs free in between. A draft written after the disposition is released on the work order. A released redline is no longer deleted.
+- **A redline can use parts and replace lines of the planned kit.** The replaced line reads struck on its step and in the Material tab, with the new part under it. The published procedure version does not change.
+- **The issue page shows the rework as a Correction row**, listing each redline with its state and who finished it. WRITE REDLINE replaces SPAWN REDLINE OP. Signing rework or repair without a redline asks once, inline. Review waits until every redline is finished.
+- **Corrective action can link a procedure revision.** The issue cannot close until the next version of that procedure is released.
+- **Issues beside the work are grouped by when their hold is due**, one line each: blocking now, due by the end of each OP, due by the end of the work order, other open, and closed folded away. The red HELD BY band across the work order is gone.
+- **The issue page names the step**: Containment reads STEP 5.4, and Work order reads WO-0002 OP 5.2.
+
 ### Fixed
 - **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.
 

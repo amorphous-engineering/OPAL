@@ -219,11 +219,11 @@ describe('csv reports', () => {
 
 	test('issue metrics: open splits into advisory, undispositioned and dispositioned', async () => {
 		const s = await setup();
-		await s.call('POST', '/issues', { title: 'A', issueType: 'bug', priority: 'high' });
+		await s.call('POST', '/issues', { title: 'A', issueType: 'anomaly', priority: 'high' });
 		await s.call('POST', '/issues', { title: 'B', issueType: 'task', priority: 'high' });
 		const m = (await s.call('GET', '/reports/analytics/issues')).body;
 		expect(m).toMatchObject({ totalIssues: 2, open: 2, advisoryOpen: 2, closed: 0 });
-		expect(m.byType).toEqual({ bug: 1, task: 1 });
+		expect(m.byType).toEqual({ anomaly: 1, task: 1 });
 		expect(m.byPriority).toEqual({ high: 2 });
 		expect(m.advisoryOpen + m.undispositioned + m.dispositioned).toBe(m.open);
 	});

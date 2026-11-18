@@ -67,6 +67,8 @@ export interface DocStepKitItem {
 	uom?: string | null;
 	usage_type: 'consume' | 'tooling' | string;
 	notes: string | null;
+	/** The released redline that replaced this line. Execution only. */
+	struck_by?: string | null;
 }
 
 export interface DocBlocker {
@@ -233,6 +235,22 @@ export interface DocOp {
 		issue_number: string | null;
 		title: string | null;
 		host_order: number | null;
+		disposition_type: string | null;
+		/** Null while a draft: pencil, which the floor cannot work. */
+		released_at: string | null;
+		released_by: string | null;
+		/** Planned kit lines it replaces. */
+		strikes: {
+			step_order: number | null;
+			step_number: string | null;
+			part_id: number;
+			part_number: string;
+			part_name: string;
+			quantity: number;
+			uom: string;
+		}[];
+		can_release: boolean;
+		can_edit: boolean;
 	} | null;
 	waiting_on_ops: string[];
 	/** OP ids this OP waits on (authoring; `waiting_on_ops` carries their numbers). */

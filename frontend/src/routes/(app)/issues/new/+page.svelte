@@ -80,7 +80,7 @@
 			assignedToId: assignee ? Number(assignee) : null,
 			links: part ? [{ kind: 'part' as const, targetId: part.id }] : [],
 			...(type === 'non_conformance' ? { shouldBe: text(shouldBe), actual: text(actual) } : {}),
-			...(type === 'bug'
+			...(type === 'anomaly'
 				? {
 						stepsToReproduce: text(steps),
 						expectedBehavior: text(expected),
@@ -181,7 +181,7 @@
 					<MarkdownField quiet id="actual" bind:value={actual} minRows={3} onsubmit={submitForm} />
 				</div>
 			</div>
-		{:else if type === 'bug'}
+		{:else if type === 'anomaly'}
 			<div class="grid grid-cols-1 gap-1.5">
 				<Label for="steps">Steps to reproduce</Label>
 				<MarkdownField quiet id="steps" bind:value={steps} minRows={3} onsubmit={submitForm} />
@@ -198,7 +198,7 @@
 					/>
 				</div>
 				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="actual-behavior">Actual behavior</Label>
+					<Label for="actual-behavior">Observed behavior</Label>
 					<MarkdownField
 						quiet
 						id="actual-behavior"

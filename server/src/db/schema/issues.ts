@@ -13,6 +13,7 @@ import { execution, stepExecution } from './execution.ts'; // added by execution
 import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { project } from './org.ts'; // added by projects
 import { part } from './parts.ts';
+import { procedure } from './procedures.ts';
 import { risk } from './risks.ts'; // added by risks
 
 const userRef = (name: string) =>
@@ -57,6 +58,12 @@ export const issue = sqliteTable(
 
 		rootCause: text('root_cause'),
 		correctiveAction: text('corrective_action'),
+		/**
+		 * A procedure whose next version is part of the corrective action. The issue cannot close
+		 * until a version above `corrective_after_version` (the latest when linked) is released.
+		 */
+		correctiveProcedureId: integer('corrective_procedure_id').references((): AnySQLiteColumn => procedure.id),
+		correctiveAfterVersion: integer('corrective_after_version'),
 		dispositionType: text('disposition_type', { enum: RECORDED_DISPOSITION_TYPES }),
 		dispositionRationale: text('disposition_rationale'),
 		dispositionedAt: text('dispositioned_at'),

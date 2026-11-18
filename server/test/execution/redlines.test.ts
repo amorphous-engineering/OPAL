@@ -92,7 +92,7 @@ describe('redlines', () => {
 		expect((await t.doc(e.id)).ops[1].step.status).toBe('completed');
 	});
 
-	test('a redline can be deleted only while nothing in it started', async () => {
+	test('a draft can be deleted; a released redline is pen', async () => {
 		const t = await setup();
 		const { e, nc } = await withNc(t, ['A', 'B']);
 		const a = (await redline(t, e, nc.id, [{ title: 'one' }, { title: 'two' }])).json;
@@ -101,28 +101,143 @@ describe('redlines', () => {
 		expect((await t.get(e.id)).steps.map((s: any) => s.number)).toEqual(['1', '2']);
 		const b = (await redline(t, e, nc.id)).json;
 		await t.disposition(nc.id);
-		await t.complete(e.id, '2R1.1');
 		const refused = await t.call('DELETE', `/executions/${e.id}/redlines/${b.id}`);
 		expect(refused.status).toBe(409);
+		expect(refused.json.message).toContain('released');
 		expect((await t.call('DELETE', `/executions/${e.id}/redlines/9999`)).status).toBe(404);
 	});
 
-	test('a redline with a claim or a step note is refused and keeps its rows', async () => {
+	test('the floor cannot claim, note or complete a draft redline', async () => {
 		const t = await setup();
 		const { e, nc } = await withNc(t, ['A', 'B']);
 		const r = (await redline(t, e, nc.id)).json;
+		expect(r.releasedAt).toBeNull();
 		const ids = (await t.get(e.id)).steps.filter((s: any) => /^2R1/.test(s.number)).map((s: any) => s.id);
-		await t.ok('POST', `/executions/${e.id}/focus`, { stepId: ids[0] });
-		expect((await t.call('DELETE', `/executions/${e.id}/redlines/${r.id}`)).status).toBe(409);
-		expect(await t.ok('GET', `/executions/${e.id}/redlines`)).toHaveLength(1);
-		await t.ok('DELETE', `/executions/${e.id}/focus`);
-		// The clock-in and first-focus mark stay after the claim ends.
-		expect((await t.call('DELETE', `/executions/${e.id}/redlines/${r.id}`)).status).toBe(409);
-		const r2 = (await redline(t, e, nc.id)).json;
-		const ids2 = (await t.get(e.id)).steps.filter((s: any) => /^2R2/.test(s.number)).map((s: any) => s.id);
-		await t.ok('POST', `/executions/${e.id}/steps/${ids2[0]}/notes`, { body: 'Found crack at weld 3' });
-		expect((await t.call('DELETE', `/executions/${e.id}/redlines/${r2.id}`)).status).toBe(409);
-		expect(await t.ok('GET', `/executions/${e.id}/redlines`)).toHaveLength(2);
+		const claim = await t.call('POST', `/executions/${e.id}/focus`, { stepId: ids[0] });
+		expect(claim.status).toBe(409);
+		expect(claim.json.message).toContain('2R1 is a draft');
+		expect((await t.call('POST', `/executions/${e.id}/steps/${ids[1]}/notes`, { body: 'Found crack' })).status).toBe(409);
+		expect((await t.complete(e.id, '2R1.1')).status).toBe(409);
+		const d = await t.doc(e.id);
+		expect(d.ops[1].redline).toMatchObject({ releasedAt: null, canEdit: true, canRelease: false });
+		expect(d.ops[1].steps[0].completeBlockers.map((b: any) => b.message)).toContain('Redline op 2R1 is a draft');
+		// A draft is pencil: it counts for nothing in progress.
+		expect(d.progress.total).toBe(2);
+	});
+
+	test('signing the disposition releases every draft of the issue, so the hold passes to the redline gate', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		await redline(t, e, nc.id);
+		await redline(t, e, nc.id);
+		await t.complete(e.id, '1');
+		await t.disposition(nc.id);
+		const rs = await t.ok('GET', `/executions/${e.id}/redlines`);
+		expect(rs.every((r: any) => r.releasedAt !== null)).toBe(true);
+		expect((await t.doc(e.id)).ops[1].redline.releasedBy).not.toBeNull();
+		expect((await t.complete(e.id, '2')).json.message).toContain('Waiting on redline op 2R1, 2R2');
+		expect((await t.complete(e.id, '2R1.1')).status).toBe(200);
+	});
+
+	test('a draft is rewritten in place until it is released', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		const r = (await redline(t, e, nc.id, [{ title: 'one' }])).json;
+		const put = await t.ok('PUT', `/executions/${e.id}/redlines/${r.id}`, {
+			title: 'Rework bracket',
+			steps: [{ title: 'Grind' }, { title: 'Inspect' }]
+		});
+		expect(put.title).toBe('Rework bracket');
+		expect(put.steps.map((s: any) => s.number)).toEqual(['2R1.1', '2R1.2']);
+		await t.disposition(nc.id);
+		const refused = await t.call('PUT', `/executions/${e.id}/redlines/${r.id}`, { title: 'Late', steps: [{ title: 'x' }] });
+		expect(refused.status).toBe(409);
+	});
+
+	test('a draft written after the disposition is released on its own, by a person', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		await t.disposition(nc.id);
+		const r = (await redline(t, e, nc.id)).json;
+		expect(r.releasedAt).toBeNull();
+		expect((await t.doc(e.id)).ops[1].redline.canRelease).toBe(true);
+		expect((await t.call('POST', `/executions/${e.id}/redlines/${r.id}/release`, {}, t.token)).status).toBe(403);
+		const released = await t.ok('POST', `/executions/${e.id}/redlines/${r.id}/release`, {});
+		expect(released.releasedAt).not.toBeNull();
+		expect((await t.call('POST', `/executions/${e.id}/redlines/${r.id}/release`, {})).status).toBe(409);
+		expect((await t.complete(e.id, '2R1.1')).status).toBe(200);
+	});
+
+	test('a draft is not released on its own before the disposition is signed', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		const r = (await redline(t, e, nc.id)).json;
+		const refused = await t.call('POST', `/executions/${e.id}/redlines/${r.id}/release`, {});
+		expect(refused.status).toBe(409);
+		expect(refused.json.message).toContain('signing it releases 2R1');
+	});
+
+	test('a released redline replaces a planned kit line: the line reads struck and its own kit is expected', async () => {
+		const t = await setup();
+		const old = await t.bulk('O-ring 2-230');
+		const neu = await t.bulk('O-ring 2-238');
+		const p = await t.proc('Kit proc');
+		await t.step(p.id, 'A');
+		const b = await t.step(p.id, 'B');
+		await t.ok('POST', `/procedures/${p.id}/steps/${b.id}/kit`, { partId: old.id, quantity: '5', usage: 'consume' });
+		await t.ok('POST', `/procedures/${p.id}/publish`, {});
+		const e = await t.cut(p.id);
+		const nc = (await t.nc(e.id, '2')).json;
+		const host = await t.stepOf(e.id, '2');
+		const lot = await t.stock(old.id, '10');
+		await t.ok('POST', `/executions/${e.id}/steps/${host}/consume`, { items: [{ stockId: lot.id, quantity: '3', usage: 'consume' }] });
+		const strikes = [{ stepId: host, partId: old.id }];
+		const wrong = await t.call('POST', `/executions/${e.id}/redlines`, {
+			issueId: nc.id,
+			title: 'Swap',
+			steps: [{ title: 'x' }],
+			strikes: [{ stepId: host, partId: neu.id }]
+		});
+		expect(wrong.status).toBe(422);
+		await t.ok('POST', `/executions/${e.id}/redlines`, {
+			issueId: nc.id,
+			title: 'Swap O-rings',
+			steps: [{ title: 'Install 2-238', kit: [{ partId: neu.id, quantity: '4' }] }],
+			strikes
+		});
+		// While a draft, the plan does not change.
+		let d = await t.doc(e.id);
+		expect(d.kit.struck).toEqual([]);
+		expect(d.kit.items.map((k: any) => k.partId)).toEqual([old.id]);
+		await t.disposition(nc.id);
+		d = await t.doc(e.id);
+		expect(d.kit.struck).toEqual([
+			expect.objectContaining({ partId: old.id, quantity: '5', qtyConsumed: '3', stepNumber: '2', redline: '2R1' })
+		]);
+		expect(d.kit.items).toEqual([expect.objectContaining({ partId: neu.id, qtyRequired: '4', qtyConsumed: '0', addedBy: '2R1' })]);
+		expect(d.kit.unplanned).toEqual([]);
+		const hostOp = d.ops.find((o: any) => o.number === '2');
+		expect(hostOp.step.stepKit[0]).toMatchObject({ partId: old.id, struckBy: '2R1' });
+		expect(d.ops[1].redline.strikes[0]).toMatchObject({ partId: old.id, stepNumber: '2', quantity: '5' });
+		expect(d.ops[1].steps[0].stepKit[0]).toMatchObject({ partId: neu.id, quantity: '4', struckBy: null });
+		// A line is replaced once.
+		const again = await t.call('POST', `/executions/${e.id}/redlines`, { issueId: nc.id, title: 'Again', steps: [{ title: 'x' }], strikes });
+		expect(again.status).toBe(422);
+		expect(again.json.message).toContain('already replaced by 2R1');
+	});
+
+	test('an issue waits on its open redlines before review', async () => {
+		const t = await setup();
+		const { e, nc } = await withNc(t, ['A', 'B']);
+		await redline(t, e, nc.id);
+		await t.disposition(nc.id);
+		const early = await t.call('POST', `/issues/${nc.id}/review`, {});
+		expect(early.status).toBe(409);
+		expect(early.json.message).toContain('waits on redline 2R1');
+		await t.complete(e.id, '2R1.1');
+		expect((await t.call('POST', `/issues/${nc.id}/review`, {})).status).toBe(200);
+		const i = await t.ok('GET', `/issues/${nc.id}`);
+		expect(i.redlineOps[0]).toMatchObject({ label: '2R1', released: true, doneBy: expect.any(String) });
 	});
 
 	test('deleting an unworked redline writes an audit delete row for each step execution', async () => {
