@@ -239,6 +239,7 @@
 			var(--error-fill) 0 3px,
 			var(--background) 3px 6px
 		);
+		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
 	}
 }

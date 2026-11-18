@@ -76,10 +76,12 @@
 			]}
 		>
 			{#if c.kind === 'warning'}
+				<!-- Paper colours whatever the app theme. A printer may drop the stripe, so the word
+					 sits in a box of its own, not on a fill that would take it with it. -->
 				<b class="mr-1 inline-flex align-baseline"
-					><span class="hazard w-2 border border-r-0 border-black"></span><span
-						class="bg-black px-1 text-white [print-color-adjust:exact]">WARNING</span
-					></b
+					><span
+						class="hazard w-2 border border-r-0 border-black [--background:#fff] [--error-fill:#c8001e]"
+					></span><span class="border-2 border-black px-1">WARNING</span></b
 				>
 			{:else}
 				<b>{c.kind === 'caution' ? 'CAUTION' : 'INFO'}</b>

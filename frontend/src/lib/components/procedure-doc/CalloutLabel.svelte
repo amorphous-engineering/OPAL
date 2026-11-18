@@ -7,7 +7,8 @@
 	import type { Callout } from './types.js';
 
 	let { kind, class: klass = '' }: { kind: Callout['kind']; class?: string } = $props();
-	const word = 'border py-0.5 text-center font-mono text-xs font-bold tracking-wide uppercase';
+	const word =
+		'block border py-0.5 text-center font-mono text-xs font-bold tracking-wide uppercase';
 </script>
 
 {#if kind === 'warning'}
