@@ -42,6 +42,7 @@ import {
 	type TreeNode
 } from './tree.ts';
 import { writeSignoffs } from './signoffs.ts';
+import { checkUnits } from './units.ts';
 
 export const invalid = (code: string, message: string, fields?: Record<string, string>) =>
 	new OpalError(422, code, message, fields);
@@ -162,6 +163,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 	const mine = patches.find((p) => p.id === NEW)!;
 	const signoffs = writeSignoffs(ctx.db, null, false, input) ?? null;
 	checkDataFields(input.dataSchema, null);
+	const units = input.units?.length ? checkUnits(ctx.db, input.id, { id: NEW, parentStepId: mine.parentStepId }, input.units) : null;
 	const row = insert(ctx, procedureStep, {
 		procedureId: input.id,
 		parentStepId: mine.parentStepId,
@@ -174,7 +176,8 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 		estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
 		callouts: normalizeCallouts(input.callouts),
 		strictSequence: parentId === null ? (input.strictSequence ?? false) : false,
-		workcenterId: input.workcenterId ?? null
+		workcenterId: input.workcenterId ?? null,
+		units
 	});
 	applyPlacements(ctx, patches, NEW);
 	return presentStep(ctx, input.id, row.id);
@@ -200,6 +203,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	}
 	if (input.callouts !== undefined) patch.callouts = normalizeCallouts(input.callouts);
 	if (input.strictSequence !== undefined) patch.strictSequence = input.strictSequence;
+	if (input.units !== undefined) patch.units = checkUnits(ctx.db, input.id, step, input.units ?? []);
 	const signoffs = writeSignoffs(ctx.db, step.signoffs, hasChildren, input);
 	if (signoffs !== undefined) patch.signoffs = signoffs;
 
@@ -274,7 +278,8 @@ export function copyStepContent(ctx: Ctx, from: number, to: number) {
 			partId: k.partId,
 			quantity: k.quantity,
 			usage: k.usage,
-			notes: k.notes
+			notes: k.notes,
+			intoSlot: k.intoSlot
 		});
 	}
 	for (const img of ctx.db.select().from(stepImage).where(eq(stepImage.stepId, from)).orderBy(stepImage.position, stepImage.id).all()) {

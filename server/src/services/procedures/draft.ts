@@ -89,6 +89,7 @@ export function presentKit(ctx: Pick<Ctx, 'db'>, rows: KitRow[]): ProcedureKitIt
 			quantity: formatQty(r.quantity as Qty),
 			usage: r.usage,
 			notes: r.notes,
+			into: r.intoSlot ?? null,
 			onHand: formatQty(onHand.get(r.partId) ?? (0 as Qty))
 		};
 	});
@@ -189,6 +190,8 @@ export function presentDraft(ctx: Pick<Ctx, 'db'>, procedureId: number): Procedu
 	const kitByStep = new Map<number, ProcedureKitItem[]>();
 	for (const k of kitPresented) kitByStep.set(k.stepId!, [...(kitByStep.get(k.stepId!) ?? []), k]);
 	const deps = dependencyMap(ctx.db, ids);
+	const slotIds = [...new Set(rows.flatMap((s) => (s.units ?? []).map((u) => u.partId)))];
+	const slotParts = new Map(slotIds.length ? ctx.db.select().from(part).where(inArray(part.id, slotIds)).all().map((p) => [p.id, p]) : []);
 	return ordered.map((s) => {
 		const n = nums.get(s.id)!;
 		const slots = effectiveSignoffs(s.signoffs, hasKids.has(s.id));
@@ -213,7 +216,12 @@ export function presentDraft(ctx: Pick<Ctx, 'db'>, procedureId: number): Procedu
 			workcenterId: s.workcenterId,
 			dependsOn: deps.get(s.id) ?? [],
 			images: images.get(s.id) ?? [],
-			kit: kitByStep.get(s.id) ?? []
+			kit: kitByStep.get(s.id) ?? [],
+			units: (s.units ?? []).map((u) => ({
+				...u,
+				partNumber: slotParts.get(u.partId)?.internalPn ?? '',
+				partName: slotParts.get(u.partId)?.name ?? ''
+			}))
 		};
 	});
 }

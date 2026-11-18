@@ -20,6 +20,14 @@
 	let notes = $state('');
 
 	const taken = $derived(new Set(step.step_kit.map((k) => k.part_id)));
+	// A consume line may install into a unit slot of the procedure: one TYPE choice per slot.
+	const slots = $derived(au.unitSlots());
+	const typeOf = (k: { usage_type: string; into?: string | null }) =>
+		k.into ? `into:${k.into}` : k.usage_type;
+	const parseType = (v: string) =>
+		v.startsWith('into:')
+			? { usage_type: 'consume', into: v.slice(5) }
+			: { usage_type: v, into: null };
 
 	function open(p: PartHit | null) {
 		if (!p) return;
@@ -33,7 +41,8 @@
 	async function add(e: Event) {
 		e.preventDefault();
 		if (!chosen || !(Number(qty) > 0)) return;
-		await au.addKit(step, chosen, Number(qty), usage, notes.trim() || null);
+		const t = parseType(usage);
+		await au.addKit(step, chosen, Number(qty), t.usage_type, notes.trim() || null, t.into);
 		adding = false;
 	}
 </script>
@@ -88,11 +97,14 @@
 						<td class="px-2 py-1">
 							<NativeSelect
 								aria-label={`Usage of ${k.part_name}`}
-								value={k.usage_type}
-								onchange={(e) => au.editKit(step, k.id!, { usage_type: e.currentTarget.value })}
+								value={typeOf(k)}
+								onchange={(e) => au.editKit(step, k.id!, parseType(e.currentTarget.value))}
 							>
 								<option value="consume">CONSUME</option>
 								<option value="tooling">TOOLING</option>
+								{#each slots as s (s.key)}<option value={`into:${s.key}`}
+										>INTO {s.label.toUpperCase()}</option
+									>{/each}
 							</NativeSelect>
 						</td>
 						<td class="px-2 py-1">
@@ -139,6 +151,9 @@
 				<NativeSelect aria-label="Usage" bind:value={usage}>
 					<option value="consume">CONSUME</option>
 					<option value="tooling">TOOLING</option>
+					{#each slots as s (s.key)}<option value={`into:${s.key}`}
+							>INTO {s.label.toUpperCase()}</option
+						>{/each}
 				</NativeSelect>
 				<Input class="h-7 w-48" aria-label="Notes" placeholder="Notes" bind:value={notes} />
 				<Button type="submit" size="sm" disabled={!(Number(qty) > 0)}>ADD</Button>

@@ -7,11 +7,12 @@ import {
 	EXEC_TERMINAL_STATUSES,
 	type ProcedureSnapshot,
 	type SnapshotStep,
+	type UnitSlot,
 	notFound
 } from '@opal/shared';
 import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { adhocStep, execution, procedure, procedureVersion, stepExecution } from '../../db/schema/index.ts';
+import { adhocStep, execution, executionUnit, procedure, procedureVersion, stepExecution } from '../../db/schema/index.ts';
 import { effectiveSignoffs } from '../procedures/signoffs.ts';
 
 export type ExecutionRow = typeof execution.$inferSelect;
@@ -47,6 +48,8 @@ export interface Row {
 	callouts: SnapshotStep['callouts'];
 	images: SnapshotStep['images'];
 	kit: SnapshotStep['kit'];
+	/** OPs only: declared unit slots. */
+	units: UnitSlot[];
 	hasChildren: boolean;
 	/** A redline OP: the issue it answers and the OP it gates. */
 	redline: { issueId: number; hostId: number | null } | null;
@@ -63,7 +66,11 @@ export interface Model {
 	children: Map<number, Row[]>;
 	/** Snapshot step id to step execution id. */
 	seOfTemplate: Map<number, number>;
+	/** The units the work order acts on, in the order recorded. */
+	units: UnitRow[];
 }
+
+export type UnitRow = typeof executionUnit.$inferSelect;
 
 export function executionRow(db: Db, id: number): ExecutionRow {
 	const r = db.select().from(execution).where(eq(execution.id, id)).get();
@@ -112,6 +119,7 @@ export function loadModel(db: Db, executionId: number): Model {
 			callouts: s.callouts,
 			images: s.images,
 			kit: s.kit,
+			units: s.level === 0 ? (s.units ?? []) : [],
 			hasChildren: snapHasChildren.has(s.id),
 			redline: null,
 			seq: 0
@@ -141,6 +149,7 @@ export function loadModel(db: Db, executionId: number): Model {
 			callouts: [],
 			images: [],
 			kit: [],
+			units: [],
 			hasChildren: hasKids,
 			redline: a.parentId === null ? { issueId: a.issueId, hostId: a.hostStepId === null ? null : (seOfTemplate.get(a.hostStepId) ?? null) } : null,
 			seq: 0
@@ -184,7 +193,8 @@ export function loadModel(db: Db, executionId: number): Model {
 	for (const r of rows) {
 		if (r.parentId !== null) children.set(r.parentId, [...(children.get(r.parentId) ?? []), r]);
 	}
-	return { exec, version, snapshot, rows, byId, children, seOfTemplate };
+	const units = db.select().from(executionUnit).where(eq(executionUnit.executionId, executionId)).orderBy(asc(executionUnit.id)).all();
+	return { exec, version, snapshot, rows, byId, children, seOfTemplate, units };
 }
 
 export const opRowOf = (m: Model, row: Row): Row => (row.level === 0 || row.parentId === null ? row : (m.byId.get(row.parentId) ?? row));

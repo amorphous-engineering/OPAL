@@ -19,7 +19,7 @@ import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { issue } from './issues.ts';
 import { project, workcenter } from './org.ts';
 import { procedure, procedureVersion } from './procedures.ts';
-import { stockRecord } from './inventory.ts';
+import { stockMove, stockRecord } from './inventory.ts';
 
 export const execution = sqliteTable(
 	'execution',
@@ -264,4 +264,75 @@ export const executionOutput = sqliteTable(
 		createdAt: createdAt()
 	},
 	(t) => [index('execution_output_execution_idx').on(t.executionId), check('execution_output_qty', sql`"quantity" > 0`)]
+);
+
+/**
+ * A unit a work order acts on, named on an OP: an existing serialized stock record, or borrowed
+ * gear OPAL does not hold (text only, no OPAL number, no count). The one home of "this work order
+ * acted on this unit". Use counts and a unit's work orders are queries over it.
+ */
+export const executionUnit = sqliteTable(
+	'execution_unit',
+	{
+		id: id(),
+		executionId: integer('execution_id')
+			.notNull()
+			.references(() => execution.id, { onDelete: 'cascade' }),
+		stepExecutionId: integer('step_execution_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'cascade' }),
+		/** The declared slot's key. Null: hardware the procedure did not list. */
+		slot: text('slot'),
+		stockId: integer('stock_id').references((): AnySQLiteColumn => stockRecord.id),
+		borrowedName: text('borrowed_name'),
+		borrowedSerial: text('borrowed_serial'),
+		borrowedFrom: text('borrowed_from'),
+		recordedById: integer('recorded_by_id').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('execution_unit_execution_idx').on(t.executionId),
+		index('execution_unit_stock_idx').on(t.stockId),
+		uniqueIndex('execution_unit_stock_uq').on(t.executionId, t.stockId).where(sql`"stock_id" IS NOT NULL`),
+		uniqueIndex('execution_unit_slot_uq').on(t.executionId, t.slot).where(sql`"slot" IS NOT NULL`),
+		check('execution_unit_one_kind', sql`("stock_id" IS NULL) <> ("borrowed_name" IS NULL)`)
+	]
+);
+
+/**
+ * A component taken out of a unit a work order acts on. The ledger is append-only and a consume
+ * move names its assembly once, so the removal is its own fact; genealogy nets it. A serialized
+ * component put back on the shelf has its ledger move here; anything else is scrapped.
+ */
+export const componentRemoval = sqliteTable(
+	'component_removal',
+	{
+		id: id(),
+		executionId: integer('execution_id')
+			.notNull()
+			.references(() => execution.id),
+		stepExecutionId: integer('step_execution_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stepExecution.id),
+		assemblyStockId: integer('assembly_stock_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stockRecord.id),
+		stockId: integer('stock_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stockRecord.id),
+		/** Qty units. */
+		quantity: integer('quantity').notNull(),
+		/** The move that put it back in stock. Null: scrapped. */
+		returnMoveId: integer('return_move_id').references((): AnySQLiteColumn => stockMove.id),
+		notes: text('notes'),
+		removedById: integer('removed_by_id').references(() => user.id, { onDelete: 'set null' }),
+		at: text('at').notNull(),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('component_removal_assembly_idx').on(t.assemblyStockId),
+		index('component_removal_stock_idx').on(t.stockId),
+		index('component_removal_execution_idx').on(t.executionId),
+		check('component_removal_qty', sql`"quantity" > 0`)
+	]
 );

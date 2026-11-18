@@ -4,7 +4,7 @@
  * gates), the template editor will fill only the authoring fields and leave the
  * rest at their empty defaults.
  */
-import type { Spec } from '@opal/shared';
+import type { ComponentRemoval, DocUnitSlot, ExecUnit, Spec, UnitSlot } from '@opal/shared';
 
 /**
  * execute: operator controls. readonly: facts only. author: the template editor; every
@@ -67,6 +67,8 @@ export interface DocStepKitItem {
 	uom?: string | null;
 	usage_type: 'consume' | 'tooling' | string;
 	notes: string | null;
+	/** The unit slot key this line installs into. */
+	into?: string | null;
 }
 
 export interface DocBlocker {
@@ -188,6 +190,10 @@ export interface DocStep {
 	workcenter_id?: number | null;
 	images: DocImage[];
 	step_kit: DocStepKitItem[];
+	/** OPs, authoring: the unit slots the OP declares, with their part named. */
+	units?: (UnitSlot & { partNumber?: string; partName?: string })[];
+	/** OPs, execute: the declared slots and what fills them; any step: removals recorded on it. */
+	unit_record?: { slots: DocUnitSlot[]; extras: ExecUnit[]; removals: ComponentRemoval[] };
 	data_schema: DocSchema | null;
 	data_captured: Record<string, unknown> | null;
 	skip_reason: string | null;

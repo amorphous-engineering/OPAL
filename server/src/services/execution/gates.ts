@@ -85,9 +85,17 @@ export function outOfSpecBlockers(row: Row, cap: CaptureCheck | undefined): Bloc
 	return out;
 }
 
+/** A required unit slot left empty stops its OP, like a required data field. */
+export function unitBlockers(m: Model, row: Row): Blocker[] {
+	const filled = new Set(m.units.filter((u) => u.stepExecutionId === row.id).map((u) => u.slot));
+	const missing = row.units.filter((s) => s.required && !filled.has(s.key)).map((s) => s.label);
+	return missing.length ? [blocker('units', `Name the ${missing.join(', ')}`)] : [];
+}
+
 export const completeBlockers = (m: Model, st: HoldState, row: Row, cap?: CaptureCheck): Blocker[] => [
 	...heldScopeBlockers(st, row),
 	...sequenceBlockers(m, row),
+	...unitBlockers(m, row),
 	...outOfSpecBlockers(row, cap)
 ];
 

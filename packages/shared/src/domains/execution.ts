@@ -46,7 +46,8 @@ export const EXEC_BLOCKER_KINDS = [
 	'signoff',
 	'role',
 	'out_of_spec',
-	'same_person'
+	'same_person',
+	'units'
 ] as const;
 export const PRODUCTION_STATUSES = ['planned', 'wip', 'completed'] as const;
 export const EXEC_USAGES = ['consume', 'tooling'] as const;
@@ -285,7 +286,85 @@ export const zDocStepKit = z.object({
 	quantity: zQty,
 	uom: z.string(),
 	usage: z.enum(EXEC_USAGES),
-	notes: z.string().nullable()
+	notes: z.string().nullable(),
+	/** The unit slot this line installs into, by key. */
+	into: z.string().nullable()
+});
+
+/**
+ * A unit the work order acts on: an existing serialized stock record, or borrowed gear OPAL does
+ * not hold (text only). Recorded on an OP; pencil while that step is workable, pen after.
+ */
+export const zExecUnit = z.object({
+	id: z.number().int(),
+	/** The step execution it was recorded on. */
+	stepId: z.number().int(),
+	stepNumber: z.string(),
+	/** The declared slot's key, or null for hardware the procedure did not list. */
+	slot: z.string().nullable(),
+	slotLabel: z.string().nullable(),
+	stockId: z.number().int().nullable(),
+	opalNumber: z.string().nullable(),
+	partId: z.number().int().nullable(),
+	partNumber: z.string().nullable(),
+	partName: z.string().nullable(),
+	serialNumber: z.string().nullable(),
+	borrowed: z.object({ name: z.string(), serial: z.string().nullable(), lentBy: z.string().nullable() }).nullable(),
+	recordedBy: z.string().nullable(),
+	recordedAt: zTimestamp,
+	/** It can still be changed: its step is workable and the work order open. */
+	pencil: z.boolean()
+});
+export type ExecUnit = z.infer<typeof zExecUnit>;
+
+/** A component taken out of a unit the work order acts on. */
+export const zComponentRemoval = z.object({
+	id: z.number().int(),
+	stepId: z.number().int(),
+	stepNumber: z.string(),
+	assemblyStockId: z.number().int(),
+	assemblyOpal: z.string(),
+	stockId: z.number().int(),
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	serialNumber: z.string().nullable(),
+	quantity: zQty,
+	uom: z.string(),
+	/** scrap: gone. stock: back on the shelf at `location`, same OPAL number (serialized units only). */
+	disposition: z.enum(['scrap', 'stock']),
+	location: z.string().nullable(),
+	notes: z.string().nullable(),
+	removedBy: z.string().nullable(),
+	at: zTimestamp
+});
+export type ComponentRemoval = z.infer<typeof zComponentRemoval>;
+
+/** A component installed in a unit now: consumed into it, less what was removed. */
+export const zInstalledComponent = z.object({
+	stockId: z.number().int(),
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	serialNumber: z.string().nullable(),
+	serialized: z.boolean(),
+	quantity: zQty,
+	uom: z.string(),
+	installedAt: zTimestamp
+});
+export type InstalledComponent = z.infer<typeof zInstalledComponent>;
+
+/** A declared slot on an OP, with what fills it. */
+export const zDocUnitSlot = z.object({
+	key: z.string(),
+	label: z.string(),
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	required: z.boolean(),
+	unit: zExecUnit.nullable()
 });
 
 export const zDocImage = z.object({ sha256: z.string(), filename: z.string(), caption: z.string().nullable() });
@@ -334,6 +413,11 @@ export const zDocStep = z.object({
 	signoffs: z.array(zDocSignoff),
 	attachments: z.array(zDocAttachment),
 	consumptions: z.array(zDocConsumption),
+	/** OPs only: the declared unit slots, with what fills each. */
+	unitSlots: z.array(zDocUnitSlot),
+	/** Units recorded on this step that fill no declared slot. */
+	extraUnits: z.array(zExecUnit),
+	removals: z.array(zComponentRemoval),
 	/** "WAITING ON OP 2" / "WAITING ON 1.1 +1" */
 	waiting: z.string().nullable()
 });
@@ -492,6 +576,8 @@ export const zExecutionDocument = z.object({
 	myCursorId: z.number().int().nullable(),
 	kit: z.object({ items: z.array(zKitRow), unplanned: z.array(zUnplannedRow) }),
 	consumptions: z.array(zDocConsumption),
+	/** Every unit the work order acts on, in the order recorded. */
+	units: z.array(zExecUnit),
 	outputs: z.array(zOutputRow),
 	productions: z.array(zProductionRow),
 	kitRelevant: z.boolean(),
@@ -522,7 +608,9 @@ export const zExecutionState = z.object({
 			holds: z.array(zExecHold),
 			attachments: z.number().int(),
 			consumed: z.number().int(),
-			notes: z.number().int()
+			notes: z.number().int(),
+			/** Changes whenever a unit is named or taken back, or a component removed, at this step. */
+			units: z.string()
 		})
 	),
 	roster: z.array(zExecRosterEntry),
@@ -592,7 +680,9 @@ export type ExecutionComment = z.infer<typeof zExecutionComment>;
 export const zConsumeLine = z.object({
 	stockId: zId,
 	quantity: zQty,
-	usage: z.enum(EXEC_USAGES).default('consume')
+	usage: z.enum(EXEC_USAGES).default('consume'),
+	/** A unit slot key: the material goes into the unit this work order bound there. */
+	into: z.string().trim().min(1).max(100).nullish()
 });
 
 export const zConsumptionRow = z.object({
@@ -682,6 +772,9 @@ export const zExecutionReport = z.object({
 		closure: zExecClosure.nullable()
 	}),
 	generatedAt: zTimestamp,
+	/** The existing units the work order acted on, and components taken out of them. */
+	units: z.array(zExecUnit),
+	removals: z.array(zComponentRemoval),
 	endItems: z.array(
 		z.object({
 			partId: z.number().int(),
@@ -1191,6 +1284,76 @@ export const execution = {
 			'After completion: book the planned outputs into stock at a location and record the genealogy of the consumed components.',
 		input: z.object({ id: zId, location: z.string().max(MAX_SHORT).trim().min(1), notes: z.string().max(MAX_TEXT).nullish() }),
 		output: z.object({ executionId: z.number().int(), productions: z.array(zProductionRow) }),
+		access: 'signed-in',
+		mcp: true
+	}),
+	units: op({
+		name: 'execution.units',
+		method: 'GET',
+		path: '/executions/:id/units',
+		summary: 'The existing units the work order acts on, and the components taken out of them.',
+		input: z.object({ id: zId }),
+		output: z.object({ units: z.array(zExecUnit), removals: z.array(zComponentRemoval) }),
+		access: 'signed-in',
+		mcp: true
+	}),
+	bindUnit: op({
+		name: 'execution.bindUnit',
+		method: 'POST',
+		path: '/executions/:id/steps/:stepId/units',
+		summary:
+			'Name a unit this work order acts on, on an OP that is still workable: a serialized stock record (stockId), or borrowed gear OPAL does not hold (borrowed). slot: a declared slot key; omit for hardware the procedure does not list. Completing the OP freezes it.',
+		input: z.object({
+			...zStepPath,
+			slot: z.string().trim().min(1).max(100).nullish(),
+			stockId: zId.optional(),
+			borrowed: z
+				.object({
+					name: z.string().trim().min(1).max(MAX_SHORT),
+					serial: z.string().trim().max(100).nullish(),
+					lentBy: z.string().trim().max(MAX_SHORT).nullish()
+				})
+				.optional()
+		}),
+		output: zExecUnit,
+		access: 'signed-in',
+		mcp: true
+	}),
+	unbindUnit: op({
+		name: 'execution.unbindUnit',
+		method: 'DELETE',
+		path: '/executions/:id/units/:unitId',
+		summary: 'Take back a unit named on an OP that is still workable.',
+		input: z.object({ id: zId, unitId: zId }),
+		output: zOk,
+		access: 'signed-in',
+		mcp: true
+	}),
+	installed: op({
+		name: 'execution.installed',
+		method: 'GET',
+		path: '/executions/:id/units/:unitId/components',
+		summary: 'Components installed in a unit the work order acts on now, net of removals.',
+		input: z.object({ id: zId, unitId: zId }),
+		output: z.array(zInstalledComponent),
+		access: 'signed-in',
+		mcp: true
+	}),
+	removeComponent: op({
+		name: 'execution.removeComponent',
+		method: 'POST',
+		path: '/executions/:id/steps/:stepId/removals',
+		summary:
+			'Take a component out of a unit this work order acts on, at a workable step. A serialized component may go back to stock at a location (it keeps its OPAL number); anything else is scrapped.',
+		input: z.object({
+			...zStepPath,
+			unitId: zId,
+			stockId: zId,
+			quantity: zQty,
+			location: z.string().trim().min(1).max(255).nullish(),
+			notes: z.string().max(MAX_TEXT).nullish()
+		}),
+		output: zComponentRemoval,
 		access: 'signed-in',
 		mcp: true
 	}),

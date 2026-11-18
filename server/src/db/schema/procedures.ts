@@ -12,7 +12,8 @@ import {
 	PROCEDURE_TYPES,
 	type ProcedureCallout,
 	type ProcedureDataSchema,
-	type ProcedureSnapshot
+	type ProcedureSnapshot,
+	type UnitSlot
 } from '@opal/shared';
 import { sql } from 'drizzle-orm';
 import {
@@ -91,6 +92,8 @@ export const procedureStep = sqliteTable(
 		/** OPs only: sub-steps must start in order. */
 		strictSequence: integer('strict_sequence', { mode: 'boolean' }).notNull().default(false),
 		workcenterId: integer('workcenter_id').references(() => workcenter.id, { onDelete: 'set null' }),
+		/** OPs only: the existing units the operation names when it runs. Null: none. */
+		units: text('units', { mode: 'json' }).$type<UnitSlot[]>(),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
@@ -162,6 +165,8 @@ export const kitItem = sqliteTable(
 		quantity: integer('quantity').notNull(),
 		usage: text('usage', { enum: KIT_USAGES }).notNull().default('consume'),
 		notes: text('notes'),
+		/** A unit slot key of the procedure: consuming the line installs into the unit bound there. */
+		intoSlot: text('into_slot'),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},

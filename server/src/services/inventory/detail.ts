@@ -8,8 +8,14 @@ import { componentsOf, usedIn } from './genealogy.ts';
 import { ledgerFor } from './moves.ts';
 import { correctionsOf, getStockByOpal, recordByOpal } from './records.ts';
 import { listResults, listTemplates, testStatus } from './tests.ts';
+import { usesOf } from './uses.ts';
 
 type DbCtx = Pick<Ctx, 'db'>;
+
+function uses(ctx: DbCtx, stockId: number) {
+	const u = usesOf(ctx.db, stockId);
+	return { uses: u.counts, workOrders: u.workOrders };
+}
 
 export function stockDetail(ctx: DbCtx, opalNumber: string): StockDetail {
 	const rec = recordByOpal(ctx, opalNumber);
@@ -45,6 +51,7 @@ export function stockDetail(ctx: DbCtx, opalNumber: string): StockDetail {
 		corrections: correctionsOf(ctx, rec.id),
 		components: componentsOf(ctx, rec),
 		usedIn: usedIn(ctx, rec),
+		...uses(ctx, rec.id),
 		tests: listResults(ctx, rec.id),
 		testTemplates: listTemplates(ctx, rec.partId),
 		testStatus: testStatus(ctx, rec.id)

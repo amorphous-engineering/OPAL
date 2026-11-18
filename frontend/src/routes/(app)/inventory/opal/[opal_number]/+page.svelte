@@ -5,6 +5,7 @@
 		type StockAction
 	} from '#lib/components/inventory/StockActionDialog.svelte';
 	import TestDialog from '#lib/components/inventory/TestDialog.svelte';
+	import UnitUses from '#lib/components/units/UnitUses.svelte';
 	import { ledgerKind, moveLinks, sourceLabel } from '#lib/components/inventory/types.js';
 	import type {
 		StockCorrection,
@@ -426,6 +427,7 @@
 				{@render genealogy(d.usedIn)}
 			</Section>
 		{/if}
+		<UnitUses uses={d.uses} workOrders={d.workOrders} />
 
 		{#if hasDeclaredTests}
 			{#if d.tests.length}
@@ -553,7 +555,9 @@
 			{ key: 'opalNumber', label: 'OPAL', mono: true },
 			{ key: 'part', label: 'PN', mono: true },
 			{ key: 'partName', label: 'Name' },
-			{ key: 'qtyUsed', label: 'Qty used', align: 'right' as const, mono: true }
+			{ key: 'qtyUsed', label: 'Qty used', align: 'right' as const, mono: true },
+			{ key: 'removed', label: 'Removed' },
+			{ key: 'since', label: 'Uses since installed' }
 		]}
 		href={(r) => `/inventory/opal/${r.opalNumber}`}
 		emptyLabel="Components"
@@ -566,6 +570,18 @@
 				<a href="/parts/{r.partId}" class="text-info hover:underline">{r.partInternalPn}</a>
 			{:else if col.key === 'partName'}
 				{r.partName}
+			{:else if col.key === 'removed'}
+				{#if Number(r.qtyRemoved) > 0}
+					<span class="font-mono"
+						>{qty(r.qtyRemoved)} · {r.removedWoNumber} · <Timestamp value={r.removedAt} /></span
+					>
+				{:else}<span class="text-quiet">—</span>{/if}
+			{:else if col.key === 'since'}
+				{#if r.usesSinceInstalled.length}
+					<span class="font-mono text-xs"
+						>{r.usesSinceInstalled.map((u) => `${u.procedureName.toUpperCase()} ${u.count}`).join(' · ')}</span
+					>
+				{:else}<span class="text-quiet">—</span>{/if}
 			{:else}
 				{qty(r.qtyUsed)}
 			{/if}

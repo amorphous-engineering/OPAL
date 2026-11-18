@@ -14,7 +14,8 @@ const STEP_FIELDS = [
 	'strictSequence',
 	'dependsOn',
 	'kit',
-	'images'
+	'images',
+	'units'
 ] as const;
 
 /** Compare values by content: JSON text, with object keys in a fixed order. */
@@ -35,7 +36,8 @@ function comparable(s: SnapshotStep, numberOf: Map<number, string>) {
 		signoffs: relabel(s.signoffs),
 		dependsOn: s.dependsOn.map((d) => numberOf.get(d) ?? `#${d}`).sort(),
 		images: s.images.map((i) => ({ sha256: i.sha256, caption: i.caption })),
-		kit: [...s.kit].sort((x, y) => x.partId - y.partId)
+		kit: [...s.kit].sort((x, y) => x.partId - y.partId),
+		units: s.units ?? []
 	};
 }
 
