@@ -5,7 +5,14 @@
 	import { outOfSpecFields } from './spec.js';
 	import type { DocStep } from './types.js';
 
-	let { step }: { step: DocStep } = $props();
+	let {
+		step,
+		quietWait = false
+	}: {
+		step: DocStep;
+		/** The OP's own row already says what it waits on, so a step of it need not repeat it. */
+		quietWait?: boolean;
+	} = $props();
 
 	const done = $derived(['completed', 'signed_off', 'skipped'].includes(step.status));
 	const raised = $derived(step.holds.filter((h) => h.kind === 'raised'));
@@ -45,7 +52,7 @@
 	{/each}
 	{#if step.status === 'awaiting_signoff'}
 		<Badge variant="outline" class={warn}>AWAITING SIGN-OFF</Badge>
-	{:else if step.waiting && !step.holds.length}
+	{:else if step.waiting && !step.holds.length && !quietWait}
 		<span class="font-mono text-xs whitespace-nowrap text-muted-foreground"
 			>{step.waiting.replace(/^WAITING ON /, 'AFTER ')}</span
 		>

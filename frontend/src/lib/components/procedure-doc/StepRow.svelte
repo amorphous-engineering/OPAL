@@ -53,6 +53,10 @@
 	const canTick = $derived(
 		short && ctl.active && workable && !!ctl.actions.sign && !!slot && (slot.can_sign || current)
 	);
+	// Steps of an OP that is gated as a whole: the OP's row already says what it waits on.
+	const quietWait = $derived(
+		ctl.active && op.waiting_on_ops.length > 0 && step.waiting === op.step.waiting
+	);
 	let busy = $state(false);
 
 	async function tick() {
@@ -125,7 +129,7 @@
 					current && 'font-semibold'
 				)}>{step.title}</span
 			>
-			<StepBadges {step} />
+			<StepBadges {step} {quietWait} />
 		{/if}
 		{#if nNote}
 			<span class={count} title="Operator notes">{nNote} {nNote === 1 ? 'NOTE' : 'NOTES'}</span>
