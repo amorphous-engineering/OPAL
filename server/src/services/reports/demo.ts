@@ -9,6 +9,11 @@
  * synchronously, does not close it, and creates no user for the operator (the lifecycle code
  * matches the operator by email, then by name).
  *
+ * `folder` is the demo's own data folder, the one `OPAL_DATA_DIR` names once the demo is live.
+ * Blobs and avatars go there, and attachment files are read from its `attachments/`. Never
+ * `dataDir()`: this runs before the switch, when that is still the real folder, and a folder
+ * upgraded from 1.x keeps the real organization's files in its `attachments/`.
+ *
  * The seed file is found, in order: `OPAL_DEMO_SEED`, the copy embedded in the binary
  * (`globalThis.__opalEmbedded.demoSeed`), and `server/assets/demo-seed.db` next to the sources.
  */
@@ -21,7 +26,6 @@ import { checkSource, importInto } from '../../import/legacy.ts';
 import { emptyReport } from '../../import/context.ts';
 import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
 import { renameCheckboxFields } from '../../db/boolean-fields.ts';
-import { dataDir } from '../../paths.ts';
 
 /** Where the seed file is. */
 export function demoSeedPath(): string {
@@ -29,15 +33,15 @@ export function demoSeedPath(): string {
 	return process.env.OPAL_DEMO_SEED ?? embedded ?? join(import.meta.dir, '../../../assets/demo-seed.db');
 }
 
-export function buildDemoContent(db: Db): void {
+export function buildDemoContent(db: Db, folder: string): void {
 	const seed = Database.deserialize(readFileSync(demoSeedPath()));
 	try {
 		const version = checkSource(seed, 'demo seed');
 		const report = emptyReport('demo seed', 'demo database', version, now());
 		importInto(seed, db, report, {
-			attachmentsDir: join(dataDir(), 'attachments'),
-			blobsDir: join(dataDir(), 'blobs'),
-			avatarsDir: join(dataDir(), 'avatars'),
+			attachmentsDir: join(folder, 'attachments'),
+			blobsDir: join(folder, 'blobs'),
+			avatarsDir: join(folder, 'avatars'),
 			// Until the two import-only tables are in the schema index, a demo goes without them.
 			legacyTables: !!db.$client.query("SELECT 1 FROM sqlite_master WHERE name = 'legacy_audit'").get()
 		});

@@ -217,7 +217,7 @@ export async function enterDemo(ctx: Ctx): Promise<LifecycleState> {
 	// blank file, and the next entry builds it again.
 	const fresh = !demoDb.select({ id: user.id }).from(user).limit(1).get() && !demoDb.select({ id: part.id }).from(part).limit(1).get();
 	if (fresh) {
-		buildDemoContent(demoDb);
+		buildDemoContent(demoDb, demoAttachments(h));
 		copyAuthSettings(ctx.db, demoDb);
 	}
 	const operatorRow = operator ? upsertOperator(demoCtx, operator) : null;
