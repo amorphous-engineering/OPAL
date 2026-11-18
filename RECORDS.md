@@ -77,7 +77,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 | Completed | What was done, by whom? | REPORT | Add note, comment | | |
 | Void, Closed short | Why did it stop, and where? | REPORT | Add comment | | |
 
-- A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time.
+- A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time. The printed traveler gives it a blank for initials, not a sign-off line.
 - A short step has a title and nothing else: no instructions, pictures, parts, data fields, callouts or declared sign-off. It is derived from the content, never flagged. Its row is the number, the title and one tick, and the tick is COMPLETE. It is the primary key on the current step and quiet elsewhere, and it shows inert with the reason only on the step the work is waiting on. An operation of short steps is a checklist, on screen and on the printed traveler, where a run of them prints as tick rows with a blank for initials.
 - A step with declared sign-offs shows a slot for each. Pressing SIGN OFF is the attestation, with no dialog. Two slots need two different people.
 - When only one person is there, whoever signed an earlier slot may WAIVE a later one with a reason, if they could otherwise sign it: the slot's role and any hold still apply. The slot then reads "waived: reason, name, time" on the run view and the report, never as a signature. A waiver cannot be changed or removed; a correction is a note on the step.

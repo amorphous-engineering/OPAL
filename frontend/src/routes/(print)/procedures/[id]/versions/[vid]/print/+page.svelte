@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Printable traveler: the published snapshot with write-in lines for the floor.
 	import { page } from '$app/state';
-	import { specText, unitSymbol } from '@opal/shared';
+	import { hasOnlyDefaultSignoff, specText, unitSymbol } from '@opal/shared';
 	import { datetime, qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
 	import { stepRuns } from '#lib/components/procedures/runs.js';
@@ -52,8 +52,16 @@
 	</div>
 {/snippet}
 
-{#snippet signLines(s: SnapshotStep)}
-	{#if s.signoffs.length}
+{#snippet signLines(s: SnapshotStep, leaf: boolean)}
+	{#if leaf && hasOnlyDefaultSignoff(s.signoffs)}
+		<!-- Routine work: the default slot is the completion stamp, not a sign-off. Initials, as on
+			 a short step's row. -->
+		<div class="mt-2 flex justify-end text-[9pt]" data-done>
+			<span class="flex w-28 items-baseline gap-1"
+				>Init <span class="inline-block flex-1 border-b border-black">&nbsp;</span></span
+			>
+		</div>
+	{:else if s.signoffs.length}
 		<div class="mt-2 border-t border-neutral-400 pt-1.5 text-[9pt]">
 			{#each s.signoffs as so, i (i)}
 				<div class="flex items-baseline gap-4 py-1" data-signoff={i}>
@@ -137,7 +145,7 @@
 		<div class="px-2.5 py-2">
 			{@render body(g.op)}
 			<UnitSlotsPrint slots={g.op.units ?? []} {partById} />
-			{#if g.subs.length === 0}{@render signLines(g.op)}{/if}
+			{#if g.subs.length === 0}{@render signLines(g.op, true)}{/if}
 		</div>
 		{#each stepRuns(g.subs) as run (run.steps[0].id)}
 			{#if run.short}
@@ -180,13 +188,13 @@
 							{/if}
 						</div>
 						{@render body(s)}
-						{@render signLines(s)}
+						{@render signLines(s, true)}
 					</div>
 				{/each}
 			{/if}
 		{/each}
 		{#if g.subs.length > 0}
-			<div class="border-t border-black px-2.5 pb-1">{@render signLines(g.op)}</div>
+			<div class="border-t border-black px-2.5 pb-1">{@render signLines(g.op, false)}</div>
 		{/if}
 	</section>
 {/snippet}
