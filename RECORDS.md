@@ -92,7 +92,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 - Every quantity on the material tab shows its unit. Source is a search over stock of that part with stock on hand, defaulting to the oldest.
 - An OP that declares unit slots names the existing units the order acts on: a serialized stock record of the slot's part, or borrowed gear as text (what, serial, who lent it). Hardware the procedure did not list can be named as well. A unit is named or taken back while its OP is workable. Completing the OP puts the names on record; a correction is a note. A required slot left empty stops the OP, and skipping it takes what skipping required data takes.
 - A unit stays named once material went into it or came out of it on that order.
-- A kit line marked INTO a slot installs into the unit named there. A removal is a new line on the step: what came out of which unit, and where it went. A serialized component may go back to stock under its own OPAL number. Lot and bulk parts are scrapped.
+- A kit line marked INTO a slot installs into the unit named there. A removal is a new line on the step: what came out of which unit, and where it went. It is offered where parts come off: a step that installs into a unit, and an OP that names units and has steps under it. An OP that only names units, such as a launch record, offers none. A serialized component may go back to stock under its own OPAL number. Lot and bulk parts are scrapped.
 - A unit's page lists every work order that named it, or an assembly it was in at the time, and counts the completed ones per procedure. Void and closed-short orders are listed and not counted.
 
 ## Procedure template
