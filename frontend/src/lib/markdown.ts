@@ -10,8 +10,14 @@
  */
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { numbersIn } from '#lib/partLinks.svelte.js';
+import { partNumberLinks } from '#lib/partNumberLinks.js';
 
 marked.setOptions({ gfm: true, breaks: true });
+
+// Part numbers that name a part link to it. The link is made here, before the sanitizer sees it.
+const partLinks = partNumberLinks();
+marked.use({ extensions: [partLinks.extension] });
 
 const FORBID_TAGS = [
 	// Inputs and controls. A GFM task list's checkbox is the exception; see tidy().
@@ -98,7 +104,10 @@ export function markdown(source: string | null | undefined): string {
 		DOMPurify.addHook('afterSanitizeAttributes', tidy);
 		hooked = true;
 	}
-	const html = marked.parse(source, { async: false }) as string;
+	const html = partLinks.using(
+		numbersIn(source),
+		() => marked.parse(source, { async: false }) as string
+	);
 	return DOMPurify.sanitize(html, {
 		USE_PROFILES: { html: true },
 		FORBID_TAGS,

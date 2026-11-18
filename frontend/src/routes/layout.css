@@ -259,6 +259,17 @@
 	.prose-opal :where(a) {
 		@apply text-info underline;
 	}
+	/* A part number on paper is the number: a printed link has nowhere to go. */
+	.paper .prose-opal a[href^='/parts/number/'] {
+		color: inherit;
+		text-decoration: none;
+	}
+	@media print {
+		.prose-opal a[href^='/parts/number/'] {
+			color: inherit;
+			text-decoration: none;
+		}
+	}
 	.prose-opal :where(blockquote) {
 		@apply border-l-2 border-border pl-3 text-muted-foreground;
 	}
