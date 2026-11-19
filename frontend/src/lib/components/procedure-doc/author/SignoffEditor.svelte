@@ -54,6 +54,8 @@
 	const addSecond = () => save([...drawn, { label: '', role: null }]);
 	function remove(i: number) {
 		if (i > 0) return save(drawn.filter((_, n) => n !== i));
+		// The second becomes the only sign-off; it keeps its role.
+		if (drawn.length > 1) return save(drawn.slice(1));
 		// Removing the sign-off returns the step to routine: a leaf keeps its roleless slot.
 		opened = false;
 		save(head ? [] : [{ label: '', role: null }]);

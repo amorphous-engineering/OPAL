@@ -1,8 +1,8 @@
 <script lang="ts">
 	// Template-level files (drawings, datasheets, PDFs): attachments with kind "reference".
 	import { api, opal } from '#lib/api.js';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import {
-		ActionLink,
 		DataTable,
 		EmptyLine,
 		Section,
@@ -90,7 +90,9 @@
 	<EmptyLine label="Reference documents">
 		{#snippet action()}
 			{#if addable}
-				<ActionLink disabled={busy} onclick={() => input?.click()}>+ UPLOAD</ActionLink>
+				<Button size="sm" variant="outline" disabled={busy} onclick={() => input?.click()}
+					>+ UPLOAD</Button
+				>
 			{/if}
 		{/snippet}
 	</EmptyLine>
@@ -98,7 +100,9 @@
 	<Section title="Reference documents" count={docs.length}>
 		{#snippet actions()}
 			{#if addable}
-				<ActionLink disabled={busy} onclick={() => input?.click()}>+ UPLOAD</ActionLink>
+				<Button size="sm" variant="outline" disabled={busy} onclick={() => input?.click()}
+					>+ UPLOAD</Button
+				>
 			{/if}
 		{/snippet}
 		{#if compact}

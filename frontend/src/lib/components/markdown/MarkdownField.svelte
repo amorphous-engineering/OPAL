@@ -1,3 +1,12 @@
+<script lang="ts" module>
+	// Whether a pointer is pressed anywhere, so a blur caused by a click can wait for that click.
+	let pointerDown = false;
+	if (typeof window !== 'undefined') {
+		window.addEventListener('pointerdown', () => (pointerDown = true), true);
+		window.addEventListener('pointerup', () => setTimeout(() => (pointerDown = false), 0), true);
+	}
+</script>
+
 <script lang="ts">
 	// The one markdown editor: CodeMirror 6 with three view modes (LIVE, HYBRID, SOURCE) and the
 	// shared formatting toolbar. The mode is a per-viewer preference common to every editor.
@@ -75,8 +84,9 @@
 	} = $props();
 
 	let focused = $state(false);
-	/** toolbarOnFocus: the editor box or its floating toolbar holds the focus. */
+	/** toolbarOnFocus: the editor box or its toolbar holds the focus. */
 	let editing = $state(false);
+	let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let root = $state<HTMLDivElement | null>(null);
 	let host = $state<HTMLDivElement | null>(null);
@@ -343,22 +353,30 @@
 	{/if}
 	{@render between?.()}
 	{#if toolbarOnFocus}
-		<!-- The toolbar floats under the box while the editor itself has focus. It takes no space,
-		     so nothing moves when it goes, and a click on what lies below lands where it was aimed.
-		     Focus in the host content between (callout boxes) does not count. -->
+		<!-- The toolbar sits under the box while the editor itself has focus; focus in the host
+		     content between (callout boxes) does not count. It goes only after the click that
+		     moved the focus away has landed, so nothing shifts under the pointer mid-click. -->
 		<div
-			class="relative min-w-0"
-			onfocusin={() => (editing = true)}
+			class="grid min-w-0 grid-cols-1 gap-2"
+			onfocusin={() => {
+				clearTimeout(hideTimer);
+				editing = true;
+			}}
 			onfocusout={(e) => {
-				if (!e.currentTarget.contains(e.relatedTarget as Node | null)) editing = false;
+				if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+				if (!pointerDown) {
+					editing = false;
+					return;
+				}
+				window.addEventListener(
+					'pointerup',
+					() => (hideTimer = setTimeout(() => (editing = false), 0)),
+					{ once: true }
+				);
 			}}
 		>
 			<div bind:this={host} class="min-w-0"></div>
-			{#if editing}
-				<div class="absolute top-full right-0 left-0 z-30 mt-1 bg-background shadow-key2">
-					{@render toolbar()}
-				</div>
-			{/if}
+			{#if editing}{@render toolbar()}{/if}
 		</div>
 	{:else}
 		<div bind:this={host} class="min-w-0"></div>

@@ -84,7 +84,7 @@
 </script>
 
 <div class="grid grid-cols-1 gap-2" data-author-body={step.order}>
-	{#if isOp}
+	{#if isOp || step.workcenter_id != null}
 		<!-- What the OP needs before it runs. Which OPs it waits on, and whether its steps go in
 		     order, are set in the Sequence tab. -->
 		<div class="flex flex-wrap items-center gap-2 text-xs">
@@ -148,6 +148,7 @@
 						step="1"
 						class="h-7 w-24 font-mono"
 						value={step.estimated_duration_minutes ?? ''}
+						onfocus={() => (durationOpen = true)}
 						onkeydown={stop}
 						oninput={(e) => {
 							const v = e.currentTarget.value;
