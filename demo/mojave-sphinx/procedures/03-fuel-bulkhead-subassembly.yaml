@@ -1,0 +1,259 @@
+# Fuel Bulkhead Subassembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 3: Fuel Bulkhead Subassembly (pp. 150-157) and
+# OP 4: Recovery Bulkhead Integration (pp. 158-162).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: fuel-bulkhead-subassembly
+name: Fuel Bulkhead Subassembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 3: Fuel Bulkhead Subassembly and OP 4: Recovery Bulkhead Integration'
+  pages: 150-162
+
+description: |
+  Assemble the fuel bulkhead, nut ring, tank interface ring and servo-actuated ball valve with its
+  fittings, then mount the recovery bulkhead on threaded studs above the valve.
+
+  Tools: hex keys and wrenches, PTFE thread sealant tape.
+  Optional: scotch tape or similar.
+
+output:
+  part: fuel-bulkhead-subassembly
+  quantity: 1
+
+# "Gather the following" in the guidebook, OP 3 (p. 151) and OP 4 (p. 159) combined.
+kit:
+  - part: SABV-04FF
+    quantity: 1
+  - part: BKHD-FL-O238-4NPT-2X250C
+    quantity: 1
+  - part: INRG-200S-8X3125C-8X250C
+    quantity: 1
+  - part: NTRG-8X3125WN-8X25HN
+    quantity: 1
+  - part: '94579A550'
+    quantity: 8
+  - part: '95505A601'
+    quantity: 14
+  - part: '90357A013'
+    quantity: 2
+  - part: '91367A952'
+    quantity: 2
+  - part: '90264A435'
+    quantity: 2
+  - part: '92141A029'
+    quantity: 8
+  - part: '44665K137'
+    quantity: 1
+  - part: '50785K43'
+    quantity: 1
+  - part: '5485K31'
+    quantity: 1
+  - part: '50785K35'
+    quantity: 1
+  - part: '50675K435'
+    quantity: 1
+  - part: '50785K27'
+    quantity: 1
+  - part: '91025A568'
+    quantity: 2
+  - part: '91102A750'
+    quantity: 4
+  - part: '3043T643'
+    quantity: 1
+  - part: BKHD-REC-4X250C-2X170WE
+    quantity: 1
+
+operations:
+  - title: Fuel Bulkhead Subassembly
+    source: { section: 'Section V, OP 3', pages: 150-157 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-03/fuel-bulkhead-subassembly.png
+        caption: Fuel bulkhead subassembly.
+        source_page: 150
+    steps:
+      - title: Install the screws and coupling nuts
+        source: { step: 1, page: 152 }
+        instructions: |
+          Install QTY 2 90357A013 ultra-low profile socket head screws with QTY 2 91367A952 sealing
+          washers under the heads of the screws (one per screw) into the BKHD-FL-O238-4NPT-2X250C
+          fuel bulkhead as shown. Thread screws into QTY 2 90264A435 coupling nuts, with QTY 2
+          92141A029 flat washers between the coupling nuts and fuel bulkhead. Tighten screws until
+          snug, then ½ additional turn.
+        callouts:
+          - caution: Excessive torque may cause sealing washers to be extruded.
+        images:
+          - file: photos/op-03/screws-and-coupling-nuts.jpg
+            caption: Screws, sealing washers, flat washers and coupling nuts in the fuel bulkhead, section view.
+            source_page: 152
+
+      - title: Load the nut ring
+        source: { step: 2, page: 153 }
+        instructions: |
+          Place QTY 8 94579A550 5/16-24 weld nuts and QTY 8 95505A601 1/4-20 hex nuts into QTY 1
+          NTRG-8X3125WN-8X25HN printed nut ring as shown.
+
+          *A strip of scotch tape or similar may be used to retain the nuts prior to insertion into
+          the tank interface ring. Note that adhesive should not be used to bond the nuts in place.
+          They must be free to float within their cutouts to accommodate any hole misalignment.
+          Tape may be used to cover the edges of the hex nuts (do not cover holes).*
+        images:
+          - file: photos/op-03/nut-ring-with-nuts.jpg
+            caption: Nut ring with the weld nuts and hex nuts in place.
+            source_page: 153
+
+      - title: Place the tank interface ring
+        source: { step: 3, page: 154 }
+        instructions: |
+          Place QTY 1 tank interface ring onto the outer face of the fuel bulkhead as shown.
+
+          *Note: The tank interface ring MUST be installed prior to integrating the valve assembly
+          onto the fuel bulkhead.*
+
+      - title: Insert the nut ring
+        source: { step: 4, page: 154 }
+        instructions: |
+          Insert the fully populated nut ring into QTY 1 INRG-200S-8X3125C-8X250C tank interface
+          ring as shown. The 5/16-24 weld nuts should align with the larger holes on the smaller
+          diameter portion of the tank interface ring.
+
+          *Note: The location of the "missing" centering tab does not matter for the fuel bulkhead
+          subassembly.*
+        images:
+          - file: photos/op-03/nut-ring-in-interface-ring.jpg
+            caption: Nut ring seated in the tank interface ring on the fuel bulkhead.
+            source_page: 154
+
+      - title: Thread the nipple into the valve
+        source: { step: 5, page: 155 }
+        instructions: |
+          Apply 2-3 clockwise wraps of PTFE tape to both ends of QTY 1 44665K137 Aluminum Pipe
+          Nipple, and thread one end into port of QTY 1 SABV-04FF as shown. Note the orientation of
+          the valve bracket. Only tighten the pipe nipple to hand-tight at this time.
+        images:
+          - file: photos/op-03/pipe-nipple-in-valve.png
+            caption: Pipe nipple threaded into the valve assembly, side view.
+            source_page: 155
+
+      - title: Thread the valve onto the bulkhead
+        source: { step: 6, page: 156 }
+        instructions: |
+          Thread the other end of the 44665K137 Aluminum Pipe Nipple into the offset 1/4 NPT port on
+          the BKHD-FL-O238-4NPT-2X250C fuel bulkhead. Tighten until snug, then rotate no more than
+          one full turn until the valve assembly aligns with the diameter of the fuel bulkhead.
+        images:
+          - file: photos/op-03/valve-aligned-top.jpg
+            caption: Valve assembly aligned with the diameter of the fuel bulkhead, top view.
+            source_page: 156
+          - file: photos/op-03/valve-aligned-perspective.jpg
+            caption: Valve assembly on the fuel bulkhead.
+            source_page: 156
+
+      - title: Install the fittings
+        source: { step: 7, page: 157 }
+        instructions: |
+          Install QTY 1 50785K27 straight adapter, QTY 1 50785K43 male/female elbow fitting, QTY 1
+          5485K31 reducing adapter, QTY 1 50785K35 female elbow fitting, and QTY 1 50675K435 flared
+          fitting adapter.
+
+          *Apply 2-3 wraps of PTFE tape onto each set of male threads before installation.*
+
+          *When installing elbow fittings, tighten until snug, then no more than one full turn until
+          the fitting is pointed in the correct direction.*
+
+          *Note: The purpose of the 50785K27 straight adapter fitting is to prevent excess slack
+          length in the fuel downcomer line.*
+        images:
+          - file: photos/op-03/fittings-side.jpg
+            caption: Fittings installed, side view with the servo at left.
+            source_page: 157
+          - file: photos/op-03/fittings-valve-side.jpg
+            caption: Fittings installed, view facing the valve bracket.
+            source_page: 157
+
+  - title: Recovery Bulkhead Integration
+    depends_on: [1]
+    source: { section: 'Section V, OP 4', pages: 158-162 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-04/recovery-bulkhead-integration.png
+        caption: Recovery bulkhead on the fuel bulkhead subassembly.
+        source_page: 158
+    steps:
+      - title: Install the threaded studs
+        source: { step: 1, page: 160 }
+        instructions: |
+          Thread QTY 2 91025A568 threaded studs into the coupling nuts until they contact the ends
+          of the screws installed through the fuel bulkhead or reach the ends of the stud threads.
+          Tighten to hand-tight; hardware installed in a later step will prevent rotation.
+        images:
+          - file: photos/op-04/studs-in-coupling-nuts.jpg
+            caption: Threaded studs in the coupling nuts, section view.
+            source_page: 160
+
+      - title: Mount the U-bolt
+        source: { step: 2, page: 161 }
+        instructions: |
+          Remove the hex nuts and mounting plate included with the 3043T643 U-bolt, then thread the
+          included hex nuts all the way to the end of the thread, tightening until snug. Place QTY 2
+          91102A750 split lock washers and QTY 2 92141A029 flat washers onto the ends of the U-bolt,
+          then insert the U-bolt into the holes in the recovery bulkhead. Secure with the included
+          mounting plate and QTY 2 95505A601 hex nuts. Tighten both hex nuts approximately 1/4 turn
+          past full compression of the split lock washers.
+        images:
+          - file: photos/op-04/u-bolt-on-recovery-bulkhead.jpg
+            caption: U-bolt in the recovery bulkhead, with washers and nuts labeled.
+            source_page: 161
+
+      - title: Mount the recovery bulkhead
+        source: { step: 3, page: 162 }
+        instructions: |
+          Thread QTY 2 95505A601 hex nuts about 3/4 in onto the threaded studs, and place QTY 2
+          92141A029 flat washers on top of the nuts. Place the recovery bulkhead with U-bolt onto
+          the threaded studs, and secure with an additional QTY 2 95505A601 hex nuts, QTY 2
+          92141A029 flat washers, and QTY 2 91102A750 split lock washers as shown. Tighten the hex
+          nuts on each threaded stud approximately 1/4 turn past full compression of the split lock
+          washers.
+        images:
+          - file: photos/op-04/recovery-bulkhead-on-studs.jpg
+            caption: Recovery bulkhead secured on the threaded studs.
+            source_page: 162
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - >-
+    Guidebook OP 3 and OP 4 are two operations of one build here: OP 4 adds parts to what OP 3
+    made, and OP 6 takes in one Fuel Bulkhead Subassembly.
+  - Step titles are new. The guidebook's steps have none.
+  - >-
+    The kit combines the OP 3 (p. 151) and OP 4 (p. 159) parts lists. 95505A601 is one line of 14
+    (8 + 6) and 92141A029 one line of 8 (2 + 6).
+  - PTFE thread sealant tape, listed in OP 3 with no quantity, is in the tools line, not the kit.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - >-
+    Steps 1.1, 1.2, 1.4, 1.5 and 1.6: the part number printed in the step is replaced by the
+    number from the parts list.
+  - >-
+    The fuel bulkhead is called the fuel bulkhead throughout. The guidebook also calls it the
+    bulkhead and, in OP 4 step 1, the forward bulkhead.
+  - >-
+    The tank interface ring is called the tank interface ring throughout. The guidebook also calls
+    it the Tank Interface Ring, the interface ring and, in OP 3 step 2, the machined integration
+    ring.
+  - 'The 92141A029 washers are called flat washers throughout. OP 3 step 1 calls them washers.'
+  - 'The 91102A750 washers are called split lock washers throughout. OP 4 also calls them lock washers.'
+  - 'The 91025A568 studs are called threaded studs throughout. OP 4 also calls them studs.'
+  - 'Step 1.1: "the coupling nuts and bulkheads" is written "the coupling nuts and fuel bulkhead".'
+  - 'Step 1.1: the note that warns of damage is set apart as a caution.'
+  - 'Step 2.3: "about ¾”" is written as "about 3/4 in".'
+  - Operation 2 depends on operation 1.
+  - Image captions are new.

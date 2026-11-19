@@ -1,0 +1,474 @@
+# GSE System
+#
+# Adapted from HCR-5100 R01, Section 6.3, OP 4: Prepare Toolbox Enclosure (pp. 251-255),
+# OP 5: Fluid System Integration (pp. 256-261) and OP 6: Electrical System Integration (pp. 262-273).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: gse-system
+name: GSE System
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section 6.3, OP 4: Prepare Toolbox Enclosure, OP 5: Fluid System Integration and OP 6: Electrical System Integration'
+  pages: 251-273
+
+description: |
+  Cut and drill the holes in the toolbox, then install the fill valve assembly, the fill line
+  bulkhead assembly and the fill tube, and the optional purge valve. Then mount the receiver,
+  relay module, voltage regulator, power switch, outlet and battery in the toolbox and wire them
+  together.
+
+  Tools for operations 1 and 2: hole saws, 2 1/8 in and 1.5 in; drill and drill bits for the
+  holes shown in the drawings; hacksaw; wrenches; measuring tape; a cutter for the nylon tubing.
+  9685T3 nylon tubing, as needed.
+
+  Tools for operation 3: wrenches and screwdrivers for the 8-32 screws, the 1/4-20 nuts and the
+  screw terminals, needle nose pliers, wire cutters and strippers, 20GA-RBP 20 gauge stranded
+  wire (as needed), electrical tape or heat shrink tubing, means to label the receptacles "IGN"
+  and "SRV", zip ties and electrical tape for bundling. Optional: soldering iron and solder
+  (recommended for the splices), crimp-on ring terminals with screws, a 3D printed wall plate
+  with engraved text and a 6-32 x 1/2 in screw.
+
+  Operation 1: refer to the operation's images for the context of each hole created in this
+  operation.
+
+output:
+  part: gse-system
+  quantity: 1
+
+# "Gather the following" in the guidebook, OP 4 (p. 251), OP 5 (p. 256) and OP 6 (p. 262) combined.
+kit:
+  - part: '91111'
+    quantity: 1
+  - part: fill-valve-assembly
+    quantity: 1
+  - part: fill-line-bulkhead-assembly
+    quantity: 1
+  - part: DTUS_FSI6X_10CH
+    quantity: 1
+  - part: '090600AFA'
+    quantity: 1
+  - part: LCATMC1569
+    quantity: 1
+  - part: BRKT-EGSE-2X8C
+    quantity: 2
+  - part: CVR-ANT-2X8C
+    quantity: 1
+  - part: '90272A194'
+    quantity: 12
+  - part: '98689A113'
+    quantity: 12
+  - part: '92148A160'
+    quantity: 12
+  - part: '90480A009'
+    quantity: 12
+  - part: '9489T519'
+    quantity: 2
+  - part: '92141A029'
+    quantity: 2
+  - part: '91102A750'
+    quantity: 2
+  - part: '95505A601'
+    quantity: 2
+  - part: GSW-17
+    quantity: 1
+  - part: AZ18080602-03
+    quantity: 1
+  - part: '7159K3'
+    quantity: 1
+  - part: '7526K53'
+    quantity: 1
+  - part: SRV-3PIN-1MXT
+    quantity: 1
+  - part: nylon-zip-tie
+    quantity: 2
+
+operations:
+  - title: Prepare Toolbox Enclosure
+    source: { section: 'Section 6.3, OP 4', pages: 251-255 }
+    workcenter: SHOP
+    images:
+      - file: photos/gse-op-04/toolbox-front-view.jpg
+        caption: Toolbox with the ground system installed, translucent view.
+        source_page: 251
+      - file: photos/gse-op-04/toolbox-rear-view.jpg
+        caption: Toolbox with the ground system installed, translucent view from the other side.
+        source_page: 251
+    steps:
+      - title: Cut the front face hole
+        source: { step: 1, page: 252 }
+        instructions: |
+          Using a hole saw, cut a 2 1/8-inch-diameter hole where shown on the front face of the
+          91111 21-Inch Voyager HFT toolbox.
+        images:
+          - file: photos/gse-op-04/front-face-holes.png
+            caption: Front face of the toolbox, hole dimensions.
+            source_page: 252
+
+      - title: Drill the right face holes
+        source: { step: 2, page: 253 }
+        instructions: |
+          Drill the holes as shown in the side of the toolbox that is on the right when facing the
+          front (where the latches are located). Note: if no purge valve is to be included, only
+          the left-most of the two 3/4-inch holes is needed.
+        images:
+          - file: photos/gse-op-04/right-face-holes.png
+            caption: Right face of the toolbox, hole dimensions.
+            source_page: 253
+
+      - title: Cut the left face holes
+        source: { step: 3, page: 254 }
+        instructions: |
+          Drill the holes as shown in the side of the toolbox that is on the left when facing the
+          front (where the latches are located). Use a hole saw for the 1.5-inch holes, and cut an
+          approximately 1/4-inch side slot between them using a hacksaw.
+
+          *Note: The imperfect alignment of the 1.5-inch holes with the NEMA electrical outlets is
+          intentional to avoid overlap between the holes, which can cause the hole saw blade to
+          bind.*
+        images:
+          - file: photos/gse-op-04/left-face-holes.png
+            caption: Left face of the toolbox, hole dimensions.
+            source_page: 254
+
+      - title: Drill the back face holes
+        source: { step: 4, page: 255 }
+        instructions: |
+          Drill the holes as shown in the back side of the toolbox.
+        images:
+          - file: photos/gse-op-04/back-face-holes.png
+            caption: Back face of the toolbox, hole dimensions.
+            source_page: 255
+
+  - title: Fluid System Integration
+    depends_on: [1]
+    source: { section: 'Section 6.3, OP 5', pages: 256-261 }
+    workcenter: BENCH
+    steps:
+      - title: Mount the fill valve assembly
+        source: { step: 1, page: 257 }
+        instructions: |
+          Remove the brass nut and toothed washer from the 50785K273 through-wall fitting on the
+          fill valve assembly. Pass the fitting through the 0.75 in hole in toolbox where shown,
+          then re-install the toothed washer and brass nut. The 97149A370 hex nut should contact
+          the inside of the toolbox. Ensure the gauge is aligned with the hole in the front face of
+          the toolbox, then tighten the brass nut against the 97149A370 hex nut to clamp the
+          assembly in place.
+
+          *Note: The configuration shown includes the check valve on the fill valve assembly, which
+          is only required if a purge valve for static testing is also included in the system.*
+        images:
+          - file: photos/gse-op-05/fill-valve-in-toolbox.jpg
+            caption: Fill valve assembly through the right face of the toolbox, gauge toward the front face.
+            source_page: 257
+
+      - title: Mount the fill line bulkhead assembly
+        source: { step: 2, page: 258 }
+        instructions: |
+          Remove the brass nut and toothed washer from the 50785K273 through-wall fitting on the
+          fill line bulkhead assembly and install into the 0.67 in hole on the left side of the
+          toolbox as shown. Re-install the nut and washer onto the threaded portion that projects
+          into the toolbox, and tighten to clamp the assembly in place.
+        images:
+          - file: photos/gse-op-05/fill-line-bulkhead-in-toolbox.jpg
+            caption: Fill line bulkhead assembly through the left face of the toolbox.
+            source_page: 258
+
+      - title: Install the fill tube
+        source: { step: 3, page: 259 }
+        instructions: |
+          Cut a section of 9685T3 tubing approximately 13.5 inches in length. Insert one end into
+          the 9396T32 push-to-connect fitting on the fill valve assembly, and the other end into
+          the fill line bulkhead assembly as shown. Some slack in the line will aid in installation;
+          it will not be perfectly straight as depicted in the CAD model.
+        images:
+          - file: photos/gse-op-05/fill-tube-installed.jpg
+            caption: Fill tube between the fill line bulkhead assembly and the fill valve assembly, side view.
+            source_page: 259
+
+      - title: Check for the purge valve
+        source: { step: 4, page: 260 }
+        instructions: |
+          The following steps are required ONLY if a purge valve is to be included in the system.
+          If only a fill valve is installed, proceed to the next operation.
+
+      - title: Mount the purge valve
+        source: { step: 5, page: 260 }
+        instructions: |
+          Install the purge valve into the second 0.75 in hole in the right face of the toolbox as
+          shown. The 97149A370 hex nut should contact the inner face of the toolbox, with the brass
+          nut and toothed washer on the outside, as on the fill valve assembly. Ensure the valve is
+          oriented vertically with the servo on top, then tighten the two nuts against one another
+          to clamp the assembly in place.
+        images:
+          - file: photos/gse-op-05/purge-valve-in-toolbox.jpg
+            caption: Purge valve beside the fill valve assembly in the right face of the toolbox.
+            source_page: 260
+
+      - title: Insert the tee
+        source: { step: 6, page: 261 }
+        instructions: |
+          Cut the 9685T3 fill tube approximately 4.5 inches from the fill valve assembly, and
+          insert QTY 1 push-to-connect tee as shown. If needed, a short section of tube may be
+          removed to reduce excess slack length.
+
+      - title: Install the purge tube
+        source: { step: 7, page: 261 }
+        instructions: |
+          Cut a section of 9685T3 tubing approximately 8 inches long. Insert one end into the
+          9396T32 fitting on the purge valve assembly, and the other end into the branch of the
+          push-to-connect tee as shown.
+        images:
+          - file: photos/gse-op-05/purge-tube-and-tee.jpg
+            caption: Purge tube from the purge valve assembly to the tee in the fill tube, side view.
+            source_page: 261
+
+  - title: Electrical System Integration
+    depends_on: [2]
+    source: { section: 'Section 6.3, OP 6', pages: 262-273 }
+    workcenter: BENCH
+    steps:
+      - title: Mount the receiver and relay module
+        source: { step: 1, page: 263 }
+        instructions: |
+          Mount the DTUS_FSI6X_10CH receiver and LCATMC1569 relay module onto the inside of the
+          back face of the toolbox as shown, using QTY 2 BRKT-EGSE-2X8C electronics mounting
+          brackets. Secure the mounting brackets and 090600AFA voltage regulator using QTY 6
+          90272A194 8-32 screws with 98689A113 flat washers, 92148A160 lock washers, and 90480A009
+          hex nuts.
+
+          *Note: M4 flat and lock washers are used with the #8 screws to reduce unique parts and
+          cost; these components are common with the Servo Actuated Ball Valve assemblies.
+          Additional flat washers may be placed under the heads of the screws if desired, but are
+          not required. The LCATMC1569 relay module may differ slightly in appearance from the CAD
+          model.*
+        images:
+          - file: photos/gse-op-06/receiver-relay-regulator.jpg
+            caption: Receiver, relay module and voltage regulator on the inside of the back face of the toolbox.
+            source_page: 263
+
+      - title: Fit the antenna cover
+        source: { step: 2, page: 264 }
+        instructions: |
+          Pass the DTUS_FSI6X_10CH receiver antennas through the indicated hole and lay them into
+          the slots in the CVR-ANT-2X8C antenna cover. Secure the antenna cover to the outer back
+          face of the toolbox using QTY 2 90272A194 8-32 screws with 98689A113 flat washers,
+          92148A160 lock washers, and 90480A009 hex nuts.
+        images:
+          - file: photos/gse-op-06/antenna-pass-through-hole.jpg
+            caption: Antenna pass-through hole beside the receiver bracket.
+            source_page: 264
+
+      - title: Install the eye bolts
+        source: { step: 3, page: 265 }
+        instructions: |
+          Install QTY 2 9489T519 eye bolts into the 1/4 in clearance holes in the back face of the
+          toolbox as shown, protruding inward with the eyes oriented vertically. Secure using the
+          included hex nuts and QTY 2 92141A029 flat washers, QTY 2 91102A750 lock washers, and
+          QTY 2 95505A601 nuts. These eye bolts will be used to secure the 12V battery on a later
+          step.
+        images:
+          - file: photos/gse-op-06/eye-bolts.jpg
+            caption: Two eye bolts in the back face of the toolbox, eyes vertical.
+            source_page: 265
+
+      - title: Install the power switch
+        source: { step: 4, page: 266 }
+        instructions: |
+          Install QTY 1 GSW-17 power switch with QTY 1 AZ18080602-03 toggle guard into the 1/2 in
+          hole on the right side of the toolbox as shown. Orient the power switch so that the
+          toggle is angled downward in the off position, when it is covered by the toggle guard.
+        images:
+          - file: photos/gse-op-06/power-switch-and-guard.jpg
+            caption: Power switch and toggle guard on the right side of the toolbox.
+            source_page: 266
+
+      - title: Break the outlet tab
+        source: { step: 5, page: 267 }
+        instructions: |
+          Using needle nose pliers, break off the small metal tab on the side of the 7159K3 outlet
+          that connects the two receptacles. This will electrically isolate the two receptacles
+          from one another.
+        images:
+          - file: photos/gse-op-06/outlet-tab.jpg
+            caption: Needle nose pliers on the tab at the side of the outlet.
+            source_page: 267
+
+      - title: Install the outlet
+        source: { step: 6, page: 268 }
+        instructions: |
+          Install QTY 1 7159K3 outlet onto the inner left face of the toolbox as shown, using QTY 4
+          90272A194 8-32 screws with 98689A113 flat washers, 92148A160 lock washers, and 90480A009
+          hex nuts.
+        images:
+          - file: photos/gse-op-06/outlet-on-left-face.jpg
+            caption: Outlet on the inner left face of the toolbox.
+            source_page: 268
+
+      - title: Install and label the wall plate
+        source: { step: 7, page: 269 }
+        instructions: |
+          Install the 7526K53 wall plate over the outlet using the included mounting screw (not
+          shown). Label the receptacles with "IGN" and "SRV" as shown to designate the igniter and
+          servo outputs.
+
+          *Alternatively, the CAD part model may be 3D printed with engraved text. A 6-32 x 1/2 in
+          screw is required for mounting the plate to the outlet.*
+        images:
+          - file: photos/gse-op-06/wall-plate.jpg
+            caption: Wall plate over the outlet, receptacles marked IGN and SRV.
+            source_page: 269
+
+      - title: Wire the Vehicle Valves cable
+        source: { step: 8, page: 270 }
+        instructions: |
+          Cut the female (larger) plug off of QTY 1 SRV-3PIN-1MXT servo extension cable and strip
+          approximately 0.5 in of each wire. Connect the wires to the screw terminals on the
+          receptacle closest to the front of the toolbox as shown (indicated by SRV). This will be
+          the Vehicle Valves cable which connects to the rocket.
+
+          - White wire: Connect to the screw terminal for the longer of the two slots
+          - Red wire: Connect to the screw terminal for the shorter of the two slots
+          - Black wire: Connect to the terminal for the ground pin (ensure the grounds of the two
+            receptacles are isolated by breaking off the tab on the side of the outlet, as
+            previously described).
+
+      - title: Connect the servo leads
+        source: { step: 9, page: 270 }
+        instructions: |
+          Connect the servo leads to the DTUS_FSI6X_10CH receiver as shown in the schematic below:
+
+          - Fill Valve to Ch5
+          - Vehicle Valves cable to Ch6
+          - Purge Valve to Ch8
+        images:
+          - file: photos/gse-op-06/wiring-schematic.png
+            caption: GSE wiring schematic.
+            source_page: 270
+
+      - title: Connect the relay module
+        source: { step: 10, page: 271 }
+        instructions: |
+          Connect the 3-pin cable from the LCATMC1569 relay module to Ch3 as shown in the
+          schematic.
+
+      - title: Wire the igniter circuit
+        source: { step: 11, page: 272 }
+        instructions: |
+          Using the 20GA stranded wire, connect the power switch, voltage regulator, and relay
+          module as shown in the schematic. The 12V positive wire from the relay module should be
+          connected to the screw terminal for the longer of the two slots and the battery ground
+          should be connected to the screw terminal for the shorter slot on the second receptacle.
+          This will be used to supply power to the igniter.
+
+      - title: Wire the receiver power
+        source: { step: 12, page: 272 }
+        instructions: |
+          Cut off the male (smaller) plug from QTY 1 SRV-3PIN-1MXT servo extension cable and strip
+          approximately 0.5 in of the red and black wires. The white wire will not be used. Splice
+          the red wire to the positive 5V output (yellow wire) from the 090600AFA voltage
+          regulator, and the black wire to the negative (black) 5V output. Splices should be
+          tightly twisted and insulated with electrical tape or heat shrink tubing. Soldering the
+          splices is recommended but not required; crimp-on ring terminals connected with a screw
+          may also be used if desired for greater modularity. Connect the 3-pin plug from the
+          voltage regulator to Ch1/PPM on the DTUS_FSI6X_10CH receiver. This will provide power to
+          the receiver and servos.
+        callouts:
+          - caution: Do not connect to the battery until all wiring is complete.
+
+      - title: Secure the battery
+        source: { step: 13, page: 273 }
+        instructions: |
+          Place the battery between the two eye bolts and secure with 2-3 nylon zip ties, looped
+          through the eyes and across the front of the battery.
+
+      - title: Connect the battery
+        source: { step: 14, page: 273 }
+        instructions: |
+          With the power switch in the off position, connect the wires to the battery terminals as
+          shown in the schematic.
+
+      - title: Bundle the wires
+        source: { step: 15, page: 273 }
+        instructions: |
+          Bundle wires together and onto fill line tubing for tidiness and strain relief as needed,
+          using zip ties and/or electrical tape.
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - >-
+    Guidebook OP 4, OP 5 and OP 6 are three operations of one build here, because each works on
+    the same toolbox.
+  - Step titles are new. The guidebook's steps have none.
+  - The kit combines the OP 4 (p. 251), OP 5 (p. 256) and OP 6 (p. 262) parts lists.
+  - >-
+    9685T3 nylon tubing, listed in OP 5 "As Needed", is in the tools line, not the kit.
+  - >-
+    The purge valve (purge system) and the push-to-connect tee, used only in the optional steps
+    2.5-2.7, are not in the kit.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps. Ground equipment has no Required Tools list.
+  - >-
+    The OP 4 parts list note "Refer to the images below for the context of each hole created on
+    this operation." is in the description, reworded to point to the operation's images.
+  - >-
+    Step 2.3: the part number printed in the step is replaced by the number from the parts list.
+    Steps 2.6 and 2.7: the tee's printed number, 9396T61, is replaced by its name, push-to-connect
+    tee.
+  - 'Steps 2.1 and 2.5: "0.75”" is written "0.75 in".'
+  - 'Step 2.2: "into 0.67” the hole" is written "into the 0.67 in hole".'
+  - Operation 2 depends on operation 1.
+  - Image captions are new.
+  - >-
+    Guidebook Section 6.3 OP 6 is the third operation of the GSE System build here; it follows OP 4
+    and OP 5 and depends on operation 2. Its step n is numbered 3.n.
+  - >-
+    The tools line is compiled from the steps only; the guidebook has no Required Tools list for
+    the ground equipment. "Wire cutters and strippers" and "means to label" are named for the
+    cutting, stripping and labelling the steps ask for.
+  - >-
+    20GA-RBP 20 gauge stranded wire, listed "As needed" in the parts list (p. 262), is in the tools
+    line, not the kit. Electrical tape and heat shrink tubing, which the steps name with no
+    quantity, and solder for the soldering step 12 recommends, are in the tools line too.
+  - >-
+    The part numbers printed in the steps are replaced by the keys of the parts file: FS-iA10B by
+    DTUS_FSI6X_10CH, DROK-12V-5V by 090600AFA, PWM-RLY-30A by LCATMC1569, 9027A194 by 90272A194,
+    GSW-17-SPST by GSW-17, TGL-GRD-12MM by AZ18080602-03, 7159K91 by 7159K3 and SRV-3PIN-1M by
+    SRV-3PIN-1MXT. The parts list's PWM-RLY-10A and ZIP-TIE-188W are LCATMC1569
+    and nylon-zip-tie in the kit.
+  - >-
+    The FS-iA10B is called the receiver throughout. Steps 2 and 12 print the part number alone
+    ("the FS-iA10B antennas", "on the FS-iA10B"); "receiver" is added there.
+  - >-
+    The PWM-controlled relay module is called the relay module throughout. Step 10 calls it the
+    PWM-controlled relay module, step 11 also the relay, and the note in step 1 the module.
+  - >-
+    The GSW-17 switch is called the power switch throughout, as in steps 11 and 14. Step 4 calls it
+    the toggle switch and the switch.
+  - >-
+    Step 4: the toggle switch guard is named "toggle guard", as later in the same step. The step
+    prints the part number with no noun.
+  - >-
+    The 7159K3 duplex device is called the outlet throughout, and each of its two halves a
+    receptacle. The guidebook also calls the device the electrical outlet (step 6) and the
+    receptacle (step 7 note, step 8), and the halves the plugs (steps 5 and 8), the outlets (step
+    7), the electrical receptacle (step 8) and the second electrical outlet (step 11).
+  - 'Step 9: "Vehicle Valves servo extension" is written "Vehicle Valves cable", the name step 8 gives it.'
+  - 'Step 3: "protecting inward" is written "protruding inward".'
+  - >-
+    Units: "1/4"" (step 3), "½”" (step 4), "1/2”" (step 7) and "0.5”" (steps 8 and 12) are written
+    with "in".
+  - 'Step 8: "Red Wire" is written "Red wire".'
+  - >-
+    Step 12: the note "DO NOT connect to the battery until all wiring is complete." is set apart as
+    a caution, in sentence case.
+  - >-
+    The wiring schematic is printed on pp. 270, 271 and 272 (and as Figure 6.1, p. 236). It is the
+    same picture each time and is used once here, on step 3.9, the first step that refers to it.
+    Steps 3.10, 3.11, 3.12 and 3.14 refer to it.
+  - The operation has no title-page drawing in the guidebook, so it has no operation image.

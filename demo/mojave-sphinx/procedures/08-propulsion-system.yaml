@@ -1,0 +1,220 @@
+# Thrust Structure & Feedline Integration
+#
+# Adapted from HCR-5100 R01, Section V, OP 9: Thrust Structure & Feedline Integration
+# (pp. 196-204).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: propulsion-system
+name: Thrust Structure & Feedline Integration
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 9: Thrust Structure & Feedline Integration'
+  pages: 196-204
+
+description: |
+  Connect the fin bracket assemblies to the thrust chamber, fasten them to the propellant tank
+  assembly, install the oxidizer and fuel hoses, and connect the valve servo leads.
+
+  Tools: wrenches and hex keys, zip ties or tape, electrical
+  tape.
+
+output:
+  part: propulsion-system
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 197).
+kit:
+  - part: thrust-chamber-assembly
+    quantity: 1
+  - part: propellant-tank-assembly
+    quantity: 1
+  - part: fin-bracket-assembly
+    quantity: 4
+  - part: SPCR-400SD-250C0313C
+    quantity: 4
+  - part: '91306A279'
+    quantity: 8
+  - part: '91255A839'
+    quantity: 4
+  - part: '92141A029'
+    quantity: 32
+  - part: '91102A750'
+    quantity: 16
+  - part: '95505A601'
+    quantity: 16
+  - part: '4468K031'
+    quantity: 1
+  - part: '4468K865'
+    quantity: 1
+  - part: SRV-Y-HRNS
+    quantity: 1
+  - part: SRV-3PIN-1MXT
+    quantity: 1
+
+operations:
+  - title: Thrust Structure & Feedline Integration
+    source: { section: 'Section V, OP 9', pages: 196-204 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-09/thrust-structure-and-feedlines.png
+        caption: Thrust structure and feedlines on the tank assembly.
+        source_page: 196
+    steps:
+      - title: Connect the upper brackets
+        source: { step: 1, page: 199 }
+        instructions: |
+          Connect the QTY 4 fin bracket assemblies to the thrust chamber brackets as
+          shown. Use QTY 1 91306A279 screw with QTY 2 92141A029 flat washers, QTY 1 91102A750 lock
+          washer, and QTY 1 95505A601 hex nut at each of the upper thrust chamber brackets.
+        images:
+          - file: photos/op-09/fin-brackets-to-thrust-chamber-brackets.jpg
+            caption: >-
+              Fin bracket assemblies on the thrust chamber brackets, with two inset views of the
+              bracket hardware.
+            source_page: 198
+
+      - title: Connect the lower brackets
+        source: { step: 2, page: 199 }
+        instructions: |
+          On the lower thrust chamber brackets, stack QTY 1 91102A750 lock washer followed by QTY 4
+          92141A029 flat washers under the head of the screw, then insert the screw through aligned
+          holes in the aluminum angle fin bracket and the thrust chamber bracket. Place an
+          additional QTY 1 92141A029 flat washer onto the screw on the back side of the thrust
+          chamber bracket, then secure with QTY 1 95505A601 hex nut.
+
+      - title: Connect hose to oxidizer valve
+        source: { step: 3, page: 201 }
+        instructions: |
+          Connect one end of QTY 1 4468K865 hose to the outlet fitting on the oxidizer valve.
+          Tighten to wrench tight (approx. 250-300 in-lbf).
+
+          *Note: Be sure to back up the oxidizer valve outlet fitting to prevent torquing the valve
+          assembly itself.*
+
+      - title: Align the thrust chamber
+        source: { step: 4, page: 201 }
+        instructions: |
+          Align the thrust chamber and fin brackets relative to the tank assembly as shown; the
+          fuel inlet fitting on the injector should be on the same side as the fuel line downcomer
+          previously installed on the tank assembly.
+        images:
+          - file: photos/op-09/chamber-fittings-and-oxidizer-valve-side.jpg
+            caption: Thrust chamber aligned to the tank assembly, with the printed note.
+            source_page: 200
+          - file: photos/op-09/chamber-fittings-and-oxidizer-valve-oblique.jpg
+            caption: Thrust chamber aligned to the tank assembly, oblique view.
+            source_page: 200
+
+      - title: Insert the spacers
+        source: { step: 5, page: 201 }
+        instructions: |
+          Align the holes in the fin brackets with the corresponding 5/16" and 1/4" holes in the
+          tank and interface ring, then slide QTY 1 SPCR-400SD-250C0313C spacer between the fin
+          bracket and tank.
+
+      - title: Screw the fin brackets on
+        source: { step: 6, page: 201 }
+        instructions: |
+          As each spacer is inserted, install QTY 1 91306A279 screw with QTY 1 92141A029 flat
+          washer into each of the 1/4" holes, and QTY 1 91255A839 screw into each of the 5/16"
+          holes. Thread the screws into the nuts captured in the nut retaining ring, and tighten
+          all 4X 91306A279 and 4X 91255A839 screws to snug.
+        callouts:
+          - caution: Excessive torque may damage the printed nut retaining ring.
+        images:
+          - file: photos/op-09/spacer-and-screws-section.jpg
+            caption: Spacer, screws and flat washer between fin bracket and tank, section view.
+            source_page: 202
+
+      - title: Connect oxidizer hose to injector
+        source: { step: 7, page: 203 }
+        instructions: |
+          Connect the free end of the 4468K865 hose to the oxidizer inlet fitting on the injector.
+          Torque to moderately tight (approx. 250-300 in-lbf).
+
+          *Route the hose approximately as shown, forming a loose spiral to take up the excess
+          length.*
+        images:
+          - file: photos/op-09/oxidizer-line-routing.jpg
+            caption: Oxidizer hose routed from the oxidizer valve to the injector.
+            source_page: 203
+
+      - title: Connect hose to fuel line downcomer
+        source: { step: 8, page: 204 }
+        instructions: |
+          Connect one end of QTY 1 4468K031 hose to the union fitting on the fuel line downcomer
+          installed on the tank assembly. Torque to wrench tight (approximately 100-150 in-lbf).
+
+      - title: Connect fuel hose to injector
+        source: { step: 9, page: 204 }
+        instructions: |
+          Connect the other end of QTY 1 4468K031 hose to the fuel inlet fitting on the injector.
+          Torque to wrench tight (approximately 100-150 in-lbf).
+
+          *Route approximately as shown, tucking behind the oxidizer hose.*
+        images:
+          - file: photos/op-09/fuel-line-routing.jpg
+            caption: Fuel hose routed behind the oxidizer hose to the injector.
+            source_page: 204
+
+      - title: Connect the servo leads
+        source: { step: 10, page: 204 }
+        instructions: |
+          Once the feedlines are fully installed, plug the fuel valve servo lead into the female end
+          of the SRV-3PIN-1MXT servo extension cable. Route the servo extension cable down the side of the
+          tank alongside the fuel line downcomer, securing it to the fuel hose with 3-4 zip ties or loops of
+          tape. Plug the other end of the servo extension cable and the oxidizer valve servo lead into the
+          SRV-Y-HRNS servo Y-harness. Secure all connections using electrical tape to prevent them
+          from being accidentally unplugged during handling. Bundle up any excess wire length and
+          secure to one of the thrust structure brackets using tape and/or zip ties, with the male
+          end of the Y-harness free.
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - >-
+    Zip ties, tape and electrical tape, named in step 10 but not in the parts list (p. 197), are in
+    the tools line, not the kit.
+  - >-
+    Step 1: "Fin Subassemblies" is written "fin bracket assemblies", the name in the parts list
+    (p. 197).
+  - 'Step 6: "washer" is written "flat washer", as in steps 1 and 2.'
+  - >-
+    Steps 1 and 2: "thrust chamber mounting bracket(s)" is written "thrust chamber bracket(s)",
+    the form the two steps use most.
+  - 'Step 4: "installed on the tank" is written "installed on the tank assembly", as earlier in the step.'
+  - >-
+    The 4468K865 and 4468K031 hoses are called hoses throughout. The notes in steps 7 and 9 call the
+    4468K865 the line and the oxidizer line.
+  - 'Step 10: "fuel downcomer" is written "fuel line downcomer", as in steps 4 and 8.'
+  - >-
+    Step 10: "the extension" and "the servo extension" are written "the servo extension cable".
+  - >-
+    Step 5: the spacer number printed in the step is replaced by the number from the parts list.
+  - 'Step 6: the caution that warns of damage is set apart as a callout.'
+  - >-
+    The sentences "Reference the images below for the following steps on this operation." (pp. 198,
+    200) and "Reference the image below for the following step on this operation." (p. 202) are
+    left out. Each of those pictures is placed on a step instead.
+  - >-
+    The picture on p. 198 is placed on step 1, which refers to it ("as shown"). Its green inset
+    shows the lower bracket of step 2.
+  - >-
+    The two pictures on p. 200 are placed on step 4, which refers to them ("as shown"). The printed
+    note "Note orientation of thrust chamber/injector fittings relative to oxidizer valve." is part
+    of the first picture and is kept there.
+  - >-
+    The picture on p. 202 is placed on step 6. It shows the spacer, screws and flat washer of steps
+    5 and 6.
+  - >-
+    The picture printed under step 10 (p. 204) is placed on step 9, which refers to it ("Route
+    approximately as shown"). It shows the hose routing and no servo wiring.
+  - Image captions are new.

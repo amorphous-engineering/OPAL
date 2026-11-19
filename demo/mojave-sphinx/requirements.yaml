@@ -1,0 +1,419 @@
+# Requirements.
+#
+# `quoted_from` marks a statement taken word for word from the guidebook. Where the guidebook's
+# sentence carries a reason or a permission as well as the requirement, the statement keeps the
+# requirement and the rationale quotes the rest. A requirement without `quoted_from` was written
+# for this demo.
+#
+# OPAL will not baseline a statement with two "shall" clauses. Where the guidebook's sentence has
+# two, the statement stops at the first and the rationale quotes the second, or the second is its
+# own requirement.
+#
+# Adapted from HCR-5100 R01. Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See README.md.
+
+requirements:
+  - key: tank-construction
+    title: Propellant tank construction
+    category: Propellant tank
+    statement: >-
+      The Propellant Tank shall be made from aluminum alloy round tube (recommended) or pipe, with
+      bulkheads at each end radially sealed with elastomeric O-rings and retained by radial
+      fasteners.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 6). The guidebook's
+      answer to where tanks come from is "simply to make them, as the resulting product will be
+      lighter, cheaper, and easier to use than a commercially manufactured pressure vessel" (p. 7).
+    verification: inspection
+    allocations:
+      - part: propellant-tank-assembly
+
+  - key: tank-fasteners
+    parent: tank-construction
+    title: Tank closure fasteners
+    category: Propellant tank
+    statement: >-
+      Radial fasteners shall pass through clearance holes in the tank wall and through the
+      retaining ring.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 6). The sentence goes on:
+      "and may be secured either with nuts placed on the inner diameter of the retaining ring
+      (recommended) or by threading into tapped holes in the retaining ring itself."
+
+      Each retaining ring holds in its bulkhead and transfers the pressure load into the casing
+      wall through screws loaded in shear (Section 2.3.2, p. 46).
+    verification: inspection
+    allocations:
+      - part: TANK-36L-047V-2X8X313C
+
+  - key: static-vent
+    parent: tank-construction
+    title: Oxidizer tank static vent
+    category: Propellant tank
+    statement: >-
+      The oxidizer tank shall always have a static pressure vent drawing fluid from the forward
+      end of the oxidizer tank.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 6). The vent lets air
+      and nitrous oxide gas escape so that liquid can fill the tank, and it means there is always
+      a way for nitrous oxide to boil out and depressurize the tank (p. 7).
+
+      The standard allows "a hole drilled directly in the side of the oxidizer tank", which is
+      what Mojave Sphinx has.
+    verification: inspection
+    allocations:
+      - part: TANK-36L-047V-2X8X313C
+
+  - key: ullage
+    parent: tank-construction
+    title: Oxidizer tank ullage
+    category: Propellant tank
+    statement: The oxidizer tank shall include a minimum of 5% ullage volume.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 7)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 7). The sentence goes on:
+      "in case of sudden, rapid heating."
+
+      In a stacked tank the ullage is formed "by a set distance between the level of the static
+      vent (or siphon tube) and the oxidizer side of the piston".
+    verification: analysis
+    allocations:
+      - part: TANK-36L-047V-2X8X313C
+        notes: >-
+          The vent position (14.25 in, OP 2 step 6) and the piston position (OP 6 step 4) set the
+          ullage. No ullage calculation is on file.
+
+  # Written for this demo. The guidebook states a target, not a requirement.
+  - key: closure-margin
+    title: Tank closure margin
+    category: Propellant tank
+    parent: tank-fasteners
+    statement: >-
+      Each tank closure joint shall have a yield margin of safety of at least 0.3 at the maximum
+      expected tank pressure.
+    rationale: |
+      Written by this team. HCR-5100 Section 2.4 (p. 70) says "Margins of at least 0.3 are
+      targeted so that any inaccuracies in analysis, imperfections in manufacturing, or variations
+      in material properties can be comfortably ignored". Section 2.4.4 (p. 72) analyses the tank
+      at 1000 psi. The guidebook gives the 0.3 as a target. Whether 0.3 should bind this build is still open.
+    verification: analysis
+    tbr:
+      owner: build
+      due: '2026-08-06T00:00:00Z'
+    allocations:
+      - part: TANK-36L-047V-2X8X313C
+        notes: >-
+          Sections 2.4.3 and 2.4.4 (p. 72) work out bolt tear-out and casing tensile stress with a
+          0.328 in bolt hole. OP 2 step 3 drills 11/32 in. The margins have not been worked out
+          for the drilled size.
+
+  - key: bulkhead-retention
+    title: Bulkhead retaining rings
+    category: Propellant tank
+    parent: tank-construction
+    statement: >-
+      The bulkheads shall be supported against internal pressure by a retaining ring, which may be
+      a separate piece (recommended) or integral to the bulkhead.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 6). On Mojave Sphinx the
+      rings are separate pieces: the interface ring and the nut retaining ring.
+    verification: inspection
+    allocations:
+      - part: fuel-bulkhead-subassembly
+      - part: oxidizer-bulkhead-subassembly
+
+  - key: vent-path
+    title: Static vent path
+    category: Propellant tank
+    parent: static-vent
+    statement: >-
+      The internal fluid path from oxidizer tank to static vent shall never be impeded by valves,
+      seals, or other obstructions.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 6). "Since the static
+      vent is quite literally a hole in the tank, it can never fail into a condition where
+      pressure gets trapped in the system" (p. 7).
+    verification: inspection
+    allocations:
+      - part: propellant-tank-assembly
+
+  - key: piston
+    title: Propellant piston
+    category: Propellant tank
+    parent: tank-construction
+    statement: >-
+      The fuel and oxidizer shall be separated by a piston, which is free to slide inside the tank
+      in order to expel the fuel using the pressure applied by the oxidizer vapor.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 7)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 7). The pressurization
+      scheme is "an entirely passive byproduct of the physical design": no pressurant gas.
+    verification: demonstration
+    allocations:
+      - part: propellant-tank-assembly
+
+  - key: piston-length
+    title: Piston length
+    category: Propellant tank
+    parent: piston
+    statement: >-
+      The length of the piston shall be not less than one half of the inner diameter of the tube
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 7)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 7). The sentence goes on:
+      ", and shall include a minimum of two elastomer seals between the fuel and oxidizer." That
+      clause is the next requirement.
+    verification: inspection
+    allocations:
+      - part: PSTN-2XO238-250T20
+
+  - key: piston-seals
+    title: Piston seals
+    category: Propellant tank
+    parent: piston
+    statement: >-
+      [The piston] shall include a minimum of two elastomer seals between the fuel and oxidizer.
+    quoted_from: 'HCR-5100 R01, Section 1.3.2 (p. 7). The subject in brackets is supplied.'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.2 (p. 7), the second clause of
+      the sentence quoted in the requirement before this one. The standard goes on to rule out
+      non-elastomer seals on propellant pistons.
+    verification: inspection
+    allocations:
+      - part: PSTN-2XO238-250T20
+
+  - key: oxidizer
+    title: Oxidizer
+    category: Propellants
+    statement: >-
+      The oxidizer shall be nitrous oxide that is loaded, stored, and utilized in a saturated
+      liquid condition.
+    quoted_from: 'HCR-5100 R01, Section 1.3.1 (p. 6). "(N2O)" after "nitrous oxide" is left out.'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.1 (p. 6). Nitrous oxide is
+      storable and self-pressurizes at normal temperatures, which is what lets the design do
+      without a pressurant gas.
+    verification: inspection
+    allocations:
+      - part: mojave-sphinx
+
+  - key: remote-fill
+    title: Remote oxidizer fill
+    category: Propellants
+    parent: oxidizer
+    statement: >-
+      Oxidizer shall only be loaded into the rocket's propellant tank through a remotely operated
+      valve, when all personnel are at a safe distance.
+    quoted_from: 'HCR-5100 R01, Section 1.3.1 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.1 (p. 6). Fittings and tubing
+      on these rockets are often not rated to the pressures saturated nitrous oxide can reach.
+      The guidebook accepts that "so long as they are pressurized only when personnel are at a
+      safe distance from the system" (p. 13).
+    verification: demonstration
+    allocations:
+      - part: fill-valve-assembly
+      - part: gse-system
+
+  - key: fuel
+    title: Fuel
+    category: Propellants
+    statement: >-
+      The fuel shall be any non-toxic alcohol, ketone, or hydrocarbon which is a free-flowing
+      flammable liquid at atmospheric pressure and temperature.
+    quoted_from: 'HCR-5100 R01, Section 1.3.1 (p. 6)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.1 (p. 6). The standard allows
+      "a maximum of 15% (nominally) by mass of gasoline, any amount of dissolved non-toxic solid
+      additives, and up to 30% of water as dilutant."
+    verification: inspection
+    allocations:
+      - part: mojave-sphinx
+
+  - key: chamber-material
+    title: Combustion chamber material
+    category: Thrust chamber
+    statement: The combustion chamber shall be made from aluminum or copper.
+    quoted_from: 'HCR-5100 R01, Section 1.3.3 (p. 9)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.3 (p. 9). The chamber is a
+      heatsink: "not cooled in any way; rather, it is intended to absorb heat for a limited amount
+      of time."
+    verification: inspection
+    allocations:
+      - part: CMBR-200DI-250B-5375L
+
+  - key: chamber-retention
+    title: Thrust chamber retention
+    category: Thrust chamber
+    statement: >-
+      The injector, nozzle, and combustion chamber shall be retained against internal pressure by
+      either A) retaining rings or B) flange plates.
+    quoted_from: 'HCR-5100 R01, Section 1.3.3 (p. 9)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.3 (p. 9). Mojave Sphinx uses
+      B, flange plates on axial rods.
+    verification: inspection
+    allocations:
+      - part: thrust-chamber-assembly
+
+  - key: igniter
+    title: Igniter
+    category: Thrust chamber
+    statement: >-
+      The igniter cartridge shall contain solid propellant which is started by an electronic
+      initiator that is triggered by a ground-side ignition command.
+    quoted_from: 'HCR-5100 R01, Section 1.3.3 (p. 9)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.3 (p. 9).
+    verification: demonstration
+    allocations:
+      - part: thrust-chamber-assembly
+      - part: gse-ignition-cable
+
+  - key: main-valves
+    title: Main propellant valves
+    category: Fluid system
+    statement: >-
+      The flow of oxidizer and fuel from the Propellant Tank to the Thrust Chamber Assembly shall
+      be controlled by a main oxidizer valve and a main fuel valve.
+    quoted_from: 'HCR-5100 R01, Section 1.3.4 (p. 12)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.4 (p. 12). Each is "either A) a
+      servo-actuated ball valve (recommended) or B) a Half Cat style pneumatic poppet valve."
+      Mojave Sphinx uses A.
+    verification: inspection
+    allocations:
+      - part: propulsion-system
+
+  # The team could not tell from the standard whether the printed handle connector counts.
+  - key: valve-coupling
+    title: Valve shaft couplings
+    category: Fluid system
+    parent: main-valves
+    statement: Shaft couplings and gears shall not be 3D printed in plastic.
+    quoted_from: 'HCR-5100 R01, Section 1.3.4 (p. 12)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.4 (p. 12). The same paragraph
+      says the servo mechanism and ball valve "may be directly connected by fastening the handles
+      (recommended), by a coupling between the shafts, or by gears."
+
+      The valve in this build joins the handles with a printed part, the Servo Valve Handle
+      Connector. The team reads that as fastening the handles, which the standard recommends, and
+      not as a shaft coupling. The reading has not been confirmed with Half Cat Rocketry.
+    verification: inspection
+    tbr:
+      owner: test
+      due: '2026-11-28T00:00:00Z'
+    allocations:
+      - part: SABV-04FF
+
+  - key: feed-lines
+    title: Feed lines
+    category: Fluid system
+    statement: >-
+      Oxidizer and fuel shall flow from the Propellant Tank to the Thrust Chamber Assembly through
+      either flexible stainless steel-braided PTFE hose or flexible nylon tubing rated to a
+      minimum of 500 psi.
+    quoted_from: 'HCR-5100 R01, Section 1.3.4 (p. 12)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.4 (p. 12). "Due to the
+      imprecise nature of the rocket and its components, the tubes (also called feed lines)
+      connecting each part must be flexible."
+    verification: inspection
+    allocations:
+      - part: propulsion-system
+
+  - key: quick-disconnect
+    title: Fill line quick disconnect
+    category: Fluid system
+    statement: >-
+      Oxidizer shall flow from the Ground Support Equipment to the Propellant Tank through a
+      Flange-Clip Quick Disconnect
+    quoted_from: 'HCR-5100 R01, Section 1.3.4 (p. 13)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.4 (p. 13). The sentence goes
+      on: ", which shall consist of a male fitting, female fitting, and clip." The quick disconnect
+      lets the fill line separate at liftoff, "preventing damage to the rocket and ground system
+      that can result from a still-connected line being pulled taut and breaking under thrust
+      load."
+    verification: demonstration
+    allocations:
+      - part: QDC-750x125FLG-281FB-8NPT
+      - part: QDC-750x125FLG-270MB-O007
+
+  - key: thrust-structure
+    title: Thrust structure
+    category: Interfaces
+    statement: >-
+      The Thrust Chamber Assembly shall be connected to the Propellant Tank by a Thrust Structure
+      composed of no fewer than three rigid members, fabricated from aluminum angle, T-bar, square
+      or rectangular tube, U-channel, or similar extruded profile.
+    quoted_from: 'HCR-5100 R01, Section 1.3.5 (p. 15)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.5 (p. 15). Mojave Sphinx has
+      four members, the fin brackets, each a piece of aluminum angle.
+    verification: inspection
+    allocations:
+      - part: propulsion-system
+
+  - key: thrust-structure-fasteners
+    title: Thrust structure fasteners
+    category: Interfaces
+    parent: thrust-structure
+    statement: >-
+      Fasteners which apply axial preload shall be used for these connections, such as
+      screws/bolts (recommended) or rivets
+    quoted_from: 'HCR-5100 R01, Section 1.3.5 (p. 15)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.5 (p. 15). The sentence goes
+      on: "; pins shall not be used." "These connections"
+      are the two points at each end where a member is fastened to the Propellant Tank and to the
+      Thrust Chamber Assembly.
+    verification: inspection
+    allocations:
+      - part: propulsion-system
+
+  - key: fin-attachment
+    title: Fin attachment
+    category: Interfaces
+    parent: thrust-structure
+    statement: >-
+      Fins shall be fastened to the rigid members comprising the Thrust Structure by screws/bolts
+      (recommended) or rivets.
+    quoted_from: 'HCR-5100 R01, Section 1.3.5 (p. 15)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.5 (p. 15). Bolted fins "can be
+      rapidly swapped out for a different design, or a backup spare in case of damage."
+    verification: inspection
+    allocations:
+      - part: fin-bracket-assembly
+
+  # Quoted as the standard has it, and left in draft: see the rationale.
+  - key: recovery-anchor
+    title: Recovery harness anchor
+    category: Interfaces
+    statement: >-
+      The Recovery Harness and/or any components in the primary load path of parachute deployment
+      shock shall not be anchored solely to the Airframe, and shall not be anchored solely or
+      primarily with adhesive.
+    quoted_from: 'HCR-5100 R01, Section 1.3.5 (p. 15)'
+    rationale: |
+      Half Cat standard liquid rocket design, HCR-5100 Section 1.3.5 (p. 15). The paragraph before
+      it has the harness "anchored either directly or indirectly to the forward Propellant Tank
+      bulkhead by means of fasteners that are either threaded into or pass through the bulkhead,
+      without permitting leakage of propellant."
+
+      Not baselined. As quoted it has two "shall" clauses and an "and/or", and OPAL will not
+      baseline either. The team has to say which parts of this vehicle's harness the statement
+      binds before it can be checked against anything.
+    verification: inspection
+    tbr:
+      owner: build
+      due: '2026-11-28T00:00:00Z'
+    allocations:
+      - part: mojave-sphinx

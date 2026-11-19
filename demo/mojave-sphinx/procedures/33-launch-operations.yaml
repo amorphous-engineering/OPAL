@@ -1,0 +1,996 @@
+# Launch Operations
+#
+# Adapted from HCR-5100 R01, Section VII: 7.3 Launchpad Operations, 7.4 Launch Procedure,
+# 7.5 Launchpad Shutdown and 7.6 Recovery (pp. 301-312).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: launch-operations
+name: Launch Operations
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: op
+source:
+  document: HCR-5100 R01
+  section: 'Section VII, 7.3 to 7.6'
+  pages: 301-312
+
+description: |
+  One launch attempt, from loading the vehicle on the rail to carrying it back from the range.
+
+  Launching Mojave Sphinx is best done with a two-person team, a Director and an Operator. If
+  necessary, one person can perform both roles to launch the rocket solo. More than two people are
+  not required, and any additional team members should not be involved in the fill and launch
+  operation; this may hamper clear and concise communication between the Director and Operator,
+  or with the Launch Control Officer (LCO) and Range Safety Officer (RSO).
+
+  Tools and materials: masking tape, electrical tape, tape or zip ties for the servo cable, a
+  time counter (a phone video will do), cameras, a wrench for the fill line fitting.
+
+operations:
+  # Not in the guidebook: the record of which launch this is and which hardware it used.
+  - title: Launch Record
+    instructions: |
+      Fill this in before the vehicle leaves the prep area.
+    signoffs: []
+    data:
+      - name: launch_number
+        label: Launch number
+        type: text
+        required: true
+      - name: site
+        label: Site
+        type: text
+        required: true
+      - name: crew
+        label: Crew present
+        type: textarea
+      - name: ambient
+        label: Ambient temperature
+        type: number
+        unit: degf
+    units:
+      - key: vehicle
+        label: Vehicle
+        part: mojave-sphinx
+        required: true
+      - key: gse
+        label: Ground equipment
+        part: gse-system
+
+  - title: Rail Loading
+    depends_on: [1]
+    source: { section: '7.3.1', pages: 301 }
+    workcenter: PAD
+    instructions: |
+      The on-pad setup of Mojave Sphinx is similar to any other high-power rocket, with the
+      exception of the oxidizer fill and vehicle valve connections. As with any amateur rocket,
+      arming the vehicle is a hazardous operation and should not be performed until the launchpad
+      is cleared of personnel who are not directly involved in the operation.
+    steps:
+      - title: 'Carry the fully packed and integrated vehicle to the launchpad.'
+        source: { step: 1, page: 301 }
+
+      - title: 'If the launch rail is not already lowered, lower it to a horizontal position.'
+        source: { step: 2, page: 301 }
+
+      - title: 'Load Mojave Sphinx onto the launch rail, as in steps 2.4 to 2.6.'
+        source: { step: 3, page: 301 }
+
+      - title: Engage the lower rail guide
+        source: { step: 4, page: 301 }
+        instructions: |
+          Slide the lower rail guide into the rail slot. Maintain the vehicle in an orientation
+          colinear with the rail.
+        callouts:
+          - caution: Excess torquing of the rail guide may cause damage to the guide, launch rail, or both.
+
+      - title: Engage the upper rail guide
+        source: { step: 5, page: 301 }
+        instructions: |
+          Guide the vehicle down the rail until the upper rail guide slides into the rail slot. At
+          this point the rail guides are able to support the full weight of the vehicle.
+
+      - title: Slide the vehicle to the rail stop
+        source: { step: 6, page: 301 }
+        instructions: |
+          Slide the vehicle fully down the rail until it bottoms out on the rail stop. If there is
+          no rail stop, a block of wood or similar may be used to stand the nozzle off from the
+          blast deflector.
+
+      - title: Raise the launch rail
+        source: { step: 7, page: 301 }
+        instructions: |
+          Raise the launch rail to a vertical position and lock its position if it has a locking
+          feature. If the rail is angled, ensure that it is pointing away from the flight line. A
+          launch angle of 2-5 degrees downrange is recommended.
+        data:
+          # 2-5 degrees is a recommendation, so it is in the label and nothing is checked.
+          - name: launch_angle
+            label: Launch angle, downrange (2-5 degrees recommended)
+            type: number
+            unit: deg
+
+      - title: 'Plug the male end of the quick disconnect (on the GSE side) into the female end (on the vehicle side).'
+        source: { step: 8, page: 301 }
+
+      - title: Fit the QD clip
+        source: { step: 9, page: 301 }
+        instructions: |
+          Slide the QD clip over the mated quick disconnect, with the tether side facing toward
+          the ground and the opening facing upwards. If the clip will not stay in place on its
+          own, a 1/4 to 1/2 in wide strip of masking tape placed over the clip's opening may be
+          used to hold it in place without affecting its ability to separate.
+
+      - title: Tie the clip tether
+        source: { step: 10, page: 301 }
+        instructions: |
+          Tie the clip tether to the launchpad or other secure object. The tether should ideally
+          be slightly taut or have minimal slack such that the clip will be disengaged within the
+          first 2-3 inches of the rocket's motion.
+
+      - title: Plug in the servo cable
+        source: { step: 11, page: 301 }
+        instructions: |
+          Plug the 3-pin servo cable into the vehicle valve servo wire, observing that all wire
+          colors match. Some 3-pin cables may have a different wire color scheme:
+
+          - WHITE = YELLOW
+          - RED = RED
+          - BLACK = BROWN
+
+      - title: Secure the servo cable
+        source: { step: 12, page: 301 }
+        instructions: |
+          Tape, tie, or zip-tie the servo cable to the launchpad or other secure object so that it
+          will be unplugged from the Y-harness connector on the vehicle when the vehicle departs
+          the rail.
+
+  - title: GSE Startup and Checkouts
+    depends_on: [2]
+    source: { section: '7.3.2', pages: 302 }
+    workcenter: PAD
+    steps:
+      - title: Boot the transmitter
+        source: { step: 1, page: 302 }
+        instructions: |
+          Flip all switches on the transmitter to the UP position, ensure the LEFT stick is fully
+          DOWN and slide the transmitter power switch to ON.
+        callouts:
+          - caution: The transmitter must be booted up before supplying power to the GSE.
+
+      - title: 'After the transmitter has booted up, flip all switches to the DOWN position and close the switch covers.'
+        source: { step: 2, page: 302 }
+
+      - title: 'Flip the GSE box power switch to ON. Verify that the transmitter has established a connection with the receiver after a few seconds.'
+        source: { step: 3, page: 302 }
+
+      - title: Verify the upstream fill line is vented
+        source: { step: 4, page: 302 }
+        instructions: |
+          If the system has been pressurized since the most recent time that the upstream fill
+          line hose was connected, verify that the upstream fill line between the supply bottle
+          and fill valve has been vented.
+
+      - title: Confirm the supply bottle is closed
+        source: { step: 5, page: 302 }
+        instructions: |
+          Manually confirm that the oxidizer supply bottle hand valve is closed.
+        callouts:
+          - warning: >-
+              Failure to comply with this step may lead to unsafe pressurization of the rocket in
+              close proximity to personnel.
+
+      - title: Confirm the supply bottle is closed, again
+        source: { step: 6, page: 302 }
+        instructions: |
+          Manually confirm again that the oxidizer supply bottle hand valve is closed.
+
+          *A second party verification is strongly recommended, especially with an inverted bottle
+          where the direction of valve rotation appears reversed.*
+        # The second party verification, as a second sign-off by a different person.
+        signoffs: [{ role: null }, { role: null }]
+
+      - title: 'Flip the FILL switch UP to open the fill valve. Visually confirm that it has opened.'
+        source: { step: 7, page: 302 }
+
+      - title: 'Flip the FILL switch DOWN to close the fill valve. Visually confirm that it has closed.'
+        source: { step: 8, page: 302 }
+
+      - title: 'Flip the SRV switch UP to open the vehicle valves. Confirm that both have opened.'
+        source: { step: 9, page: 302 }
+
+      - title: Close the vehicle valves
+        source: { step: 10, page: 302 }
+        instructions: |
+          Flip the SRV switch DOWN to close the vehicle valves. Confirm that both have closed.
+
+          *Note: Visual observation of the fuel valve may be difficult or impossible on the launch
+          pad with the airframe installed. It is recommended to perform this checkout at least
+          once prior to airframe integration with visual confirmation of nominal fuel valve
+          actuation. When fully integrated on the launch pad, auditory confirmation by listening
+          for the sound of the servo is acceptable. Personnel performing this check must be
+          familiar with the sound characteristic of a nominal valve actuation.*
+
+      - title: Perform a spark check
+        source: { step: 11, page: 302 }
+        instructions: |
+          Perform a spark check:
+
+          1. With IGN switch DOWN, briefly touch the ignition leads together to confirm that they
+             do not spark.
+          2. Flip the IGN switch FULL UP.
+          3. Briefly touch the ignition leads together to confirm that they spark.
+          4. Flip the IGN switch FULL DOWN.
+          5. Briefly touch the ignition leads together to confirm that they do not spark.
+
+  - title: Vehicle Arming
+    depends_on: [3]
+    source: { section: '7.3.3', pages: 303 }
+    workcenter: PAD
+    instructions: |
+      Operations may only proceed when a launch window is imminent.
+    steps:
+      - title: Turn on the primary deployment controller
+        source: { step: 1, page: 303 }
+        instructions: |
+          Turn on the primary deployment controller by twisting its power wires together. Ensure a
+          minimum of five full twists of the wires. Wrap the connection with electrical tape to
+          cover all exposed wire.
+        callouts:
+          - warning: >-
+              Do not arm the rocket before a launch window is certain and all personnel will be
+              immediately vacating the launchpad area.
+          - caution: >-
+              Eye protection is required for all personnel at or near the pad during this
+              operation. Live pyrotechnic charges can present a hazard in the event of
+              misconfiguration or malfunction of the deployment controllers.
+
+      - title: Turn on the secondary deployment controller
+        source: { step: 2, page: 303 }
+        instructions: |
+          Turn on the secondary deployment controller by twisting its power wires together. Ensure
+          a minimum of five full twists of the wires. Wrap the connection with electrical tape to
+          cover all exposed wire.
+
+      - title: 'Confirm that both deployment controllers read continuity of both drogue and main ejection charges.'
+        source: { step: 3, page: 303 }
+
+      - title: Connect the ignition leads
+        source: { step: 4, page: 303 }
+        instructions: |
+          Confirm that the Operator has physical possession of the GSE control transmitter and
+          that all switch covers are closed before proceeding.
+
+          After touching the ignition leads together to confirm no spark, connect one clip of the
+          ignition leads to each leg of the igniter wire.
+
+          Ensure the leads and/or alligator clips cannot contact each other or any conductive
+          surface such as the launch rail. Insulate igniter leads with electrical tape as
+          required.
+
+      - title: Wait for the pad to clear
+        source: { step: 5, page: 303 }
+        instructions: |
+          Wait until all other personnel are walking away from the pad to a safe distance or
+          bunker.
+
+          This includes unrelated personnel at other launch pads on the range who may pass near
+          the launch pad on their way to the observation area.
+        callouts:
+          - warning: The igniter is now armed.
+
+      - title: 'Start any cameras or other data collection devices at the pad.'
+        source: { step: 6, page: 303 }
+
+      - title: Open the oxidizer supply bottle
+        source: { step: 7, page: 303 }
+        instructions: |
+          Fully open the oxidizer supply bottle hand valve.
+
+          *Note: it is recommended to back off the valve approximately 1/4 turn from fully open so
+          that the handle rotates easily. This prevents a full-open bottle from being mistaken for
+          closed.*
+
+      - title: Leave the pad
+        source: { step: 8, page: 303 }
+        instructions: |
+          Proceed calmly from the pad to the launch control center.
+        callouts:
+          - warning: The oxidizer fill system is now armed.
+
+  - title: Launch Preparation
+    depends_on: [4]
+    source: { section: '7.4.1, 7.4.2 and 7.4.4', pages: 304-305 }
+    workcenter: PAD
+    steps:
+      - title: Review the procedure
+        source: { section: '7.4.1', page: 304 }
+        instructions: |
+          Unlike what may be expected from a "traditional" amateur liquid rocket, the load-and-go
+          launch procedure is a short, fast-paced sequence. It is quite simple to execute, but
+          must be carried out with confidence to avoid wasting oxidizer or creating confusion
+          during launch operations. Both the Director and Operator (which may be the same person)
+          should review the Load and Go operation to understand their roles.
+
+          Read the whole of it before performing the actual fill and fire. When the time comes to
+          launch the rocket, the Director and Operator should already know what to do without
+          needing to reference the procedure.
+
+      - title: Decide the fill criteria
+        source: { section: '7.4.2', page: 304 }
+        instructions: |
+          Before proceeding to launch operations, decide on the criteria for concluding oxidizer
+          fill. Typically, fill is concluded when either:
+
+          - [Time] has elapsed.
+          - The static vent begins visibly expelling liquid nitrous oxide.
+
+          Fill time for Mojave Sphinx is usually around 60 seconds, plus or minus 10 seconds
+          depending on ambient temperature. Any change to the tank volume or static vent orifice
+          size will change fill time. Whatever the case may be, predetermine the fill criteria and
+          stick to those condition(s).
+
+          If determining fill based on visual observation of liquid exiting the vent, ensure the
+          vent is oriented perpendicular to the observer. Liquid venting will present as a sudden
+          and distinct change in the appearance of the vent, with an opaque, well-defined plume
+          rather than a translucent wisp. The GSE fill valve should be closed immediately upon
+          observation of liquid venting, to avoid wasting excess oxidizer.
+
+          If operating the rocket from the recommended standoff distance rather than a protected
+          bunker closer to the pad at FAR or RRS, a time-based fill criteria is recommended as the
+          venting may not be easily visible. Otherwise, an exception may be made to the
+          recommendation that only two people be involved in the fill and launch operation, with a
+          third person viewing the rocket through binoculars or a spotting scope with the sole
+          responsibility of calling out when liquid venting is observed. The authority to call out
+          liquid venting should rest solely with one individual, to avoid a split decision that
+          may cause confusion or hesitation in entering the terminal count.
+        images:
+          - file: photos/section-7/static-vent-gas.jpg
+            caption: Static vent venting gas, seen from approximately 270 feet. The plume is barely visible.
+            source_page: 305
+          - file: photos/section-7/static-vent-liquid.jpg
+            caption: Static vent venting liquid, same view. The plume is a substantial cloud of vapor.
+            source_page: 305
+        data:
+          - name: fill_criterion
+            label: Fill criterion
+            type: select
+            options: [Time elapsed, Liquid at the static vent]
+            required: true
+          - name: planned_fill_time
+            label: Fill time, if by time
+            type: number
+            unit: s
+            # "Usually around 60 seconds, plus or minus 10 seconds": a usual value, not a limit.
+            spec: { kind: reference, nominal: '60' }
+
+      - title: Coordinate with the LCO
+        source: { section: '7.4.4', page: 305 }
+        instructions: |
+          Inform the LCO that the rocket is ready to begin fill operations. Communicate the
+          following:
+
+          - The fill and ignition system is controlled entirely from the R/C transmitter. It does
+            not require the club to push any buttons on their launch controller.
+          - Nitrous fill will take about 60 seconds.
+          - After fill is completed, the LCO should give a prompt 5-second countdown.
+
+          There may be multiple rockets launching in the same window. Only proceed once a positive
+          go-ahead has been given by the LCO to begin filling oxidizer.
+
+          Operations may only proceed when all personnel are at a safe standoff distance or inside
+          of bunkers.
+        callouts:
+          - warning: Do not begin filling the rocket if there are any personnel within the safe standoff distance.
+
+  - title: Load and Go
+    depends_on: [5]
+    source: { section: '7.4.5', pages: 306 }
+    workcenter: PAD
+    # One sign-off for the operation, in place of a sign-off on every step.
+    signoffs: [{ role: Launch Director }]
+    instructions: |
+      *Note: The time counter on a phone video may be used to conveniently keep track of fill time
+      elapsed.*
+    steps:
+      - title: 'Push the LEFT stick FULL UP while calling out "Stick up."'
+        source: { step: 1, page: 306 }
+        performer: Launch Operator
+
+      - title: 'Flip the FILL switch UP while calling out "Fill valve open."'
+        source: { step: 2, page: 306 }
+        performer: Launch Operator
+
+      - title: 'Note fill start time on time counter.'
+        source: { step: 3, page: 306 }
+        performer: Launch Director
+
+      - title: 'Call out fill time elapsed and remaining every 15 seconds.'
+        source: { step: 4, page: 306 }
+        performer: Launch Director
+
+      - title: Call fill complete
+        source: { step: 5, page: 306 }
+        instructions: |
+          When the fill criteria has been met, call out "Fill complete."
+        performer: Launch Director
+        data:
+          - name: fill_time
+            label: Fill time elapsed
+            type: number
+            unit: s
+            required: true
+            # About 60 seconds is from 7.4.2 and 7.4.4 (pp. 304-305), not from this step.
+            spec: { kind: reference, nominal: '60' }
+
+      - title: 'Flip the FILL switch DOWN while calling out "Fill valve close."'
+        source: { step: 6, page: 306 }
+        performer: Launch Operator
+
+      - title: 'Confidently call out "Ready for 5-count."'
+        source: { step: 7, page: 306 }
+        performer: Launch Director
+
+      - title: 'Confirm acknowledgment by the LCO.'
+        source: { step: 8, page: 306 }
+        performer: Launch Director
+
+      - title: 'Wait for the LCO or RSO to do a range check and begin countdown.'
+        source: { step: 9, page: 306 }
+
+      - title: 'Wait for the countdown to finish.'
+        source: { step: 10, page: 306 }
+
+      - title: 'Flip the IGN and SRV switches FULL UP.'
+        source: { step: 11, page: 306 }
+        performer: Launch Operator
+
+      - title: Launch or dump
+        source: { step: 12, page: 306 }
+        instructions: |
+          The rocket will either launch or dump its propellants.
+        data:
+          - name: outcome
+            label: Outcome
+            type: select
+            options: [Launched, Dumped propellants]
+            required: true
+
+      - title: Switches down
+        source: { step: 13, page: 306 }
+        instructions: |
+          After launch or dump is complete, flip all switches DOWN and close all covers.
+
+          *Note: With receiver failsafes set properly, turning off the transmitter will do the
+          same as this step.*
+        performer: Launch Operator
+
+  - title: Flight Observation
+    depends_on: [6]
+    source: { section: '7.4.6', pages: 306-307 }
+    workcenter: PAD
+    instructions: |
+      Once the rocket has launched, it will proceed exactly as any other high-power rocket. Mojave
+      Sphinx has no onboard control for its propulsion system and will burn until fuel depletion.
+    steps:
+      - title: Track the ascent
+        source: { section: '7.4.6', page: 306 }
+        instructions: |
+          Visually track the vehicle as it ascends ("keep eyes on the rocket"). If personnel are
+          inside of bunkers, this may not be possible until the RSO has given permission to exit.
+
+          *Note: Because liquid propulsion systems do not generally produce a smoke trail after
+          burnout, it may be difficult to visually track the vehicle through its entire flight
+          profile, especially if the sun is in an unfavorable position or if there is partial
+          cloud cover below the apogee altitude.*
+
+      - title: Confirm apogee deployment
+        source: { section: '7.4.6', page: 306 }
+        instructions: |
+          Confirm that the vehicle has successfully fired its apogee deployment charge and
+          separated into two segments connected by shock cord. If this is not confirmed, make the
+          RSO aware of a possible ballistic return and ensure that all persons are inside of
+          bunkers if available.
+
+          *Note: It has been observed that Mojave Sphinx, and other Half Cat style rockets with
+          unshrouded thrust structures have a tendency to fall sideways after apogee if the drogue
+          fails to deploy. The Mojave Sphinx prototype, on one occasion, experienced a complete
+          deployment failure yet descended in a horizontal orientation until impact, slowing its
+          fall nearly as its drogue parachute would have. On another occasion, the propulsion
+          system separated from the parachutes due to shock cord damage and descended horizontally
+          on its own. Although this is a seemingly consistent characteristic of this style of
+          design, it should not be considered a safe descent mode.*
+        callouts:
+          - warning: >-
+              Always treat an unseparated rocket as a heads-up event that can pose a risk to
+              people and property in the vicinity.
+        data:
+          - name: apogee_deployment
+            label: Apogee deployment confirmed
+            type: boolean
+            required: true
+
+      - title: Track the descent
+        source: { section: '7.4.6', page: 307 }
+        instructions: |
+          Visually track the vehicle as it descends ("keep eyes on the rocket"). Be aware that the
+          LCO may launch other rockets while Mojave Sphinx descends under parachute.
+
+          Watch for firing of the main deployment charge. Altitude is difficult to judge by eye;
+          depending on the deployment controller's setting (typically around 1000 feet), the
+          vehicle may appear to be closer to the ground than it truly is.
+
+          Once the main parachute has deployed, the vehicle will slow to its final descent
+          velocity. If the main parachute does not deploy, note that it will be moving
+          considerably faster at touchdown.
+        data:
+          - name: main_deployment
+            label: Main parachute deployed
+            type: boolean
+            required: true
+
+      - title: Call heads up if it comes back
+        source: { section: '7.4.6', page: 307 }
+        instructions: |
+          If wind conditions have brought the vehicle back toward the flight line, make sure all
+          persons are aware that there is an incoming rocket. Even at a "safe" nominal descent
+          rate, collision of the rocket under parachutes with a person, structure, or vehicle has
+          the potential to cause harm. If it appears that the rocket will land in close proximity
+          to people, loudly announce "heads up" to draw the attention of anyone near the landing
+          area.
+
+      - title: Note the line of sight to touchdown
+        source: { section: '7.4.6', page: 307 }
+        instructions: |
+          Take note of the line-of-sight to the rocket's touchdown. If it is far away, it will be
+          helpful to note which distant landmarks it appears to be in line with, so that a vector
+          can be drawn to its location. A compass reading can also be used for this purpose. These
+          measures are recommended even if the rocket is equipped with a GPS or radio tracking
+          device, in the event that the tracker loses power on landing or otherwise malfunctions.
+        data:
+          - name: touchdown_line
+            label: Line of sight to touchdown (landmarks or compass reading)
+            type: text
+
+  - title: Nominal Pad Shutdown
+    depends_on: [6]
+    source: { section: '7.5 and 7.5.1', pages: 308-309 }
+    workcenter: PAD
+    instructions: |
+      It is important to shut down the pad promptly after firing because the oxidizer supply
+      bottle is still open at this point. This presents a potential hazard to persons nearby in
+      the event that the fill valve is accidentally opened, which can cause the fill line to whip
+      violently.
+
+      If the rocket is still on the pad after an oxidizer fill of any duration, go to the Aborted
+      Firing operations.
+    steps:
+      - title: Walk toward the launchpad
+        source: { step: 1, page: 308 }
+        instructions: |
+          After the RSO has given permission or declared all-clear, calmly proceed toward the
+          launchpad.
+        callouts:
+          - warning: >-
+              Only cross the flight line after the RSO has given explicit permission or declared
+              that the range is clear.
+
+      - title: 'Stop about 20 feet away and listen for any hissing sounds. Politely ask others around to remain quiet for a moment if necessary.'
+        source: { step: 2, page: 308 }
+
+      - title: Locate any hissing
+        source: { step: 3, page: 308 }
+        instructions: |
+          If hissing sounds can be heard, attempt to identify the location(s) and stay clear.
+          Hissing indicates a leak, which may be caused by a burst line, damaged fill valve, or
+          loose fitting.
+
+      - title: 'If the rocket has left the pad, leaks are only a minor hazard and will be stopped when the supply bottle is closed.'
+        source: { step: 4, page: 308 }
+
+      - title: 'Approach the pad and fully close the oxidizer supply bottle hand valve. If there were leaks present, step away and wait for them to subside.'
+        source: { step: 5, page: 308 }
+
+      - title: Vent the upstream fill line
+        source: { step: 6, pages: 308-309 }
+        instructions: |
+          Vent the upstream fill line:
+
+          1. Physically confirm that the oxidizer supply bottle is closed.
+          2. Place the end of the fill line on the ground and secure it by standing on it
+             ("whip-checking") with the QD fitting protruding slightly out from under the sole of
+             the shoe. Ask others to step back a few feet. *Note: The thrust force produced by the
+             pressure and effective orifice area of the 1/4 in fill line and QD fitting is
+             sufficiently low that it can be secured in this manner without risk of injury. This
+             does not necessarily apply to venting pressurized lines in all situations, especially
+             those with larger diameters and/or containing higher pressures. If desired, the fill
+             line may be secured in an alternative manner such as a clamp or very short tether to
+             a fixed or heavy object. In this case all personnel should stand clear by at least
+             twice the length of the fill line in case the restraining device fails.*
+          3. Call out "Venting!"
+          4. Open the fill valve to vent the upstream fill line. There will be a brief, loud
+             hissing. *Note: If the fill valve fully opens and the hissing does not stop within
+             two seconds, close the fill valve and ensure that the supply bottle is fully closed.*
+          5. Alternatively, the upstream fill line may be vented by cracking the fitting
+             connecting the line to the bottle. Use a wrench to loosen the fitting until hissing
+             can be heard, slowly loosening it more as the hissing dies down, until pressure has
+             fully vented. The fitting may then be re-torqued or removed.
+
+      - title: 'Turn off the GSE by flipping the box power switch to OFF.'
+        source: { step: 7, page: 309 }
+
+      - title: 'Turn off the transmitter by sliding the power switch to OFF.'
+        source: { step: 8, page: 309 }
+
+      - title: 'The launchpad is now safe.'
+        source: { step: 9, page: 309 }
+
+  - title: Recovery
+    depends_on: [7, 8]
+    source: { section: '7.6', pages: 312 }
+    workcenter: PAD
+    instructions: |
+      After launch, Mojave Sphinx is recovered like any other high-power rocket. No pressure
+      remains in the tank or feed system because the valves stay open, and all propellants are
+      fully expended (save for a small amount of residual fuel that may drip from the chamber).
+      The only significant hazard to be aware of is that the thrust chamber assembly will remain
+      quite hot for several minutes after firing; while the chamber's peak external temperature is
+      typically lower than some commercial solid motor casings, its substantial thermal mass
+      retains heat for longer. Conversely, the propellant tank will be cold from the rapid
+      expansion of the nitrous, but warms up quickly in the sun.
+
+      It is strongly recommended to travel to the landing site with at least two people (buddy
+      system). Personnel engaged in recovery must be dressed appropriately for the weather and
+      carry plenty of water. This is especially critical at desert launch sites in the summer
+      months, when severe dehydration and heat exhaustion can set in quickly. Exercise caution
+      regarding natural hazards such as rough terrain or venomous wildlife.
+    steps:
+      - title: Go to the landing site
+        source: { section: '7.6', page: 312 }
+        instructions: |
+          After the vehicle has landed, await instructions from the RSO. When the RSO gives
+          permission to enter the range, proceed in the direction the vehicle was last seen.
+
+          *Note: If a radio beacon or GPS tracker is installed, follow the signal. If no
+          electronic tracking device is installed, it is helpful to draw a vector from the
+          observer's position on the flight line to a distant landmark in line with the rocket's
+          last sighted position.*
+        callouts:
+          - warning: >-
+              When temperatures exceed 110° F, the danger posed by severe dehydration and
+              rapid-onset heat exhaustion cannot be overstated.
+
+      - title: Photograph the vehicle as found
+        source: { section: '7.6', page: 312 }
+        instructions: |
+          Upon locating the vehicle, document its condition with photos before it is disturbed.
+          This may be helpful for identifying landing damage or diagnosing other anomalies at a
+          later time.
+        callouts:
+          - warning: >-
+              Be mindful of the potential for extreme component temperatures if the vehicle is
+              recovered shortly after landing.
+        data:
+          - name: as_found_photos
+            label: Vehicle as found
+            type: photo
+            multiple: true
+
+      - title: Listen for the reported apogee
+        source: { section: '7.6', page: 312 }
+        instructions: |
+          *Optional: If the deployment controllers report the recorded apogee via a series of
+          audible beeps, listen for the result. A video recording may be helpful and provides a
+          crude form of data backup.*
+        data:
+          # The guidebook prints no unit for the reported apogee, so it is recorded as written.
+          - name: apogee_reported
+            label: Apogee reported by the deployment controller
+            type: text
+
+      - title: Turn off the deployment controllers
+        source: { section: '7.6', page: 312 }
+        instructions: |
+          Carefully untuck the two pairs of avbay power wires and untwist the splices to turn off
+          the deployment controllers. Insulate the leads with electrical tape, if possible, to
+          prevent them from turning back on from accidental contact.
+
+      - title: Carry the vehicle back
+        source: { section: '7.6', page: 312 }
+        instructions: |
+          *Optional: Stuff the parachute, chute protectors, and shock cord back into the tubes and
+          slide the vehicle back together so that it may be more easily carried as a single piece.
+          A tote bag is also a convenient means of bundling up parachutes and shock cords for
+          transport.*
+
+          Carry the rocket back to the flight line. Once returned, it may be prepared for another
+          launch.
+
+  # ---- Off-nominal paths. A contingency operation is worked only when its condition arises.
+
+  - title: Hold After Oxidizer Fill
+    contingency: true
+    source: { section: '7.4.3', pages: 305 }
+    workcenter: PAD
+    steps:
+      - title: Hold on the pad
+        source: { section: '7.4.3', page: 305 }
+        instructions: |
+          In the event that the 5-second launch countdown cannot commence immediately following
+          completion of oxidizer fill (for example, due to a range violation by an aircraft or
+          other vehicle), the rocket may be allowed to hold on the pad for up to 30 seconds.
+        data:
+          - name: hold_time
+            label: Time held after closing the fill valve
+            type: number
+            unit: s
+            spec: { kind: max, upper: '30' }
+
+      - title: Refill or abort
+        source: { section: '7.4.3', page: 305 }
+        instructions: |
+          If launch does not occur within 30 seconds of closing the fill valve, either:
+
+          - Reopen the fill valve for 5-10 seconds to increase the pressure in the tank
+          - Abort the launch by opening the vehicle valves without firing the igniter, which will
+            safely dump all propellant
+
+          A standard Mojave Sphinx tank loses approximately 4.5 psi per second from venting after
+          the fill valve is closed. It is not recommended to proceed to ignition with a tank
+          pressure lower than 400 psi, although tank pressure is not typically measured when
+          launching. On a hot day, the actual allowable hold time before crossing this threshold
+          may be longer than 30 seconds, however it is a reasonable rule of thumb under a typical
+          range of conditions.
+        data:
+          - name: hold_action
+            label: Action taken
+            type: select
+            options: [Reopened the fill valve, Aborted by opening the vehicle valves]
+            required: true
+
+  - title: 'Aborted Firing: Vehicle Valves Opened'
+    contingency: true
+    source: { section: '7.5.2', pages: 309 }
+    workcenter: PAD
+    instructions: |
+      If the fill valve was opened at any point with the fill line connected to the rocket, there
+      is a risk that the vehicle tank may still contain pressure. As part of the load-and-go
+      procedure, the vehicle valves should have been opened to fully expel all propellant even if
+      ignition did not occur. However, if the vehicle valves could not be opened for any reason,
+      the oxidizer tank must be allowed to fully depressurize via the static vent.
+
+      Work this operation if the vehicle valves were opened to expel propellants.
+    steps:
+      - title: Shut down the pad
+        source: { step: 1, page: 309 }
+        instructions: |
+          Follow the Nominal Pad Shutdown operation.
+        callouts:
+          - warning: Do NOT approach the rocket without completing a safety walk.
+
+      - title: Disconnect the ignition leads
+        source: { step: 2, page: 309 }
+        instructions: |
+          Disconnect ignition leads from igniter wires and twist the igniter wires together.
+
+          *Note: Opening the main propellant valves will dump both oxidizer and fuel. Be mindful
+          of expelled fuel on and around the pad area. If the fuel was a hydrocarbon such as
+          diesel, it will not evaporate and should be mopped up with rags or oil absorbent mats
+          and disposed of in an environmentally responsible manner.*
+        callouts:
+          - warning: NEVER bring a heat source, sparks, or open flame near liquid fuels.
+          - warning: >-
+              NEVER approach a nitrous oxide tank which is on fire. This includes both the supply
+              bottle and vehicle propellant tank. Whenever possible, fires should be allowed to
+              burn themselves out with personnel at a safe distance unless the fire is very small
+              and able to be safely extinguished.
+
+  - title: 'Aborted Firing: Vehicle Valves Not Opened'
+    contingency: true
+    source: { section: '7.5.2', pages: 309-310 }
+    workcenter: PAD
+    instructions: |
+      The propellant tank may be partially or completely filled with oxidizer. The oxidizer tank
+      check valve prevents backflow out of the tank, so if the vehicle valves cannot be opened,
+      the only other way to offload oxidizer is through the static vent.
+
+      The static vent ensures that the tank cannot hold pressure indefinitely, however it takes a
+      considerable amount of time for a full load of liquid nitrous to boil off through the vent.
+      For a standard Mojave Sphinx tank, this is estimated to take 1-1.5 hours.
+
+      Fortunately, there is an extremely low probability of the system losing power or connection
+      to the vehicle valves between the start of oxidizer loading and ignition. This has never
+      occurred in over 50 firings of Half Cat style rockets at the time of writing, demonstrating
+      the robustness and reliability of the GSE described in this guide. Additionally, a loss of
+      communication between the transmitter and GSE will automatically safe the system with
+      properly configured receiver failsafes.
+
+      It is important to understand that because the valves on the rocket are identical to those
+      used on the ground system, and all valves are controlled by the same system, dumping
+      propellant via the onboard vehicle valves is no less reliable than a dedicated dump valve on
+      the ground system would be.
+
+      Work this operation if the vehicle valves are unable to be opened for any reason after any
+      amount of oxidizer was loaded.
+    steps:
+      - title: Note the time and wait
+        source: { step: 1, page: 310 }
+        instructions: |
+          Note the approximate time when oxidizer fill concluded. Wait at least one hour if the
+          tank was completely filled. If the tank was only partially filled prior to aborting or a
+          failed launch attempt, this may be reduced according to the percentage of the nominal
+          fill duration completed.
+        callouts:
+          - warning: Do NOT approach the rocket without completing a safety walk.
+
+      - title: 'After the RSO has given permission to proceed downrange, calmly and slowly walk toward the launchpad.'
+        source: { step: 2, page: 310 }
+
+      - title: Stop at 100 feet and listen
+        source: { step: 3, page: 310 }
+        instructions: |
+          Stop about 100 feet away and listen for any hissing sounds. Politely ask others around
+          to remain quiet for a moment if necessary.
+
+          If there is liquid oxidizer present in the propellant tank, a hissing sound should be
+          audible from the static vent. It is helpful to approach the rocket from the side with
+          the static vent in case of ambient noise making it difficult to hear from the opposite
+          side.
+
+      - title: Wait while the vent hisses
+        source: { step: 4, page: 310 }
+        instructions: |
+          If static vent hissing is audible, do not approach further. Return to the safe standoff
+          distance or bunker and wait for the hissing to die down. Depending on fill level, vent
+          orifice size, and ambient temperature, this may take anywhere from a few minutes to over
+          an hour.
+
+          If at least three attempts to remotely open the vehicle valves are unsuccessful, it is
+          recommended to turn the transmitter off and leave it off until the vehicle and pad are
+          completely safed.
+        callouts:
+          - warning: >-
+              During this time, DO NOT turn the transmitter off and back on. Booting up the
+              transmitter requires the switches to be in the UP position, which will energize the
+              igniter circuit and command the valves open, which could result in accidental
+              ignition and launch if the system were to spontaneously regain functionality.
+          - warning: >-
+              Personnel MUST NOT approach closer than 100 feet until no hissing sound can be
+              observed at that distance.
+
+      - title: 'Once static vent hissing is no longer audible from a 100-foot distance, cautiously proceed toward the pad.'
+        source: { step: 5, page: 310 }
+
+      - title: Stop at 50 feet and listen
+        source: { step: 6, page: 310 }
+        instructions: |
+          Stop about 50 feet away and listen for any hissing sounds. All personnel should remain
+          quiet for a few moments to provide an opportunity to listen for any continuing venting.
+
+      - title: 'If static vent hissing is audible, do not approach further and wait for the hissing to die down.'
+        source: { step: 7, page: 310 }
+
+      - title: 'Once static vent hissing is no longer audible from a 50-foot distance, cautiously proceed toward the pad.'
+        source: { step: 8, page: 310 }
+
+      - title: Stop at 20 feet and listen
+        source: { step: 9, page: 310 }
+        instructions: |
+          Stop about 20 feet away and listen for any hissing sounds. All personnel should remain
+          quiet for a few moments to provide an opportunity to listen for any continuing venting.
+
+      - title: 'If static vent hissing is audible, do not approach further and wait for the hissing to die down.'
+        source: { step: 10, page: 310 }
+
+      - title: 'Once static vent hissing is no longer audible from a 20-foot distance, cautiously proceed toward the pad.'
+        source: { step: 11, page: 310 }
+
+      - title: Allow quiet hissing to stop
+        source: { step: 12, page: 310 }
+        instructions: |
+          If there is still quiet hissing only audible within 10 feet, give the propellant tank 5
+          additional minutes to vent or until hissing has ceased entirely.
+
+      - title: Shut down the pad
+        source: { step: 13, page: 310 }
+        instructions: |
+          When no hissing is audible from the static vent, follow the Nominal Pad Shutdown
+          operation beginning with closing of the oxidizer supply bottle hand valve.
+
+      - title: 'After the oxidizer supply tank has been closed, disconnect ignition leads from igniter wires and twist the igniter wires together.'
+        source: { step: 14, page: 310 }
+
+  - title: Vehicle Shutdown
+    contingency: true
+    source: { section: '7.5.3', pages: 311 }
+    workcenter: PAD
+    instructions: |
+      This operation only applies in the event that the vehicle was not launched and remains on
+      the pad.
+    steps:
+      - title: Turn off the deployment controllers
+        source: { step: 1, page: 311 }
+        instructions: |
+          Turn off all deployment controllers to disarm the pyrotechnic charges. Insulate the
+          altimeter power leads to prevent accidental re-arming.
+        callouts:
+          - caution: >-
+              Eye protection is required for all personnel at the pad when deployment controllers
+              with pyrotechnic charges are armed.
+
+      - title: Close the vehicle valves
+        source: { step: 2, page: 311 }
+        instructions: |
+          It is recommended to command the vehicle valves into the closed position so that fuel
+          does not leak when bringing the vehicle horizontal.
+
+          Always be mindful of the possibility of fuel dripping from the nozzle, even with the
+          fuel valve fully closed.
+
+      - title: 'The vehicle may now be removed from the launch rail and prepared for another attempt.'
+        source: { step: 3, page: 311 }
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - >-
+    Sections 7.3 to 7.6 are one procedure here, one work order per launch attempt. Each numbered
+    subsection is an operation, except that 7.4.1, 7.4.2 and 7.4.4 are the three steps of Launch
+    Preparation and the opening of 7.5 leads Nominal Pad Shutdown. 7.4.3 (holding after fill), the
+    two cases of 7.5.2 (aborted firing) and 7.5.3 (vehicle shutdown) are contingency operations,
+    worked only when their condition arises.
+  - >-
+    The operations are ordered by dependencies: each waits on the one before, Nominal Pad Shutdown
+    and Flight Observation both follow Load and Go, and Recovery follows both.
+  - >-
+    A guidebook step of one line is a step whose title is that line, with nothing under it. A
+    longer step has a new, short title above the guidebook's text.
+  - >-
+    7.4.1, 7.4.2, 7.4.4, 7.4.6 and 7.6 are running text in the guidebook. Here each is one or more
+    steps, cut where the text moves to a new act. The words are the guidebook's.
+  - The first sentence of the description is new. The second paragraph is the opening of 7.4.
+  - The tools and materials line is compiled from the steps.
+  - 'Rail Loading step 3 is printed "Load Mojave Sphinx onto the launch rail:", a heading for steps 4 to 6. Here it points at them by their numbers in this file, 2.4 to 2.6.'
+  - >-
+    Launch Record, the first operation, is not in the guidebook. It records which launch this is,
+    where, who was there and the temperature, and names the vehicle and the ground equipment the
+    work order is run on. The other operations wait on it.
+  - >-
+    Sentences that warn of damage or injury are set apart as cautions and warnings. A sentence
+    printed as "WARNING:" or in capitals (NEVER, DO NOT, MUST NOT), or that warns of harm to
+    people, is a warning. "Caution!" stays a caution.
+  - >-
+    "Do NOT approach the rocket without completing a safety walk" is printed in the opening of 7.5,
+    about a rocket still on the pad. It is a warning on the first step of each Aborted Firing
+    operation. "Only cross the flight line..." is a warning on the first step of Nominal Pad
+    Shutdown, and "Do not arm the rocket..." on the first step of Vehicle Arming.
+  - >-
+    Small rewordings: 7.4.1 drops "Basically,". Each contingency operation says "Work this
+    operation if..." where the guidebook says "If the vehicle valves were opened to expel
+    propellants:" and "In the event that... follow the steps below". 7.5.3 "This procedure" is
+    "This operation".
+  - '"The igniter is now armed" and "The oxidizer fill system is now armed" are printed after steps 4 and 7 of 7.3.3. They sit on the steps that follow, which are done in that state.'
+  - 'Lettered sub-steps are numbered lists or paragraphs inside their step.'
+  - >-
+    GSE Startup step 6 has a second sign-off, by a different person. The guidebook says a second
+    party verification is "strongly recommended"; this team requires it.
+  - >-
+    The guidebook prints OPERATOR or DIRECTOR at the start of Load and Go steps 1 to 8, 11 and 13.
+    Here the word is the step's `performer` (Launch Operator or Launch Director), shown as a role
+    mark beside the step, and is not repeated in the text. The role does not limit who completes
+    the step. One sign-off by the Launch Director closes the operation; the guidebook asks for
+    none.
+  - >-
+    Data fields are new: launch angle (2-5 degrees recommended, not checked), fill criterion, planned and
+    actual fill time (about 60 seconds, shown for reference), outcome, apogee and main deployment,
+    line of sight to touchdown, photos of the vehicle as found, reported apogee, time held (30
+    seconds at most) and the action taken after a hold.
+  - '7.4.1: "the following steps" and "this whole section" are written as the Load and Go operation; "the guidebook" as "the procedure".'
+  - '7.5 and 7.5.2: "refer to 7.5.2" and "Follow procedure 7.5.1" name the operations here.'
+  - '7.6: the buddy system, water and natural hazards are stated twice in the guidebook and once here. The two sentences that warn of injury (extreme component temperatures; dehydration above 110° F) are warnings on the steps they bear on.'
+  - '7.5.1 step 6: each note follows the sub-step it is printed under.'
+  - '7.6: the reported apogee is recorded as text, because the guidebook gives it no unit.'
+  - 'Spelling: "it''s own" is "its own", "shack cords" is "shock cords".'
+  - Figure 7.12 is two pictures here, each with its half of the guidebook's caption.

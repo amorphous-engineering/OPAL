@@ -1,0 +1,757 @@
+# Vehicle Preparation
+#
+# Adapted from HCR-5100 R01, Section VII: 7.1 Vehicle Preparation (pp. 285-297).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: vehicle-preparation
+name: Vehicle Preparation
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: op
+source:
+  document: HCR-5100 R01
+  section: 'Section VII, 7.1'
+  pages: 285-297
+
+description: |
+  Load fuel, install the igniter and pack the recovery system of an assembled vehicle.
+
+  This section covers the preparation of the vehicle for static testing or launch. Recovery system
+  packing is only required for launch. This procedure assumes that the rocket has been fully
+  assembled per Section 5 and contains only the steps that must be repeated each time the rocket
+  is recycled.
+
+  Tools and materials: 5/8 in, 9/16 in and 15/16 in wrenches (or adjustable), 3/16 in hex key or
+  driver bit, sturdy PVC pipe or wooden dowel marked 12.25 in from one end, multimeter with
+  continuity check function, 3/8 in drill bit, long (longer than 6 in) hemostats, gram scale or
+  1/2 tsp measuring spoon, safety glasses, face shields, nitrile gloves, O-ring grease, grease,
+  shop towels, a container to catch fuel, a small piece of wire, a long 1/4-20 threaded rod,
+  electrical tape, masking tape, FFFG (3F) Pyrodex powder, screwdriver. If the piston is to be
+  removed: 1/4-20 bolt or threaded rod, vise-grip or large pliers. As needed: wooden or concrete
+  block for under the nozzle, aluminum tape, rubber bands in place of masking tape on the shock
+  cord. Optional: battery powered drill with adjustable torque-limiting clutch, magnetic dish,
+  needle nose pliers, curved tweezers or a hooked pick, stiff wire or 1/8 in tube brush.
+
+# "Gather the following" in 7.1.1, 7.1.2 and 7.1.3.
+kit:
+  # Fuel, e-matches and the igniter motor are Section 4.4 Consumables lines 2, 4 and 3 (p. 133).
+  - part: e85
+    quantity: 0.5
+    unit: gal
+  - part: '1834'
+    quantity: 5
+  - part: A3-4T
+    quantity: 1
+  - part: '93135A013'
+    quantity: 4
+
+operations:
+  - title: Fuel Loading
+    source: { section: '7.1.1', pages: 285-287 }
+    workcenter: BENCH
+    # The rocket being prepared, named when the work order is run. The O-rings below go into it.
+    units:
+      - key: vehicle
+        label: Vehicle
+        part: mojave-sphinx
+        required: true
+    instructions: |
+      Perform these steps outdoors or in a well-ventilated area with disposable shop towels or rags
+      on hand to clean up any fuel spills.
+    steps:
+      - title: Gather the following
+        source: { step: 1, page: 285 }
+        instructions: |
+          - 5/8 in wrench (or adjustable)
+          - 9/16 in wrench (or adjustable)
+          - 3/16 in hex key or driver bit
+          - Optional: Battery powered drill with adjustable torque-limiting clutch
+          - Sturdy PVC pipe or wooden dowel with marking 12.25 in from one end
+          - Safety glasses
+          - Nitrile gloves
+          - O-ring grease
+          - 1X -238 Buna-N O-rings (PN: 9452K226)
+          - Shop towels
+          - Approx. 1/2 gallon fuel (see section 2.6)
+          - If piston is to be removed (required every 3 firings or sooner):
+            - 1/4-20 bolt or threaded rod
+            - Vise-grip or large pliers
+            - 2X additional -238 Buna-N O-rings (PN: 9452K226)
+        callouts:
+          - warning: >-
+              This procedure involves handling of fuel and O-ring grease. Ensure all personnel are
+              equipped with safety glasses and nitrile gloves.
+
+      - title: Disconnect the fuel line
+        source: { step: 2, page: 285 }
+        instructions: |
+          Disconnect the fuel line from the flared fitting on the fuel valve outlet using the 5/8 in
+          and 9/16 in wrenches.
+
+          Be prepared for a small amount of fuel to drip out of the fuel valve outlet and/or
+          injector when the fuel line is disconnected.
+        callouts:
+          - caution: Residual fuel may be present.
+
+      - title: Open the fuel valve
+        source: { step: 3, page: 285 }
+        instructions: |
+          Ensure the fuel valve is OPEN. If closed, it may be opened either using the GSE or by
+          slowly and gently moving the valve handle/servo horn to the open position by hand. The
+          servo must be disconnected from power to open manually. If the valve is closed, the
+          forward tank bulkhead cannot be removed, as it will pull a vacuum.
+
+      - title: 'Disconnect the fuel valve servo wire from the vehicle Y-harness at the 3-pin connector closest to the servo.'
+        source: { step: 4, page: 286 }
+
+      - title: Remove the interface ring fasteners
+        source: { step: 5, page: 286 }
+        instructions: |
+          Remove the 8X 5/16 in fasteners from the forward tank interface ring using the 3/16 in hex
+          key or driver bit and drill. Set aside for later reinstallation. A magnetic dish is
+          recommended to prevent fasteners from being lost.
+
+      - title: Remove the fuel bulkhead assembly
+        source: { step: 6, page: 286 }
+        instructions: |
+          Remove the entire fuel bulkhead assembly from the tank by pulling on the U-bolt installed
+          in the recovery bulkhead. The lower airframe tube may remain connected to the interface
+          ring if installed. Note: When static testing without the recovery bulkhead, it is
+          recommended to either re-install the recovery bulkhead or another pair of 1/4-20 threaded
+          rods to remove the fuel bulkhead assembly by pulling on the coupling nuts.
+
+          It is recommended to remove the fuel bulkhead assembly with the rocket vertical or tilted
+          upwards to prevent spillage.
+        callouts:
+          - caution: >-
+              Do not remove the assembly by pulling on the valve assembly. This may damage the
+              valve assembly and/or fuel tank outlet port/fitting.
+          - caution: >-
+              Residual fuel will likely be present in the tank, even if some has already drained
+              out of the valve outlet fittings and/or fuel line.
+
+      - title: Insert the extraction bolt
+        source: { step: 7, page: 286 }
+        instructions: |
+          Perform steps 1.7 to 1.11 only if the piston must be removed prior to the next firing.
+          Servicing the piston seals is required every three firings. If the piston does not need
+          to be removed, skip to step 1.12.
+
+          Insert a 1/4-20 bolt or threaded rod into the tapped blind hole in the center of the
+          piston until it bottoms out. Tighten only to hand tight.
+
+      - title: Pull the piston
+        source: { step: 8, page: 286 }
+        instructions: |
+          Pull the piston out of the forward end of the tank using the extraction bolt. A pair of
+          vise-grips or pliers may be used to improve grip. The extraction bolt may now be removed
+          from the piston.
+
+      - title: Remove the piston O-rings
+        source: { step: 9, page: 286 }
+        instructions: |
+          Remove the 2 O-rings from the piston and discard. Clean any particulate or darkened grease
+          from the O-ring grooves.
+
+      - title: 'Coat 2 new -238 O-rings with grease and install into the grooves on the piston.'
+        source: { step: 10, page: 286 }
+        kit:
+          - part: '9452K226'
+            quantity: 2
+            into: vehicle
+
+      - title: Reinstall the piston
+        source: { step: 11, page: 286 }
+        instructions: |
+          Re-install the piston into the tank with the 1/4-20 threaded blind hole facing the open
+          forward end. Use even pressure to carefully push the O-rings past the tank edge and bolt
+          holes. Verify that the piston extraction bolt has been removed before proceeding.
+
+      - title: Push the piston to depth
+        source: { step: 12, page: 286 }
+        instructions: |
+          Push the piston down into the tank until the lower surface closest to the outer edge is
+          12.25 +0/-0.25 in from the forward end of the tank tube. A sturdy piece of PVC pipe or
+          wooden dowel with a clearly visible marking is recommended.
+
+          If more force is required, place a wooden or concrete block under the nozzle to provide
+          support without stressing the fins. No more than 150 lbf should be required to install the
+          piston to its final depth.
+        callouts:
+          - caution: >-
+              Do not apply more than 100 lbf to the piston if the vehicle is resting on the plywood
+              fins.
+          - caution: >-
+              DO NOT use a hammer or mallet to push the piston down. This may cause the piston to
+              bind against the tank wall, preventing fuel flow when the valve is opened.
+        data:
+          - name: piston_depth
+            label: Piston depth from the forward end of the tank tube
+            type: number
+            unit: in
+            required: true
+            # 12.25 +0/-.25 in.
+            spec: { kind: range, lower: '12.00', upper: '12.25' }
+
+      - title: Check the static vent
+        source: { step: 13, page: 286 }
+        instructions: |
+          Verify that the nitrous tank static vent is unobstructed by poking a small piece of wire
+          (such as from a spent e-match) at least 1/2 in into the vent orifice. If the vent is found
+          to be obstructed, pull the piston upwards using a long 1/4-20 threaded rod until the
+          piston no longer blocks the vent. Blockage of the vent will prevent oxidizer loading.
+
+      - title: Inspect the fuel bulkhead O-ring
+        source: { step: 14, page: 286 }
+        instructions: |
+          Inspect the fuel bulkhead O-ring for damage or swelling to assess whether replacement is
+          necessary. If so, remove and discard the O-ring, then grease and install 1 new -238
+          O-ring into the groove on the fuel bulkhead.
+        # Drawn only when the O-ring is replaced.
+        kit:
+          - part: '9452K226'
+            quantity: 1
+            into: vehicle
+
+      - title: Pour the fuel
+        source: { step: 15, page: 287 }
+        instructions: |
+          With the rocket vertical, pour approximately 1/2 gallon of fuel into the tank on top of
+          the piston. Fuel may be pre-measured, or simply filled until the level reaches 1.25 in from
+          the end of the tank tube. Any excess fuel will be pushed out through the fuel valve when
+          the fuel bulkhead assembly is reinstalled. Note: The nominal volume of the fuel tank is
+          120 cubic inches (0.52 gal). A 1/2 in variation in fuel tank length due to fill level
+          and/or piston position will result in less than 5% variation in total impulse.
+
+      - title: Insert the fuel bulkhead assembly
+        source: { step: 16, page: 287 }
+        instructions: |
+          Insert the fuel bulkhead assembly into the forward end of the tank, ensuring proper
+          orientation of the fuel valve outlet fitting and alignment of any clocking marks on the
+          interface ring and tank. Use even pressure to carefully push the O-ring past the tank
+          edge and bolt holes. Push down on the interface ring until it seats against the edge of
+          the tank tube.
+
+          Use a shop towel or container against the outlet fitting to catch fuel spray.
+        callouts:
+          - caution: Any excess fuel will be pushed out through the fuel valve outlet.
+
+      - title: Close the fuel valve
+        source: { step: 17, page: 287 }
+        instructions: |
+          Close the fuel valve either using the GSE or by slowly and gently moving the valve
+          handle/servo horn to the closed position by hand. The servo must be disconnected from
+          power to close manually.
+
+          *Note: At this point the fuel tank is fully sealed and the rocket may be returned to a
+          horizontal orientation if desired.*
+
+      - title: Reinstall the interface ring fasteners
+        source: { step: 18, page: 287 }
+        instructions: |
+          Reinstall the 8X 5/16 in fasteners into the forward tank interface ring, threading them
+          into the captive nuts. Leave fasteners loose until all 8 are installed, then tighten to
+          snug.
+
+      - title: 'Reconnect the fuel line hose to the flared fittings on the fuel valve outlet and tighten to snug.'
+        source: { step: 19, page: 287 }
+
+      - title: Reconnect the fuel valve servo wire
+        source: { step: 20, page: 287 }
+        instructions: |
+          Reconnect the fuel valve servo wire to the 3-pin extension from the vehicle Y-harness.
+          Secure connector with 1-2 wraps of electrical or masking tape.
+
+  - title: Igniter Installation
+    source: { section: '7.1.2', pages: 287-290 }
+    workcenter: BENCH
+    instructions: |
+      These steps must be performed outdoors away from any other flammable materials and ignition
+      sources.
+    steps:
+      - title: Gather the following
+        source: { step: 1, pages: 287-288 }
+        instructions: |
+          - 9/16 in wrench (or adjustable)
+          - 15/16 in wrench (or adjustable)
+          - Multimeter with continuity check function
+          - 3/8 in drill bit
+          - Optional: battery operated drill
+          - Long (longer than 6 in) hemostats
+          - 1X e-match (MJG FireWire or equivalent), at least 16 in long
+          - 1X Estes A3-4T 13mm black powder rocket motor
+          - Grease
+          - Shop towels
+        callouts:
+          - warning: >-
+              This procedure involves handling pyrotechnic materials. Safety glasses are required
+              for all personnel in the vicinity. Face shields are recommended as an additional
+              precaution for those directly handling pyrotechnic materials.
+
+      - title: Disconnect the igniter cartridge
+        source: { step: 2, page: 288 }
+        instructions: |
+          Disconnect the igniter cartridge assembly from the injector at the coupler fitting between
+          the two pipe nipples where shown. Note: it is not recommended to disconnect the lower pipe
+          nipple from the injector port, as this will result in wearing of the aluminum threads over
+          time.
+        images:
+          - file: photos/section-7-1/igniter-disconnection-point.jpg
+            caption: Cartridge igniter disconnection point.
+            source_page: 288
+
+      - title: 'Remove the cap from the forward end of the igniter cartridge and set aside.'
+        source: { step: 3, page: 288 }
+
+      - title: Remove the spent igniter motor
+        source: { step: 4, page: 288 }
+        instructions: |
+          If the system has been previously fired, remove the spent igniter motor from the
+          cartridge. Needle nose pliers, curved tweezers, or a hooked pick are recommended.
+
+      - title: Inspect the igniter flow path
+        source: { step: 5, page: 288 }
+        instructions: |
+          Inspect the igniter cartridge and injector for any blockage of the igniter flow path.
+          Remove blockage if necessary using a stiff piece of wire or 1/8 in tube brush. Note:
+          blockages of less than 50% of the igniter inlet orifice area are acceptable so long as
+          they do not prevent insertion of the e-match wires.
+
+      - title: Remove the motor's clay nozzle
+        source: { step: 6, page: 288 }
+        instructions: |
+          Prepare a new igniter motor by removing the clay nozzle from the Estes A3-4T using a 3/8 in
+          drill bit. This may be done by rotating the bit by hand, or using a battery powered drill
+          at low speed. Drill until the dark gray propellant grain is exposed across the full
+          diameter of the drill bit. A small amount of clay remaining on the outer edges is
+          acceptable.
+        images:
+          - file: photos/section-7-1/igniter-motor-nozzle-removed.jpg
+            caption: Estes A3-4T with clay nozzle removed (propellant grain exposed).
+            source_page: 288
+
+      - title: Remove the ejection charge
+        source: { step: 7, page: 289 }
+        instructions: |
+          Remove the ejection charge by drilling out the clay cap at the forward end of the
+          Estes A3-4T until the loose black powder charge is exposed. Most of the powder will simply
+          fall out; remaining powder can be scraped out or left in place. Note: testing has
+          demonstrated that there is no detrimental impact to leaving the ejection charge in place.
+          Removal is recommended but not required.
+
+      - title: Test the e-match
+        source: { step: 8, page: 289 }
+        instructions: |
+          Test a new e-match for continuity using a multimeter. If no continuity is indicated do not
+          use the e-match, and replace it with one that does read continuity.
+
+      - title: Shunt the e-match
+        source: { step: 9, page: 289 }
+        instructions: |
+          Shunt the e-match by twisting the exposed wire leads together. This will prevent
+          accidental ignition from static discharge or other sources of current. Tightly twisting
+          the first 3-5 in of the e-match wire leads is recommended to aid in installation. The
+          twisted wires may also be greased to slide more easily through the igniter flow path
+          during installation.
+
+      - title: 'Insert the wire lead end of the e-match into the igniter fittings on the injector as shown until the wires can be seen projecting into the chamber.'
+        source: { step: 10, page: 289 }
+
+      - title: Insert the e-match into the cartridge
+        source: { step: 11, page: 289 }
+        instructions: |
+          Position the igniter cartridge near the injector and insert the e-match head into the pipe
+          nipple connected to the cartridge assembly as shown, until the e-match head and 3-4 in of
+          wire protrude from the forward end of the cartridge.
+
+      - title: Thread the cartridge into the coupler
+        source: { step: 12, page: 289 }
+        instructions: |
+          Thread the pipe nipple on the igniter cartridge into the coupler fitting on the chamber
+          assembly as shown and tighten to snug. Note: testing has demonstrated that PTFE thread
+          tape is not required for brass igniter fittings. Any resulting leakage is minimal and
+          non-detrimental.
+
+      - title: Fold the e-match wire
+        source: { step: 13, page: 289 }
+        instructions: |
+          Fold the e-match wire 3-4 times approximately 1/2 in below the head as shown. This will
+          prevent the e-match from being accidentally pulled out during pre-launch handling, while
+          still allowing it to be ejected during ignition.
+        images:
+          - file: photos/section-7-1/folded-e-match.jpg
+            caption: Folded e-match.
+            source_page: 289
+          - file: photos/section-7-1/e-match-in-cartridge.jpg
+            caption: Folded e-match inside igniter cartridge.
+            source_page: 290
+
+      - title: Insert the igniter motor
+        source: { step: 14, page: 290 }
+        instructions: |
+          Place the cored end of the prepared Estes A3-4T igniter motor against the e-match head and
+          gently push it into the cartridge, ensuring that the e-match head stays in contact with the
+          propellant grain.
+
+      - title: Pull the leads through the nozzle
+        source: { step: 15, page: 290 }
+        instructions: |
+          Insert a pair of long hemostats into the chamber through the nozzle throat and grip the
+          e-match wire leads. Gently pull the wires through until the leads extend several inches
+          out of the nozzle. Leave the stripped ends twisted together at this time to prevent
+          accidental ignition from static discharge or other sources of current. Note: the bare wire
+          ends may be partially untwisted to make it easier to fully separate them at the launch
+          pad.
+
+      - title: Pack the cartridge
+        source: { step: 16, page: 290 }
+        instructions: |
+          Place a small wad of shop towel or other springy material into the forward end of the
+          igniter cartridge to fill the empty volume and maintain contact between the igniter motor
+          and e-match head.
+
+      - title: 'Reinstall the cap onto the forward end of the igniter cartridge and tighten to snug.'
+        source: { step: 17, page: 290 }
+
+  - title: Recovery System Packing
+    source: { section: '7.1.3', pages: 290-297 }
+    workcenter: BENCH
+    instructions: |
+      *Note: The recommended ejection charges are conservatively sized and when properly
+      implemented will provide highly energetic separation of both the drogue and main. Ground
+      testing is strongly recommended to verify and/or refine charge sizing, especially if any
+      modifications have been made to the airframe configuration or if alternative ejection charge
+      materials such as 4F black powder are used. Many resources are available online to calculate
+      an initial estimate for ejection charge sizes, however these are not a substitute for ground
+      testing.*
+
+      Steps 3.2 to 3.8 prepare the ejection charges, steps 3.9 to 3.19 pack the main parachute and
+      steps 3.20 to 3.26 pack the drogue parachute.
+    steps:
+      - title: Gather the following
+        source: { step: 1, page: 291 }
+        instructions: |
+          - Safety glasses
+          - Nitrile gloves
+          - Electrical tape
+          - Masking tape
+          - 4X e-matches (MJG FireWire or equivalent), at least 16 in long
+          - FFFG (3F) Pyrodex powder
+          - Gram scale or 1/2 tsp measuring spoon
+          - Multimeter with continuity check function
+          - 4X 2-56 nylon screws (PN: 93135A013)
+        callouts:
+          - warning: >-
+              This procedure involves handling pyrotechnic materials. Safety glasses are required
+              for all personnel in the vicinity. Face shields are recommended as an additional
+              precaution for those directly handling pyrotechnic materials. Gloves may also be used
+              to prevent skin contact with Pyrodex powder.
+
+      - title: Check the e-matches
+        source: { step: 2, page: 291 }
+        instructions: |
+          Check continuity on 4 e-matches. If any e-matches do not indicate continuity, discard and
+          replace with a new e-match that does. After checking continuity, shunt the bare wire leads
+          by twisting them together to prevent accidental ignition from static discharge or other
+          sources of current.
+
+      - title: Cut the glove fingers
+        source: { step: 3, page: 291 }
+        instructions: |
+          Cut 4 fingers off of a nitrile glove. These will be used to contain the ejection charges.
+
+      - title: Measure the powder
+        source: { step: 4, page: 291 }
+        instructions: |
+          Measure out either 8 grams or 1.5 teaspoons of 3F Pyrodex powder into each glove finger.
+        data:
+          # The spoon is an allowed method, so the mass is not required.
+          - name: charge_powder
+            label: 3F Pyrodex per charge, if weighed
+            type: number
+            unit: g
+            spec: { kind: reference, nominal: '8' }
+
+      - title: 'Insert the head of an e-match into the powder-filled glove finger, so that it is fully submerged in powder.'
+        source: { step: 5, page: 291 }
+
+      - title: Close and wrap the charges
+        source: { step: 6, page: 291 }
+        instructions: |
+          Twist the open end of the glove finger around the e-match wires, then wrap the entire
+          charge tightly in 4-5 layers of electrical tape, slightly stretching the tape during
+          wrapping to help compress the charge. The charges should be hard when complete and should
+          not easily deform when pinched. There should be no excess volume inside the glove finger
+          for powder to move around.
+
+      - title: Check the altimeter batteries
+        source: { step: 7, page: 291 }
+        instructions: |
+          Before connecting any charges to the rocket's altimeters, verify acceptable battery
+          voltage for both altimeter batteries. The acceptable voltage and method of verification
+          will vary depending on the type of deployment controller used. Refer to the
+          manufacturer's directions as needed. If necessary, replace or recharge batteries before
+          continuing.
+        data:
+          # The guidebook gives no voltage: it depends on the deployment controller.
+          - name: battery_a_voltage
+            label: Altimeter A battery voltage
+            type: number
+            unit: v
+          - name: battery_b_voltage
+            label: Altimeter B battery voltage
+            type: number
+            unit: v
+
+      - title: Connect the ejection charges
+        source: { step: 8, pages: 291-292 }
+        instructions: |
+          Connect the 4 completed ejection charges to the main and drogue deployment outputs for
+          each altimeter. The recommended method is a Western Union splice, as shown. Wrap all wire splices
+          thoroughly with electrical tape. There should be one charge connected to each of the
+          following:
+
+          - Altimeter A Main
+          - Altimeter A Drogue
+          - Altimeter B Main
+          - Altimeter B Drogue
+
+          Refer to the generic avbay wiring diagram.
+        images:
+          - file: photos/section-7-1/avbay-wiring-diagram.png
+            caption: Avbay wiring diagram.
+            source_page: 292
+
+      - title: Check the main recovery harness
+        source: { step: 9, page: 292 }
+        instructions: |
+          *Note: It is recommended to perform steps 3.9 to 3.19 with at least two people.*
+
+          Verify that the main recovery harness is securely connected to the nose cone and avbay
+          assemblies before proceeding.
+
+      - title: Gather the main canopy
+        source: { step: 10, page: 292 }
+        instructions: |
+          Gather the main parachute canopy from its center so that it forms a flat triangle on the
+          work surface. Ensure the shroud line attachment points are roughly even with one another.
+
+      - title: Fold the main into a strip
+        source: { step: 11, page: 292 }
+        instructions: |
+          Fold the main parachute canopy into a strip approximately 8-10 in wide, with the center of
+          the canopy at one end and the shroud line attachment points at the other.
+        images:
+          - file: photos/section-7-1/main-canopy-strip.jpg
+            caption: Main parachute canopy, folded into strip.
+            source_page: 293
+
+      - title: Z-fold the main canopy
+        source: { step: 12, page: 293 }
+        instructions: |
+          Z-fold the canopy so that each segment of the Z is approximately 1/3 of the canopy's
+          radius.
+        images:
+          - file: photos/section-7-1/main-canopy-z-folded.jpg
+            caption: Main parachute canopy, Z-folded.
+            source_page: 293
+
+      - title: Roll the main canopy
+        source: { step: 13, page: 293 }
+        instructions: |
+          Tightly roll the Z-folded canopy starting from the end opposite the shroud lines. The
+          resulting bundle should be approximately 3.5 in in diameter. Do not wrap the shroud lines
+          around the rolled canopy. The canopy must be held firmly to prevent it from unrolling
+          before being packed into the airframe.
+        images:
+          - file: photos/section-7-1/main-canopy-rolled.jpg
+            caption: Main parachute canopy, rolled into bundle.
+            source_page: 294
+
+      - title: Wrap the main in its protector
+        source: { step: 14, page: 294 }
+        instructions: |
+          Place the rolled canopy onto the Nomex main parachute protector, and lay the shroud lines
+          alongside it in a zig-zag pattern. Then, wrap the canopy and shroud lines in the Nomex
+          protector so that the canopy is fully covered. A "burrito-style" wrapping method is
+          recommended.
+        images:
+          - file: photos/section-7-1/main-on-protector.jpg
+            caption: Main parachute, laid on protector with shroud lines.
+            source_page: 294
+          - file: photos/section-7-1/protector-folded-over.jpg
+            caption: Protector folded over main parachute.
+            source_page: 295
+          - file: photos/section-7-1/main-bundle-wrapped.jpg
+            caption: Main parachute bundle, wrapped in protector.
+            source_page: 295
+
+      - title: 'Place the two main deployment charges into the upper airframe tube, initially positioning them several inches from the end of the tube.'
+        source: { step: 15, page: 296 }
+
+      - title: Insert the main parachute bundle
+        source: { step: 16, page: 296 }
+        instructions: |
+          Insert the Nomex-wrapped main parachute bundle into the upper airframe tube behind the
+          ejection charges. Push the main parachute bundle into the upper airframe as far as
+          possible with moderate force.
+
+          *Note: It is critical that the main parachute bundle is positioned between the ejection
+          charges and the open end of the tube where the airframe will separate in flight. This
+          allows the charges and airframe to function as a "parachute cannon" that can build up
+          enough pressure to eject even a tightly packed bundle, rather than relying on the momentum
+          of the airframe to extract the main parachute from the tube.*
+        callouts:
+          - caution: Take care not to place strain on the ejection charge wire splices.
+
+      - title: Bundle the main shock cord
+        source: { step: 17, page: 296 }
+        instructions: |
+          Bundle the main shock cord into 4-5 sections each containing about 6 feet of length. Wrap
+          each bundle with 1-2 wraps of masking tape at a single point. This will help dissipate the
+          shock of main parachute deployment as energy is expended to break the masking tape. Other
+          types of tape should NOT be used; rubber bands are an acceptable substitute.
+
+      - title: Pack the main shock cord
+        source: { step: 18, page: 296 }
+        instructions: |
+          Pack the shock cord bundles into the upper airframe tube behind the main parachute, then
+          insert the avbay coupler into the tube. The coupler should be a moderately snug fit that
+          does not allow wobble of the airframe tube. Shim the outer surface of the coupler with
+          masking or aluminum tape as necessary. Electrical tape should not be used.
+
+      - title: Install the shear pins
+        source: { step: 19, page: 296 }
+        instructions: |
+          Align the 4 shear pin holes in the upper airframe tube with the slots along the lower edge
+          of the forward avbay bulkhead as shown. Then, insert a 2-56 nylon screw into each
+          hole. The shear pin screws should be a press fit into the airframe holes, but a
+          screwdriver may aid in installation. If the shear pins are loose enough that there is a
+          risk of them falling out, a small patch of tape may be placed over the heads to retain
+          them.
+
+          *Note: The shear pins should be included in ground testing of the main parachute
+          ejection. This testing is important to verify that the shear pins break cleanly without
+          bending or tearing the holes in the airframe tube, which can cause binding of the coupler
+          and failure to deploy.*
+
+      - title: 'Verify that the drogue recovery harness is securely attached to the recovery bulkhead on the propulsion section and the avbay assembly before proceeding.'
+        source: { step: 20, page: 296 }
+
+      - title: Fold the drogue canopy
+        source: { step: 21, page: 296 }
+        instructions: |
+          Fold the drogue parachute canopy in a similar fashion to the main. Due to the much smaller
+          size of the drogue relative to the airframe tube, the packing method is less critical.
+          Unlike the main, the shroud lines may be wrapped around the folded canopy for convenience.
+
+      - title: Wrap the drogue in its protector
+        source: { step: 22, page: 296 }
+        instructions: |
+          Wrap the folded drogue parachute fully in the Nomex drogue parachute protector. A
+          "burrito-style" wrapping method is recommended.
+
+      - title: 'Place the 2 drogue ejection charges into the lower airframe tube, initially positioning them several inches from the end of the tube.'
+        source: { step: 23, page: 296 }
+
+      - title: Insert the wrapped parachute bundle
+        source: { step: 24, pages: 296-297 }
+        instructions: |
+          Insert the Nomex-wrapped main parachute bundle into the upper airframe tube behind the
+          ejection charges. Push the main parachute bundle into the upper airframe as far as
+          possible with moderate force. Note: because the drogue parachute fits much more loosely in
+          the airframe tube, it is less critical that the lower airframe tube function as a
+          "parachute cannon." While the packing method described here is recommended, the momentum
+          of the two sections of the rocket after deployment is generally sufficient to extract the
+          drogue parachute.
+        callouts:
+          - caution: Take care not to place strain on the ejection charge wire splices.
+
+      - title: Bundle the drogue shock cord
+        source: { step: 25, page: 297 }
+        instructions: |
+          Bundle the drogue shock cord into 4-5 sections each containing about 6 feet of length.
+          Wrap each bundle with a single wrap of masking tape at a single point. This will help
+          dissipate the shock of main parachute deployment as energy is expended to break the
+          masking tape. Other types of tape should NOT be used; rubber bands are an acceptable
+          substitute.
+
+      - title: Pack the drogue shock cord
+        source: { step: 26, page: 297 }
+        instructions: |
+          Pack the shock cord bundles into the lower airframe tube behind the drogue parachute, then
+          insert the avbay coupler into the tube. The coupler should be a moderately snug fit that
+          does not allow wobble of the airframe tube. Shim the outer surface of the coupler with
+          masking or aluminum tape as necessary. Electrical tape should not be used.
+
+          *Note: It is recommended to mate the integrated upper airframe and avbay assembly to the
+          lower airframe tube/propulsion section with the rocket standing vertical on its fins to
+          aid in alignment.*
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - >-
+    Section 7.1 is one procedure here. Each numbered subsection (7.1.1, 7.1.2, 7.1.3) is an
+    operation. All three are BENCH work, done before the vehicle goes to the pad.
+  - >-
+    A guidebook step of one short line is a step whose title is that line, with nothing under it.
+    A longer step has a new, short title above the guidebook's text.
+  - >-
+    The first sentence of the description is new. The second paragraph is the opening of 7.1. The
+    tools and materials line is compiled from the three "Gather the following" lists and from the
+    steps. Items listed with no quantity (grease, tape, Pyrodex powder) are there, not in the kit.
+  - >-
+    The kit holds what the three "Gather the following" lists give a quantity for: 3 -238 O-rings
+    (1 for the fuel bulkhead, 2 for the piston, each used only when its step calls for it), about
+    1/2 gallon of fuel, 5 e-matches (1 for the igniter, 4 for the ejection charges), 1 Estes A3-4T
+    and 4 nylon screws. The O-rings are on the steps that fit them (1.10 and 1.14), so that they
+    are recorded as going into the vehicle the work order names; the rest are on the procedure.
+  - >-
+    Fuel Loading names the vehicle it is done to. The guidebook has no such line; it is how the
+    work order records which rocket was prepared.
+  - >-
+    "Gather the following" is step 1 of each operation, as the guidebook numbers it. In 7.1.1 the
+    items printed as m to o after "If piston is to be removed:" are nested under that line.
+  - >-
+    The opening caution of each subsection is a warning on step 1, because it warns of injury.
+    The sentences in them that say where to work ("Perform these steps outdoors...", "These steps
+    must be performed outdoors...") are in the operation's instructions.
+  - >-
+    Sentences that warn of damage are set apart as cautions and may be shortened: 1.2 and 1.6
+    residual fuel, 1.6 pulling on the valve assembly (from "Removal by pulling on the valve assembly
+    should be avoided, as it may..."), 1.12 the 100 lbf limit and the hammer, 1.16 excess fuel,
+    3.16 and 3.24 strain on the wire splices. The actions that went with them stay in the step.
+  - >-
+    The sentence printed between steps 6 and 7 of 7.1.1 ("Perform steps 7-11 only if...") opens
+    step 1.7, with its step numbers written as 1.7 to 1.11 and 1.12.
+  - >-
+    7.1.3 has three sub-headings ("Prepare ejection charges:", "Main Parachute Packing", "Drogue
+    Parachute Packing:"). They are one line in the operation's instructions, naming the steps under
+    each. The note under "Main Parachute Packing" (at least two people) opens step 3.9 and names
+    steps 3.9 to 3.19 where the guidebook says "the following steps".
+  - >-
+    The closing lines "Fuel loading is now complete.", "Igniter installation is now complete.",
+    "Main parachute packing is now complete." and "Drogue parachute packing is now complete. The
+    rocket is fully integrated and ready to carry to the launch pad." are left out.
+  - '3.8: "Refer to the generic avbay wiring diagram below." is printed after the step; it is the last line of the step here, without "below". "as shown below" in the step is "as shown".'
+  - >-
+    One name per part: the forward tank interface ring (1.18 prints "retaining ring"), the Estes
+    A3-4T (2.7 prints "A3-4T", 2.14 "A3-4"), the extraction bolt (1.8 and 1.11 print "extraction
+    fastener").
+  - >-
+    Units: the inch mark is written "in" (5/8 in, 12.25 in and so on), "100lbf" and "150lbf" are
+    "100 lbf" and "150 lbf", "(.52 gal)" is "(0.52 gal)", "+0/-.25" is "+0/-0.25", "<5%" is "less
+    than 5%", "(>6")" is "(longer than 6 in)". "2X" and "4X" are plain numbers where no part number
+    follows; "8X 5/16 in" stays, because "8 5/16 in" reads as one number.
+  - >-
+    3.1: the nylon screws are 93135A013, the order number in Section 4.3.2 line 14. 3.1 prints
+    PN 94735A707.
+  - 'Italic notes stay italic: 1.17, the opening note of 7.1.3, 3.9, 3.16, 3.19 and 3.26. Notes printed inline in a step stay inline.'
+  - 'Figure 7.4 (top of p. 290) is on step 2.13 with Figure 7.3; Figures 7.10 and 7.11 (p. 295) are on step 3.14 with Figure 7.9. Image captions are the guidebook''s figure titles; 7.2 says "Estes A3-4T" for "Estes A3".'
+  - >-
+    Data fields are new: piston depth (12.00 to 12.25 in, from "12.25 +0/-.25"), Pyrodex per
+    charge (8 g shown for reference, not required because a spoon may be used), and the voltage of
+    each altimeter battery (no value: the guidebook says it depends on the deployment controller).

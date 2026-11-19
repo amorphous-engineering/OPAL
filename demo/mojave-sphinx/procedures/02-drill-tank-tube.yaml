@@ -1,0 +1,172 @@
+# Drill Tank Tube
+#
+# Adapted from HCR-5100 R01, Section V, OP 2: Drill Tank Tube (pp. 145-149).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: drill-tank-tube
+name: Drill Tank Tube
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 2: Drill Tank Tube'
+  pages: 145-149
+
+description: |
+  Drill the bolt holes and the nitrous static vent orifice in the tank tube.
+
+  Tools: drill press or hand drill, 11/32 in drill bit, 1.2 mm drill bit, countersink, deburring
+  knife or fine rounded file, measuring tape, permanent marker, strip of paper. To square an end:
+  file, hacksaw or bandsaw. Optional: automatic center punch, drill stop, tape, paint pen.
+
+  A vertical mill with an indexing head may be used in place of the printed drill jigs. This is
+  recommended if available.
+
+output:
+  part: TANK-36L-047V-2X8X313C
+  quantity: 1
+
+# "Gather the following" in the guidebook.
+kit:
+  - part: '9056K423'
+    quantity: 1
+  - part: DRLJG-TANK-8X625OD-BSHNG
+    quantity: 2
+    usage: tooling
+
+operations:
+  - title: Drill Tank Tube
+    workcenter: SHOP
+    images:
+      - file: photos/op-02/tank-tube-bolt-holes.png
+        caption: Tank tube with the bolt holes drilled.
+        source_page: 145
+    steps:
+      - title: Check the tube ends are square
+        source: { step: 1, page: 146 }
+        instructions: |
+          Check that the ends of the tank tube are cut square to within approximately ±0.020 in.
+          To check, wrap a strip of paper around the tube and align its edge with itself, so that
+          the edge makes a straight line around the tube. Compare the end of the tube with that
+          line.
+
+          If an end is not square, file it, or trim off a short section (less than 0.25 in) with a
+          hacksaw or bandsaw.
+
+      - title: Fit the drill jigs
+        source: { step: 2, page: 147 }
+        instructions: |
+          Press a tank drill jig onto each end of the tank tube, until the end of the tube contacts
+          the lip of the jig. Each jig must be snug on the tube, so that it cannot slide or rotate.
+          Secure it with tape if necessary.
+
+          *Optional: mark each hole location with a marker or an automatic center punch. A center
+          punch mark helps keep the tip of the drill in place when starting the hole.*
+
+      - title: Drill the bolt holes
+        source: { step: 3, page: 147 }
+        instructions: |
+          Drill 8 holes in each end of the tank tube with an 11/32 in drill bit, using the jig to
+          align the bit.
+
+          *A drill press is recommended, but a hand drill may be used. A drill stop may be used to
+          keep the bit from striking the far wall of the tube, but is not required.*
+        callouts:
+          - caution: Do not let the drill bit strike the inside surface on the far side of the tube.
+        images:
+          - file: photos/op-02/drill-jig-on-tube.jpg
+            caption: Drill jig on the end of the tank tube.
+            source_page: 147
+
+      - title: Deburr the bolt holes
+        source: { step: 4, page: 148 }
+        instructions: |
+          Deburr the edges of the holes on the inside of the tank tube, so that sharp edges or
+          burrs cannot damage the O-rings when the piston and bulkhead are inserted. A reversible
+          countersink such as the Noga RC2000 is recommended, but any standard countersink may be
+          used to break the inside edges by hand.
+        callouts:
+          - caution: >-
+              If sandpaper or abrasive pads are used, move them around the circumference only.
+              Axial motion makes scratches perpendicular to the seal, which increases the
+              likelihood of leakage.
+        images:
+          - file: photos/op-02/deburred-bolt-hole.jpg
+            caption: Bolt hole deburred on the inside of the tube.
+            source_page: 148
+
+      - title: Deburr the tube ends
+        source: { step: 5, page: 148 }
+        instructions: |
+          Deburr the inside edge of both ends of the tank tube with a deburring knife or a fine
+          rounded file. This reduces the risk of damage to the seals and makes the piston and
+          bulkhead easier to insert.
+
+      - title: Mark the vent location
+        source: { step: 6, page: 149 }
+        instructions: |
+          Measure 14.25 in from one end of the tank tube, in line with one set of bolt holes. Mark
+          this location with a permanent marker.
+
+          Either end may be used: the tube is the same at both ends until the vent is drilled. The
+          end nearest the vent becomes the forward end of the tank.
+
+      - title: Drill the vent orifice
+        source: { step: 7, page: 149 }
+        instructions: |
+          At the marked location, drill a 1.2 mm hole through the wall of the tank tube. This is
+          the nitrous static vent orifice.
+
+          *An automatic center punch may be used before drilling to help keep the drill bit from
+          walking.*
+
+          *To help identify the vent location, mark it as shown with a permanent marker or paint
+          pen.*
+        images:
+          - file: photos/op-02/vent-mark.jpg
+            caption: Vent orifice marked on the tank tube.
+            source_page: 149
+        data:
+          - name: vent_distance
+            label: Vent orifice, distance from the forward end
+            type: number
+            unit: in
+            required: true
+            # The guidebook gives 14.25 in with no tolerance, so the value is shown, not checked.
+            spec: { kind: reference, nominal: '14.25' }
+
+      - title: Mark the rail guide line
+        source: { step: 8, page: 149 }
+        instructions: |
+          Mark a line between one pair of bolt holes 90 degrees from the vent, and label it
+          "RAIL GUIDES". This makes the vent point to one side of the launch rail, for maximum
+          visibility.
+        images:
+          - file: photos/op-02/rail-guide-clocking.png
+            caption: Rail guide clocking position and vent location (approximate).
+            source_page: 149
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - 'Step 1: the unit was added to "+/-.020", and "<.25"" is written as "less than 0.25 in".'
+  - 'Step 1: "Compare the end of the tube with that line" was added to finish the paper check.'
+  - The workpiece is called the tank tube throughout. The guidebook also calls it the tank and the tube.
+  - '"Debur" is spelled "deburr". "2X" and "8X" are written as plain numbers.'
+  - 'Steps 3 and 4: the sentence that warns of damage is set apart as a caution and shortened.'
+  - >-
+    Step 6: the paragraph beginning "Either end may be used" is new. The forward end is defined in
+    OP 6 steps 4 and 5 (p. 177).
+  - >-
+    Step 7: a data field records the vent distance as drilled. The guidebook asks for no
+    measurement after drilling.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - The note about the vertical mill moved from the parts list to the description.
+  - >-
+    Image captions are new. The clocking diagram and the vent photo are one image in the
+    guidebook and two here.

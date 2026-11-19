@@ -1,0 +1,232 @@
+# Propellant Tank Assembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 6: Tank Assembly (pp. 172-179).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: propellant-tank-assembly
+name: Propellant Tank Assembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 6: Tank Assembly'
+  pages: 172-179
+
+description: |
+  Install the piston and the fuel and oxidizer bulkhead subassemblies in the tank, bolt them in
+  place, and connect the hose to the fuel valve.
+
+  Tools: grease, piece of 1 in PVC pipe or wooden dowel (marked for the piston depth), measuring
+  tape, marker, 3/16 in hex key, wrenches. Optional: zip ties,
+  aluminum tape.
+
+output:
+  part: propellant-tank-assembly
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 173).
+kit:
+  - part: fuel-bulkhead-subassembly
+    quantity: 1
+  - part: oxidizer-bulkhead-subassembly
+    quantity: 1
+  - part: TANK-36L-047V-2X8X313C
+    quantity: 1
+  - part: PSTN-2XO238-250T20
+    quantity: 1
+  - part: '9452K226'
+    quantity: 4
+  - part: '91255A378'
+    quantity: 12
+  - part: '4468K858'
+    quantity: 1
+  - part: '50675K135'
+    quantity: 1
+
+operations:
+  - title: Tank Assembly
+    source: { section: 'Section V, OP 6', pages: 172-179 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-06/propellant-tank-assembly.png
+        caption: Propellant tank assembly.
+        source_page: 172
+    steps:
+      - title: Grease the O-rings
+        source: { step: 1, page: 174 }
+        instructions: |
+          Apply a liberal amount of grease to the QTY 5 -230 Buna-N O-rings. Set aside on a clean
+          surface.
+
+      - title: Fit the bulkhead O-rings
+        source: { step: 2, page: 174 }
+        instructions: |
+          Install QTY 1 -230 Buna-N O-ring into the O-ring glands on each of the QTY 2 bulkhead
+          subassemblies.
+        images:
+          - file: photos/op-06/fuel-bulkhead-subassembly.jpg
+            caption: Fuel bulkhead subassembly.
+            source_page: 174
+          - file: photos/op-06/oxidizer-bulkhead-subassembly.jpg
+            caption: Oxidizer bulkhead subassembly with the O-ring in the gland.
+            source_page: 174
+
+      - title: Fit the piston O-rings
+        source: { step: 3, page: 174 }
+        instructions: |
+          Install QTY 2 -230 Buna-N O-rings onto the piston.
+        images:
+          - file: photos/op-06/piston-with-o-rings.jpg
+            caption: Piston with two O-rings.
+            source_page: 174
+
+      - title: Insert the piston
+        source: { step: 4, page: 177 }
+        instructions: |
+          Insert the piston with O-rings into the tank. The face of the piston with the ¼-20
+          threaded extraction hole should face towards the forward end where the fuel bulkhead will
+          be inserted; this is the end closest to the vent orifice. Apply slow, even pressure to
+          compress the seals into the tank. Using a marked piece of PVC pipe, push the piston down
+          until the top face sits 12.125-12.25 inches from the end of the tank.
+        callouts:
+          - caution: Take care not to damage the O-rings.
+        data:
+          - name: piston_depth
+            label: Piston top face, distance from the end of the tank
+            type: number
+            unit: in
+            required: true
+            spec: { kind: range, lower: '12.125', upper: '12.25' }
+
+      - title: Insert the oxidizer bulkhead subassembly
+        source: { step: 5, page: 177 }
+        instructions: |
+          Insert the oxidizer bulkhead subassembly into the aft end of the tank (farthest from the
+          vent orifice). Note the orientation relative to the designated rail guide position.
+          Apply slow, even pressure to compress the seal into the tank.
+
+          *Use the tank interface ring to ensure that the bulkhead is seated at the correct depth.
+          Align the bolt holes in the tank interface ring to the tank bolt holes. If the ring and
+          tank were match drilled, ensure the clocking marks are aligned.*
+        callouts:
+          - caution: Take care not to damage the O-ring.
+        images:
+          - file: photos/op-06/relative-clocking-end-view.jpg
+            caption: Relative Clocking of Fuel Line Raceway, Oxidizer Valve, Vent, and QD
+            source_page: 176
+
+      - title: Insert the fuel bulkhead subassembly
+        source: { step: 6, page: 177 }
+        instructions: |
+          Insert the fuel bulkhead subassembly into the forward end of the tank. Note the
+          orientation relative to the designated rail guide position. Apply slow, even pressure to
+          compress the seal into the tank.
+
+          *Use the tank interface ring to ensure that the bulkhead is seated at the correct depth.
+          Align the bolt holes in the tank interface ring to the tank bolt holes. If the ring and
+          tank were match drilled, ensure the clocking marks are aligned.*
+        callouts:
+          - caution: Take care not to damage the O-ring.
+
+      - title: Bolt the forward end
+        source: { step: 7, page: 178 }
+        instructions: |
+          Install QTY 8 91255A378 screws through the tank and retaining ring bolt holes at the
+          forward end (Fuel Valve side), threading into the weld nuts in the nut retaining ring.
+          Insert all screws before tightening to allow freedom of movement for alignment. Once all
+          8 screws are engaged in the threads, tighten to snug using a 3/16 in hex key. These
+          fasteners are loaded primarily in shear, and do not need to be extremely tight.
+
+      - title: Bolt the aft end loosely
+        source: { step: 8, page: 178 }
+        instructions: |
+          Install QTY 4 91255A378 screws through the tank and retaining ring bolt holes at the aft
+          end (Oxidizer Valve side), threading into the weld nuts in the nut retaining ring. Skip
+          every other hole, and ensure that the screw locations are aligned relative to the valve
+          and rail guide positions as shown in the reference images. The remaining bolt holes will
+          be used to secure the thrust structure to the tank at a later time. Leave all 4 screws on
+          this end slightly loose.
+        callouts:
+          - caution: >-
+              The tank cannot be pressurized until all 8 screws are installed. If the tank is to be
+              pressure tested prior to integration of the fin bracket/thrust structure assembly,
+              install an additional 4X 91255A378 screws and tighten all screws to snug.
+        images:
+          - file: photos/op-06/fuel-line-raceway-side.jpg
+            caption: Fuel Line Raceway Side
+            source_page: 175
+          - file: photos/op-06/minus-90-from-raceway.jpg
+            caption: '-90 Degrees from Fuel Line Raceway'
+            source_page: 175
+          - file: photos/op-06/qd-and-vent-side.jpg
+            caption: 'QD and Vent Side: 180 Degrees from Fuel Line Raceway'
+            source_page: 175
+          - file: photos/op-06/rail-guide-side.jpg
+            caption: 'Rail Guide Side: +90 degrees from Fuel Line Raceway'
+            source_page: 175
+
+      - title: Fit the union to the hose
+        source: { step: 9, page: 179 }
+        instructions: |
+          Install QTY 1 50675K135 flared union fitting into one end of QTY 1 4468K858 hose. Tighten
+          to wrench tight (approx. 80 ft-lbs).
+
+      - title: Connect the hose to the fuel valve
+        source: { step: 10, page: 179 }
+        instructions: |
+          Connect the other end of QTY 1 4468K858 hose to the flared fitting on the outlet of the
+          fuel valve, located at the forward end of the tank. Tighten to wrench tight (approx.
+          100-150 in-lbs).
+
+          *The hose may be secured to the tank using zip ties and/or tape as desired. A strip of
+          aluminum tape running lengthwise is recommended. Do not fully cover the hose with tape at
+          this time, as the fuel valve servo wire must also be secured in a similar manner.*
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - >-
+    The tools line is compiled from the steps and from Required Tools (pp. 136-137). Grease, which
+    step 1.1 calls for with no quantity and the parts list does not list, is in the tools line.
+  - >-
+    The tank tube (TANK-36L-047V-2X8X313C) is called the tank throughout. Step 4 also calls it the
+    tube, and steps 4, 5 and 6 say "into the tube".
+  - >-
+    The bulkhead subassemblies are called the fuel bulkhead subassembly and the oxidizer bulkhead
+    subassembly, as in the parts list. Step 2 prints "Bulkhead Subassemblies"; steps 5 and 6
+    print "bulkhead/valve subassembly".
+  - 'Step 1.3: "the fuel tank piston" is written "the piston", the name step 4 uses.'
+  - >-
+    Steps 1.5 and 1.6: "the interface ring" is written "the tank interface ring", the name the
+    same paragraph uses first.
+  - >-
+    Step 1.10: "the fuel line" is written "the hose", the name the parts list and steps 9 and 10
+    use. The printed captions on p. 175 and p. 176, which name the fuel line raceway, are
+    unchanged.
+  - >-
+    Steps 1.4, 1.5 and 1.6: "Take care not to damage the O-ring(s)" is set apart as a caution.
+    The rest of that sentence, "apply slow, even pressure...", stays in the step as its own
+    sentence.
+  - >-
+    Step 1.8: the CAUTION paragraph is a caution callout with its wording as printed, except
+    "8X", which is written as a plain number. It is not a step.
+  - '"8X" and "4X" are written as plain numbers where no part number follows.'
+  - 'Step 1.7: "3/16”" is written "3/16 in".'
+  - 'Step 1.5: the missing space in "position.Take" is restored.'
+  - >-
+    Step 1.4: a data field records the piston depth against the range printed in the step,
+    12.125-12.25 in.
+  - >-
+    The sentence "Reference the images below for the following steps on this operation." (pp. 175
+    and 176) is left out. Its figures are placed on steps: the end view on p. 176 on step 1.5,
+    whose orientation note it illustrates; the four side views on p. 175 on step 1.8, whose text
+    cites "the reference images". Their printed captions are kept.
+  - >-
+    Step 1.2: the renders of the fuel and oxidizer bulkhead subassemblies sit under step 3 on
+    p. 174. They show step 2 and are placed there. The piston render stays on step 1.3.
+  - Captions of the title drawing and the p. 174 renders are new.

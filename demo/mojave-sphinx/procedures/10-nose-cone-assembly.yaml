@@ -1,0 +1,246 @@
+# Nose Cone Assembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 11: Nose Cone Assembly (pp. 217-224).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: nose-cone-assembly
+name: Nose Cone Assembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 11: Nose Cone Assembly'
+  pages: 217-224
+
+description: |
+  Assemble the printed nose cone sections on four nylon threaded rods, with an eye bolt and a short
+  length of shock cord in the nose cone tip.
+
+  Tools: wrenches, measuring tape, a fine-toothed saw or other
+  cutting tool for the nylon threaded rods. As needed: razor blade, adhesive, drill and #2-56 tap,
+  aluminum foil tape or similar.
+
+output:
+  part: nose-cone-assembly
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 218).
+kit:
+  - part: NSCN-SLDR-4X250R-8X832HNC
+    quantity: 1
+  - part: NSCN-SC1-4X250R
+    quantity: 1
+  - part: NSCN-SC2-4X250R
+    quantity: 1
+  - part: NSCN-TIP-4X250R-250HNC
+    quantity: 1
+  - part: '98831A028'
+    quantity: 2
+  - part: '95505A601'
+    quantity: 8
+  - part: '91102A750'
+    quantity: 9
+  - part: '95229A420'
+    quantity: 8
+  - part: '92141A029'
+    quantity: 8
+  - part: '93135A013'
+    quantity: 4
+  - part: '3018T23'
+    quantity: 1
+  - part: '92994A029'
+    quantity: 1
+  - part: '90480A009'
+    quantity: 8
+  - part: REC-TNSC-3KLB
+    quantity: 24
+    unit: in
+
+operations:
+  - title: Nose Cone Assembly
+    source: { section: 'Section V, OP 11', pages: 217-224 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-11/nose-cone-assembly.png
+        caption: Nose cone assembly, tip up.
+        source_page: 217
+    steps:
+      - title: Cut the nylon threaded rods
+        source: { step: 1, page: 219 }
+        instructions: |
+          Cut QTY 2 98831A028 nylon threaded rods into equal lengths of 12 inches each, for a total
+          of four pieces.
+        data:
+          - name: rod_length
+            label: Nylon threaded rod, cut length
+            type: number
+            unit: in
+            required: true
+            # The guidebook gives 12 inches with no tolerance, so the value is shown, not checked.
+            spec: { kind: reference, nominal: '12' }
+
+      - title: Stack the nose cone sections
+        source: { step: 2, page: 219 }
+        instructions: |
+          Stack QTY 1 NSCN-SLDR-4X250R-8X832HNC nose cone shoulder, QTY 1 NSCN-SC1-4X250R nose
+          cone section 1, and QTY 1 NSCN-SC2-4X250R nose cone section 2 as shown.
+        images:
+          - file: photos/op-11/stacked-cone-sections.png
+            caption: Nose cone shoulder, section 1 and section 2 stacked, section view.
+            source_page: 219
+
+      - title: Insert the nylon threaded rods
+        source: { step: 3, page: 220 }
+        instructions: |
+          Insert QTY 4 12-inch sections of 98831A028 nylon threaded rod into the sleeves of the
+          printed nose cone components as shown, with approximately 0.50 in protrusion from the
+          bottom of the nose cone shoulder.
+        data:
+          - name: rod_protrusion
+            label: Rod protrusion from the bottom of the nose cone shoulder
+            type: number
+            unit: in
+            required: true
+            # The guidebook gives approximately 0.50 in with no tolerance.
+            spec: { kind: reference, nominal: '0.50' }
+
+      - title: Install the rod nuts and washers
+        source: { step: 4, page: 220 }
+        instructions: |
+          Install QTY 1 95505A601 hex nut with QTY 1 91102A750 lock washer and QTY 1 95229A420 flat
+          washer onto each end of each nylon threaded rod, with approximately equal thread
+          protrusion from each nut. Tighten the 4 nuts on the bottom of the nose cone shoulder just
+          until the lock washers are fully compressed.
+
+          *Note: Excessive thread protrusion will interfere with the nose cone tip installed on a
+          later step.*
+        callouts:
+          - caution: Excessive torque may strip the threads of the nylon threaded rods.
+        images:
+          - file: photos/op-11/threaded-rods-and-nuts.jpg
+            caption: Nylon threaded rods with nuts at both ends, inset of one rod end.
+            source_page: 220
+
+      - title: Fit the eye bolt to the tip
+        source: { step: 5, page: 221 }
+        instructions: |
+          Place QTY 1 91102A750 lock washer and QTY 8 92141A029 washers onto the shank of QTY 1
+          3018T23 eye bolt. Then, insert QTY 1 92994A029 cap nut into the hex on the
+          NSCN-TIP-4X250R-250HNC nose cone tip, and thread the eye bolt with washers into the cap
+          nut until snug, ensuring that the eye is oriented between the counterbores as shown.
+          Washers may be added or subtracted as needed.
+
+          *Note: The eye bolt is prevented from rotating by other features within the nose cone
+          assembly, and does not need to be especially tight.*
+        callouts:
+          - caution: Excessive torque may damage the hex on the printed nose cone tip.
+        images:
+          - file: photos/op-11/eye-bolt-in-tip-section.jpg
+            caption: Eye bolt, washers and cap nut in the nose cone tip, section view.
+            source_page: 221
+          - file: photos/op-11/eye-bolt-in-tip-end.jpg
+            caption: Nose cone tip end view, eye between the counterbores.
+            source_page: 221
+
+      - title: Tie the shock cord
+        source: { step: 6, page: 222 }
+        instructions: |
+          Tie one end of a 24 in section of REC-TNSC-3KLB shock cord to the eye bolt using a
+          non-slip loop knot. The loop should be large enough that the body of the knot sits 2-3
+          inches behind the eye bolt when pulled taut. Ensure the knot is sufficiently compact to
+          fit through the opening in the NSCN-SC2-4X250R nose cone section 2.
+        data:
+          - name: knot_distance
+            label: Knot body, distance behind the eye bolt
+            type: number
+            unit: in
+            required: true
+            spec: { kind: range, lower: '2', upper: '3' }
+
+      - title: Place the nose cone tip
+        source: { step: 7, page: 222 }
+        instructions: |
+          Place the nose cone tip with eye bolt onto the lower portion of the nose cone assembly,
+          aligning the tabs and slots so that the nylon threaded rods and nuts sit within the
+          counterbores.
+        images:
+          - file: photos/op-11/tip-on-cone.jpg
+            caption: Nose cone tip with eye bolt on the nose cone, translucent view.
+            source_page: 222
+          - file: photos/op-11/tip-eye-bolt-cap-nut.jpg
+            caption: Eye bolt and cap nut in the nose cone tip, translucent view.
+            source_page: 222
+
+      - title: Secure the nose cone tip
+        source: { step: 8, page: 223 }
+        instructions: |
+          Secure the nose cone tip to nose cone section 2 using QTY 4 93135A013 nylon screws as
+          shown.
+
+          *Note: The screw holes are nominally an interference fit to allow the screw to be pushed
+          or threaded in without tapping the hole, and retained by friction. If the screws fit
+          loosely in the holes, adhesive may be used. If the holes are too small to install the
+          screws, they may be drilled as needed, and optionally tapped with a #2-56 thread on the
+          NSCN-SC2-4X250R tabs.*
+        images:
+          - file: photos/op-11/tip-nylon-screws-section.jpg
+            caption: Nose cone tip on the eye bolt, nylon screws through the tabs, section view.
+            source_page: 223
+
+      - title: Snap in the hex nuts
+        source: { step: 9, page: 224 }
+        instructions: |
+          Place QTY 8 90480A009 hex nuts into the hexagonal cutouts on the interior of the nose cone
+          shoulder. The nuts should snap in past the retention tabs with moderate force.
+
+          *Note: If the nuts cannot be pushed past the retention tabs, lightly shave down the tips
+          of the tabs using a razor blade. If the tolerances are too loose for the nuts to be
+          adequately retained, a small strip of 7631A82 aluminum foil tape or similar can be placed
+          over each hexagonal cutout.*
+
+      - title: Tie the second loop knot
+        source: { step: 10, page: 224 }
+        instructions: |
+          Tie the protruding section of shock cord into a second non-slip loop knot, so that the
+          loop hangs out of the nose cone shoulder.
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - >-
+    Adhesive (step 8 note) and aluminum foil tape (step 9 note), named with no quantity, are in the
+    tools line, not the kit. The note in step 9 keeps 7631A82 as printed; it is not in the kit.
+  - >-
+    The shock cord is in the kit as 24 in of REC-TNSC-3KLB, the length the parts list (p. 218)
+    prints.
+  - >-
+    Steps 6 and 8: the part number printed in the step is replaced by the key in the parts file.
+  - >-
+    The 98831A028 rods are called nylon threaded rods throughout. Steps 1 and 3 print "Nylon
+    Threaded Rod(s)"; step 7 calls them tension rods.
+  - >-
+    The printed parts are called the nose cone shoulder, nose cone section 1, nose cone section 2
+    and nose cone tip throughout. Step 2 prints "Nose Cone Shoulder", "Nose Cone Section 1" and
+    "Nose Cone Section 2"; step 6 calls section 2 the "nose cone section"; step 8 calls it "Section
+    2 of the nose cone".
+  - 'Step 3: the repeated words "into the sleeves into the sleeves" are printed once.'
+  - 'Step 3: ".50”" is written "0.50 in". Step 6: "24”" is written "24 in".'
+  - 'Step 4: "4X nuts" is written "4 nuts".'
+  - 'Step 4: the CAUTION line is set apart as a caution callout.'
+  - >-
+    Step 5: the last sentence of the note, "Excessive torque may damage the hex on the printed nose
+    cone tip.", is set apart as a caution.
+  - >-
+    Steps 1, 3 and 6: data fields record the rod cut length (12 in, reference), the rod protrusion
+    (0.50 in, reference) and the knot distance behind the eye bolt (2-3 in, range). The guidebook
+    asks for no recorded measurement.
+  - >-
+    The photo of the rods and nuts on p. 220 sits under step 4 and stays there, though it also
+    shows the rod protrusion of step 3.
+  - Image captions are new.

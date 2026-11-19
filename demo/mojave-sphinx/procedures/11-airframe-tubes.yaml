@@ -1,0 +1,213 @@
+# Airframe Fabrication
+#
+# Adapted from HCR-5100 R01, Section V, OP 12: Airframe Fabrication (pp. 225-228).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: airframe-tubes
+name: Airframe Fabrication
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 12: Airframe Fabrication'
+  pages: 225-228
+
+description: |
+  Cut the shipping tube into the upper and lower airframe tubes, drill and slot them from the
+  printed templates, and check the holes against the parts they mount to.
+
+  Tools: drill, 9/32 in, 3/16 in and #50 drill bits, razor blade or very fine-toothed saw,
+  sandpaper, hex keys and screwdrivers. Optional: thin
+  cyanoacrylate glue or epoxy, aluminum tape, flexible plastic card, tape.
+
+  Alternate shipping tubes may be used so long as they are 4 in inner diameter. However, thin
+  walled mailing tubes (approximately 0.062 in thick) are not recommended, as they are prone to
+  damage and will increase the risk of structural failure in flight. The recommended tube has a
+  wall thickness of approximately 0.080 in; 0.125 in and 0.250 in heavy duty shipping tubes are
+  acceptable, at the cost of increased weight and drag. Using an alternate tube with a larger OD
+  will also require modifying the printed hole and slot marking templates.
+
+# One work order makes both tubes.
+outputs:
+  - { part: lower-airframe-tube, quantity: 1 }
+  - { part: upper-airframe-tube, quantity: 1 }
+
+# "Gather the following" in the guidebook (p. 226). The one shipping tube is cut in two, half
+# for each output.
+kit:
+  - { part: '20545T38', quantity: 0.5, for: lower-airframe-tube }
+  - { part: '20545T38', quantity: 0.5, for: upper-airframe-tube }
+  - { part: TMPLT-AF-LWR-416, quantity: 1, usage: tooling }
+  - { part: PLG-DRL-AF-LWR-416, quantity: 1, usage: tooling }
+  - { part: TMPLT-AF-UPR1-416, quantity: 1, usage: tooling }
+  - { part: TMPLT-AF-UPR2-416, quantity: 1, usage: tooling }
+  - { part: PLG-DRL-AF-UPR1-416, quantity: 1, usage: tooling }
+
+operations:
+  - title: Airframe Fabrication
+    source: { section: 'Section V, OP 12', pages: 225-228 }
+    workcenter: SHOP
+    images:
+      - file: photos/op-12/airframe-fabrication.png
+        caption: Lower and upper airframe tubes assembled, with the nose cone at the right.
+        source_page: 225
+    steps:
+      - title: Cut the tube in two
+        source: { step: 1, page: 227 }
+        instructions: |
+          Cut QTY 1 20545T38 shipping tube into two pieces of equal length (18 inches each).
+          Designate one as the upper airframe tube and one as the lower airframe tube. Ensure the
+          cut end is flat and clean.
+        data:
+          - name: upper_tube_length
+            label: Upper airframe tube, length
+            type: number
+            unit: in
+            required: true
+            # The guidebook gives 18 inches with no tolerance, so the value is shown, not checked.
+            spec: { kind: reference, nominal: '18' }
+          - name: lower_tube_length
+            label: Lower airframe tube, length
+            type: number
+            unit: in
+            required: true
+            spec: { kind: reference, nominal: '18' }
+
+      - title: Mark and plug the lower tube
+        source: { step: 2, page: 227 }
+        instructions: |
+          Use the TMPLT-AF-LWR-416 template to mark the positions of the airframe mounting bolt
+          holes and fuel line slot on the lower airframe tube. Then, insert the PLG-DRL-AF-LWR-416
+          sacrificial backing plug into the tube so that it sits flush with the end at which the
+          holes are to be drilled. This prevents or reduces delamination of the cardboard layers
+          during drilling.
+
+          *Note: The plug is intentionally oversized to preload against the inside of the tube.*
+
+      - title: Drill the lower tube holes
+        source: { step: 3, page: 227 }
+        instructions: |
+          Using a 9/32 in drill bit, drill 7 holes in the lower airframe tube in the locations
+          marked using the template. Once all holes are drilled, remove and discard the sacrificial
+          backing plug.
+
+      - title: Cut the fuel line slot
+        source: { step: 4, page: 227 }
+        instructions: |
+          Cut the slot along the templated line using a razor blade and/or a very fine toothed saw.
+
+          *Tip: It is recommended, but not required, to reinforce the edges of the slot, holes, and
+          tube ends using a thin cyanoacrylate glue or epoxy that will soak into the cardboard.*
+
+      - title: Cover the lower tube in tape
+        source: { step: 5, page: 227 }
+        instructions: |
+          Optional step: cover the lower airframe tube with aluminum tape in lengthwise strips with
+          approximately 1/4 in of overlap. Burnish the tape down with a flexible plastic card to
+          remove wrinkles.
+
+          *Note: This is primarily for visual effect, and provides minimal if any structural
+          reinforcement.*
+
+      - title: Mark and plug the upper tube
+        source: { step: 6, page: 227 }
+        instructions: |
+          Use the TMPLT-AF-UPR1-416 template to mark the positions of the nose cone screw holes on
+          the forward end of the upper airframe tube. Then, insert the PLG-DRL-AF-UPR1-416
+          sacrificial backing plug into the tube so that it sits flush with the end at which the
+          holes are to be drilled. This prevents or reduces delamination of the cardboard layers
+          during drilling.
+
+          *Note: The plug is intentionally oversized to preload against the inside of the tube.*
+
+      - title: Drill the nose cone screw holes
+        source: { step: 7, page: 228 }
+        instructions: |
+          Using a 3/16 in drill bit, drill 8 holes in the upper airframe tube in the locations
+          marked using the template. Once all holes are drilled, remove and discard the sacrificial
+          backing plug.
+
+      - title: Mark and drill shear pin holes
+        source: { step: 8, page: 228 }
+        instructions: |
+          Use the TMPLT-AF-UPR2-416 template to mark the positions of the shear pin holes on the
+          aft end of the upper airframe tube.
+
+          *Note: A sacrificial backing plug is not required due to the small diameter of these
+          holes.* Using a Number 50 (0.070 in) drill bit, drill 4 holes in the upper airframe tube
+          in the locations marked using the template. Once all holes are drilled, use sandpaper
+          and/or a razor blade to clean up any raised material on the inside of the tube.
+
+          *Note: The holes are intentionally undersized to allow press-fitting the shear pins
+          through the cardboard.*
+
+      - title: Check the mounting bolt holes
+        source: { step: 9, page: 228 }
+        instructions: |
+          Verify alignment of the lower airframe mounting bolt holes by sliding the lower airframe
+          tube over the upper tank interface ring. Ensure that 7X 91306A279 screws are able to be
+          installed simultaneously into the nuts retained in the interface ring. No screw is
+          installed in the hole that aligns with the fuel line slot.
+
+      - title: Check the nose cone screw holes
+        source: { step: 10, page: 228 }
+        instructions: |
+          Verify alignment of the upper airframe nose cone screw holes by inserting the nose cone
+          assembly into the forward end of the upper airframe tube and installing 8X 90272A194
+          screws into the nuts retained in the nose cone shoulder.
+
+      - title: Check the shear pin holes
+        source: { step: 11, page: 228 }
+        instructions: |
+          Verify alignment of the upper airframe tube shear pin holes by sliding the upper airframe
+          tube onto the forward end of the avionics bay coupler, so that the 4 shear pin holes are
+          positioned over the shear pin slots in the avionics bay bulkhead as shown. Install 4X
+          93135A013 nylon screws into the shear pin holes by press fitting, or turning with a
+          screwdriver, although the cardboard holes are not intended to be threaded.
+
+          *Note: If needed, the shear pins may be retained for flight using a small patch of tape
+          over the head.*
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - >-
+    The guidebook's OP 12 makes two parts, so this build has two outputs: the lower airframe tube
+    and the upper airframe tube.
+  - >-
+    Kit: the parts list prints QTY 1 20545T38, which step 1 cuts in two. It is written as two
+    lines of 0.5, one for each tube.
+  - >-
+    Kit: the parts list prints "-" as the quantity of each template and backing plug. Each is in
+    the kit as 1, used as tooling.
+  - >-
+    Kit: the upper airframe template is TMPLT-AF-UPR1-416 and TMPLT-AF-UPR2-416, the numbers
+    printed in steps 6 and 8. The parts list prints one, TMPLT-AF-UPR-416.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - >-
+    The note printed with the parts list (p. 226) moved to the description. "4”" is written "4 in",
+    "~.062”" "approximately 0.062 in", and ".080”", ".125”" and ".250”" with "0" and "in".
+  - >-
+    Step 1: the numbers 20545T38-AF-UPR and 20545T38-AF-LWR, printed in brackets after "upper
+    airframe tube" and "lower airframe tube", are left out. The two tubes are this build's outputs.
+  - >-
+    Step 1: two data fields record the length of each tube as cut. The guidebook asks for no
+    measurement after cutting.
+  - >-
+    The two tubes are called the lower airframe tube and the upper airframe tube throughout.
+    Steps 3, 7 and 8 say "the airframe tube", and step 9 "the 20545T38-AF-LWR airframe tube".
+  - >-
+    Steps 2 and 6: PLG-DRL-AF-LWR and PLG-DRL-AF-UPR1 are written PLG-DRL-AF-LWR-416 and
+    PLG-DRL-AF-UPR1-416, the numbers in the parts list.
+  - 'Step 3: "9/32”" is written "9/32 in". Step 7: "3/16”" is written "3/16 in".'
+  - 'Step 4: the dashes in "–but not required–" are written as commas.'
+  - 'Step 5: "¼”" is written "1/4 in".'
+  - 'Step 6: "the forward end the upper airframe tube" is written "the forward end of the upper airframe tube".'
+  - 'Step 8: "(.070”)" is written "(0.070 in)".'
+  - '"7X", "8X" and "4X" are written as plain numbers where no part number follows.'
+  - Image caption is new.

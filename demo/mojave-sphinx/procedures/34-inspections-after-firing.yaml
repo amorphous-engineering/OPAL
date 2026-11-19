@@ -1,0 +1,68 @@
+# Inspections After Firing
+#
+# Adapted from HCR-5100 R01, Section II: 2.7 Maintenance Schedule, Table 2.8 (pp. 84-85).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: inspections-after-firing
+name: Inspections After Firing
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: op
+source:
+  document: HCR-5100 R01
+  section: 'Section II, 2.7, Table 2.8'
+  pages: 84-85
+
+description: |
+  The inspections the guidebook recommends on the vehicle after each firing and each flight.
+
+  These maintenance suggestions are based on data gathered from many firings of the Mojave Sphinx
+  prototype, and should be sufficiently conservative estimates to keep the rocket in nominal
+  operating condition. However, always use best judgment to refurbish or replace hardware as
+  needed.
+
+operations:
+  - title: After each firing
+    source: { section: '2.7, Table 2.8', pages: 85 }
+    workcenter: BENCH
+    steps:
+      - title: Check tightness of chamber threaded rods/nuts
+        source: { row: 1, page: 85 }
+        instructions: |
+          Failure mode prevented: hot gas leakage and erosion at chamber/nozzle joint.
+
+      - title: Verify fuel injector orifices are unobstructed
+        source: { row: 2, page: 85 }
+        instructions: |
+          Failure mode prevented: chamber hot spots or reduced performance due to clogged fuel
+          orifices.
+
+      - title: Verify igniter pass-through hole is unobstructed and clear as needed
+        source: { row: 3, page: 85 }
+        instructions: |
+          Failure mode prevented: reduced igniter burn time or difficulty installing e-match as a
+          consequence of soot buildup.
+
+  - title: After each flight, or firing with fins installed
+    source: { section: '2.7, Table 2.8', pages: 85 }
+    workcenter: BENCH
+    steps:
+      - title: Check tightness of fin fasteners
+        source: { row: 4, page: 85 }
+        instructions: |
+          Failure mode prevented: erratic trajectory due to excessive fin deflection in flight.
+
+changes_from_source:
+  - >-
+    Table 2.8 is a table of four inspections with the columns Inspection, Perform After and
+    Failure Mode Prevented. Here each row is a step: the Inspection cell is the title, and the
+    Failure Mode Prevented cell is the text under it. The Perform After column gives the two
+    operations: "Each firing" and "Each flight (or firing with fins installed)".
+  - The first sentence of the description is new. The rest is from the opening of 2.7 (p. 84).
+  - >-
+    Table 2.9 (parts to replace after a number of firings or launches) and Table 2.10 (spares to
+    keep on hand) are not in this procedure. OPAL has no count of firings per serial to hang a
+    replacement schedule on.
+  - There are no pictures on pp. 84-85.

@@ -1,0 +1,1889 @@
+# Parts.
+#
+# Transcribed from HCR-5100 R01. Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See README.md.
+#
+# key and external_pn: the number the guidebook prints. The guidebook prints some numbers more than
+#   one way, so one rule picks the form used here:
+#     - a bought part takes the number in its order link in the bills of material (Section IV,
+#       and 6.2 for ground equipment), which is the number to order by. A row with no link takes
+#       its Part Number column;
+#     - a part Half Cat designed takes the number in the parts list of the procedure that first
+#       uses it, or its appendix table (C.1, D.1, E.1) when that list gives none.
+#   Every other form the guidebook prints is listed under also_printed_as.
+#   An en dash in a printed number is written as a hyphen. A vendor number printed as a pair
+#   (9056K42-9056K423) is written as its second half. A part with no number anywhere has a
+#   lower-case name as its key and no external_pn.
+# name: the Item name in Section IV when the part has a line there, else the name in the procedure's
+#   parts list.
+# description: the vendor description for a bought part, the procedure's description for a made one.
+# supplier.price: as printed in Section IV. It is the price of the pack when `pack` is given.
+# tier, tracking, category: chosen for this demo. On the vehicle is FLIGHT; raw stock, tooling and
+#   consumables are DEV. Machined parts and assemblies are serialized; the rest is tracked by lot.
+#
+# OPAL assigns its own number (SPX-F-0001 and so on) when the part is created.
+
+parts:
+  - key: '9056K423'
+    name: '6061 Aluminum Tube 4"D X 1/8"W X 36"L'
+    external_pn: '9056K423'
+    description: 'Multipurpose 6061 Aluminum Round Tube 1/8" Wall Thickness, 4" OD (3 ft)'
+    tier: DEV
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 3 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '9056K423', price: '85.38' }
+    also_printed_as: ['9056K42-9056K423']
+
+  - key: DRLJG-TANK-8X625OD-BSHNG
+    name: Propellant Tank Drill Jig
+    external_pn: DRLJG-TANK-8X625OD-BSHNG
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Propulsion
+    source: 'Section 4.2.1 line 19 (pp. 118-119); Table C.1 (p. 318)'
+    made_from: printer filament
+
+  - key: '9452K226'
+    name: '-238 Buna-N O-Rings'
+    external_pn: '9452K226'
+    description: 'Oil-Resistant Buna-N O-Ring 1/8 Fractional Width, Dash Number 238'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 5 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '9452K226', price: '16.14', pack: 50 }
+
+  - key: '91255A378'
+    name: '5/16-24 X 1/2" Button Head Screw'
+    external_pn: '91255A378'
+    description: 'Button Head Hex Drive Screw Black-Oxide Alloy Steel, 5/16"-24 Thread, 1/2" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 6 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '91255A378', price: '7.57', pack: 25 }
+    also_printed_as: ['9255A378']
+
+  - key: '94579A550'
+    name: '5/16-24 Offset Narrow Base Weld Nut'
+    external_pn: '94579A550'
+    description: 'Steel Offset-Barrel Narrow-Base Weld Nut 5/16"-24 Thread Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 7 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '94579A550', price: '9.21', pack: 25 }
+
+  - key: '90264A435'
+    name: '1/4-20 Coupling Nut'
+    external_pn: '90264A435'
+    description: 'Zinc-Plated Steel Coupling Nut Low-Strength, 1/4"-20 Thread Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 9 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '90264A435', price: '0.39' }
+
+  - key: '91367A952'
+    name: 'Sealing Washers for 1/4" Screw, 0.5" OD'
+    external_pn: '91367A952'
+    description: 'Chemical-Resistant Fluorosilicone Sealing Washer for 1/4" Screw Size,.230" ID,.5" OD,.052" to .072" Thick'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 10 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '91367A952', price: '7.49', pack: 10 }
+
+  - key: '90357A013'
+    name: 'Ultra-Low-Profile Socket Head Screw Alloy Steel, 1/4"-20 Thread Size, 1/2" Long'
+    external_pn: '90357A013'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 11 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '90357A013', price: '4.93' }
+
+  - key: TANK-36L-047V-2X8X313C
+    name: Propellant Tank Casing
+    external_pn: TANK-36L-047V-2X8X313C
+    description: 'Tank Tube, Drilled, 36” Long, 1.2mm (.047”) Vent, 8X 5/16” Clearance Holes Per End'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.1 line 13 (pp. 118-119)
+    made_from: '9056K423'
+    also_printed_as: [TANK-36L-047V2X8X313C]
+
+  - key: BKHD-FL-O238-4NPT-2X250C
+    name: Fuel Tank Bulkhead
+    external_pn: BKHD-FL-O238-4NPT-2X250C
+    description: 'Fuel Tank Bulkhead, -238 O-ring Gland, 1/4NPT Port, 2X ¼” Clearance Holes'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.1 line 14 (pp. 118-119)
+    made_from: '1610T134'
+    also_printed_as: [BKHD-FL-O238-4NPT2X250C]
+
+  - key: BKHD-OX-O238-8NPT-4NPT
+    name: Oxidizer Tank Bulkhead
+    external_pn: BKHD-OX-O238-8NPT-4NPT
+    description: 'Oxidizer Tank Bulkhead, 3.75” Diameter, -238 O-ring Gland, 1/8NPT & 1/4NPT Ports'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.1 line 15 (pp. 118-119)
+    made_from: '1610T134'
+    also_printed_as: [BKHD-OX-O238-8NPT4NPT, BKHD-OX-0238-8NPT-4NPT]
+
+  - key: PSTN-2XO238-250T20
+    name: Propellant Piston
+    external_pn: PSTN-2XO238-250T20
+    description: 'Piston, 2X -238 O-Ring Glands, ¼-20 Tapped Hole'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.1 line 16 (pp. 118-119)
+    made_from: '1610T33'
+
+  - key: INRG-200S-8X3125C-8X250C
+    name: Interface Ring
+    external_pn: INRG-200S-8X3125C-8X250C
+    description: 'Tank Interface Ring, 3.75” Diameter, 8X 5/16” & ¼” Clearance Holes'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.1 line 17 (pp. 118-119)
+    made_from: '7392T173'
+    also_printed_as: [INRG-200S-8X3125C8X250C]
+
+  - key: '44665K137'
+    name: 'Aluminum Pipe Nipple, 1/4NPT, 4"L'
+    external_pn: '44665K137'
+    description: 'Standard-Wall Aluminum Pipe Nipple Threaded on Both Ends, 1/4 NPT, 4" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 1 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '44665K137', price: '5.09' }
+
+  - key: '50785K43'
+    name: 'Brass High Pressure Elbow Fitting, M/F, 1/4NPT'
+    external_pn: '50785K43'
+    description: 'High-Pressure Brass Pipe Fitting 90 Degree Elbow Adapter, 1/4 NPT Female x Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 2 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50785K43', price: '2.94' }
+
+  - key: '5485K31'
+    name: 'High-Pressure Brass Straight Reducer, 1/4 x 1/8 NPT Male'
+    external_pn: '5485K31'
+    description: 'High-Pressure Brass Pipe Fitting Straight Reducer, 1/4 x 1/8 NPT Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 3 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '5485K31', price: '2.64' }
+
+  - key: '50785K35'
+    name: 'High-Pressure Brass Elbow Connector, 1/8 NPT Female'
+    external_pn: '50785K35'
+    description: 'High-Pressure Brass Pipe Fitting 90 Degree Elbow Connector, 1/8 NPT Female'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 4 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50785K35', price: '3.31' }
+
+  - key: '50675K435'
+    name: '37 Degree Flared Adapter for 5/16" Tube OD, 1/8 Pipe Size'
+    external_pn: '50675K435'
+    description: '37 Degree Flared Fitting for Copper Tubing Straight Adapter for 5/16" Tube OD, 1/8 Pipe Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 5 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50675K435', price: '5.38' }
+
+  - key: '4468K858'
+    name: 'High-Pressure Braided Chemical Hose with Fittings Brass 1/2"-20 Thread Size Flare UNF Female, 3/8" OD - 42"'
+    external_pn: '4468K858'
+    description: 'High-Pressure Braided Chemical Hose with Fittings Brass 1/2"-20 Thread Size Flare UNF Female, 3/8" OD (42 in)'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 6 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '4468K858', price: '30.36' }
+
+  - key: '50675K135'
+    name: '37 Degree Flared Straight Connector for 5/16" Tube OD, 1-3/8" Long'
+    external_pn: '50675K135'
+    description: '37 Degree Flared Fitting for Copper Tubing Straight Connector for 5/16" Tube OD, 1-3/8" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 9 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50675K135', price: '4.47' }
+
+  - key: '50675K163'
+    name: '37 Degree Flared Adapter for 3/8" Tube OD x 1/4 NPT Male'
+    external_pn: '50675K163'
+    description: '37 Degree Flared Fitting for Copper Tubing Adapter for 3/8" Tube OD x 1/4 NPT Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 10 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50675K163', price: '3.65' }
+
+  - key: '9685T3'
+    name: 'Nylon Tubing, 1/4" OD, 800PSI, 10ft'
+    external_pn: '9685T3'
+    description: 'High-Pressure Hard Plastic Tubing for Air&Water Nylon, Semi-Clear White, 0.15" ID, 1/4" OD (10 ft)'
+    unit: ft
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 11 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '9685T3', price: '11.50' }
+
+  - key: '7768K21'
+    name: 'Check Valve, 1/8NPT Female/Male, Brass'
+    external_pn: '7768K21'
+    description: 'Brass Threaded Check Valve with Brass Piston, 1/8 NPT Female x NPT Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 12 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '7768K21', price: '15.00' }
+
+  - key: '50785K41'
+    name: 'Elbow, 1/8NPT, Male/Female, Brass'
+    external_pn: '50785K41'
+    description: 'High-Pressure Brass Pipe Fitting 90 Degree Elbow Adapter, 1/8 NPT Female x Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 13 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50785K41', price: '2.16' }
+
+  - key: '9396T31'
+    name: 'Push to Connect Fitting, 1/4" Tube X 1/8NPT'
+    external_pn: '9396T31'
+    description: 'High-Pressure Push-to-Connect Tube Fitting for Air and Water, Adapter, 1/4" Tube OD x 1/8 NPTF Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 14 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '9396T31', price: '3.95' }
+
+  - key: '50785K27'
+    name: 'High Pressure Brass Straight adapter, 1/4NPT Female x Male'
+    external_pn: '50785K27'
+    description: 'High-Pressure Brass Pipe Fitting Straight Adapter with Hex Body, 1/4 NPT Female x Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 17 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '50785K27', price: '2.66' }
+
+  - key: QDC-750x125FLG-281FB-8NPT
+    name: 'Quick Disconnect, ¾” x ⅛” Flange, 9/32” Female Bore, 1/8 NPT'
+    external_pn: QDC-750x125FLG-281FB-8NPT
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Fluid System
+    source: Section 4.2.2 line 18 (pp. 120-121)
+    made_from: '8974K299'
+    also_printed_as: [QDC-750X125FLG-281FB8NPT, QDC-750X125FLG-281FB-8NPT]
+
+  - key: DS3225
+    name: '25kg Servo w/ 25T Servo Horn'
+    external_pn: DS3225
+    description: '2Pack 25KG High Torque RC Servo Waterproof servo Compatible with 1/6, 1/8, 1/10, 1/12 RC Car, Full Metal Gear Steering Servo with 25T Servo Horn (270°)'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 1 (pp. 122-123)
+    supplier: { key: amazon, price: '28.99', pack: 2 }
+
+  - key: '4112T22'
+    name: 'Compact High Pressure Ball Valve, 1/4NPT'
+    external_pn: '4112T22'
+    description: 'Compact High-Pressure Brass Ball Valve with Lever Handle, 1/4 NPT Female'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 2 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '4112T22', price: '17.26' }
+
+  - key: '90480A009'
+    name: '8-32 Hex Nut, Low Strength'
+    external_pn: '90480A009'
+    description: 'Low-Strength Steel Hex Nut Zinc-Plated, 8-32 Thread Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 3 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '90480A009', price: '2.02', pack: 100 }
+
+  - key: '90591A141'
+    name: 'M4X0.7 Hex Nut, Low Strength'
+    external_pn: '90591A141'
+    description: 'Zinc-Plated Steel Hex Nut Low-Strength, M4 x 0.7 mm Thread'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 4 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '90591A141', price: '1.90', pack: 100 }
+
+  - key: '90272A194'
+    name: '8-32 X 1/2"L Screw, Zinc Plated Steel'
+    external_pn: '90272A194'
+    description: 'Zinc-Plated Steel Pan Head Phillips Screw 8-32 Thread, 1/2" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 5 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '90272A194', price: '3.98', pack: 100 }
+    also_printed_as: ['9027A194']
+
+  - key: '91280A044'
+    name: 'M4X0.7 X 16mm Hex Head Screws, 18-8SS'
+    external_pn: '91280A044'
+    description: 'Medium-Strength Class 8.8 Steel Hex Head Screw M4 x 0.70 mm Thread, 16 mm Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 6 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '91280A044', price: '10.56', pack: 100 }
+    also_printed_as: ['92180A044']
+
+  - key: '98689A113'
+    name: 'M4 Washer, 8mm OD, 18-8SS'
+    external_pn: '98689A113'
+    description: 'General Purpose 18-8 Stainless Steel Washer for M4 Screw Size, 4.300 mm ID, 8 mm OD'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 7 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '98689A113', price: '3.43', pack: 100 }
+
+  - key: '92148A160'
+    name: 'M4 Split Lock Washer, 18-8SS'
+    external_pn: '92148A160'
+    description: '18-8 Stainless Steel Split Lock Washer for M4 Screw Size, Standard, 4.4 mm ID, 7.6 mm OD'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 8 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '92148A160', price: '1.94', pack: 100 }
+
+  - key: '93475A210'
+    name: 'M3 Flat Washer, 18-8SS, 7mm OD'
+    external_pn: '93475A210'
+    description: '18-8 Stainless Steel Washer for M3 Screw Size, 3.2 mm ID, 7 mm OD'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 9 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '93475A210', price: '2.19', pack: 100 }
+
+  - key: '92855A310'
+    name: 'M3x0.5 10mm Low Profile Socket Head Screw, 18-8SS'
+    external_pn: '92855A310'
+    description: '18-8 Stainless Steel Low-Profile Socket Head Screws with Hex Drive, M3 x 0.5 mm Thread, 10 mm Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 10 (pp. 122-123)
+    supplier: { key: mcmaster, vendor_pn: '92855A310', price: '2.28', pack: 25 }
+
+  - key: pla-plus-3d-printer-filament
+    name: 'PLA+ 3D Printer Filament, White, 2kg (Or Equivalent)'
+    external_pn: pla-plus-3d-printer-filament
+    description: 'OVERTURE PLA Plus (PLA+) Filament 1.75mm PLA Professional Toughness Enhanced PLA Roll, Cardboard Spool, Premium PLA 2kg(4.4lbs), Dimensional Accuracy Probability +/- 0.02mm (White 2-Pack)'
+    tier: DEV
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 13 (pp. 122-123)
+    supplier: { key: amazon, price: '45.99' }
+
+  - key: SABV-MOUNT-V2
+    name: Servo Valve Mount
+    external_pn: SABV-MOUNT-V2
+    description: Servo Valve Mount V2.STL
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Valves
+    source: Section 4.2.3 line 14 (pp. 122-123)
+    made_from: printer filament
+    also_printed_as: [SABV-MNT-04V-3225S]
+
+  - key: SABV-HCON-V2
+    name: Servo Valve Handle Connector
+    external_pn: SABV-HCON-V2
+    description: Servo Valve Handle Connector V2.STL
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Valves
+    source: Section 4.2.3 line 15 (pp. 122-123)
+    made_from: printer filament
+    also_printed_as: [SABV-HCON-04V-3225S]
+
+  - key: BKHD-REC-4X250C-2X170WE
+    name: 'Bulkhead, Recovery/Avionics Bay, 3.99” OD, 4X 1/4" Clearance Holes'
+    external_pn: BKHD-REC-4X250C-2X170WE
+    description: 'Bulkhead, Recovery/Avionics Bay, 4X 1/4" Clearance Holes, 2X .170” Wire Exit Holes'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 8 (pp. 131-132)
+    supplier: { key: sendcutsend, price: '6.78' }
+    also_printed_as: [BKHD-REC-399-250C-2X170WE, BKHD-PLY-399-250C-4X]
+
+  - key: SABV-04FF
+    name: 'Servo-Actuated Ball Valve Assembly, 1/4NPT Female'
+    external_pn: SABV-04FF
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Valves
+    source: OP 3 parts list (p. 151)
+    also_printed_as: [SABV-14NPT-FF]
+
+  - key: NTRG-8X3125WN-8X25HN
+    name: Nut Retaining Ring
+    external_pn: NTRG-8X3125WN-8X25HN
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Propulsion
+    source: 'Section 4.2.1 line 18 (pp. 118-119); Table C.1 (p. 318)'
+    description: 'Nut Ring, Printed, for 8X 5/16” Weld Nuts & ¼” Hex Nuts'
+    made_from: printer filament
+    also_printed_as: [NTRG-45C20D-200E]
+
+  - key: '95505A601'
+    name: '1/4-20 Medium Strength Hex Nuts'
+    external_pn: '95505A601'
+    description: 'Medium-Strength Steel Hex Nut, Grade 5, 1/4"-20 Thread Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 13 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '95505A601', price: '7.08', pack: 100 }
+
+  - key: '92141A029'
+    name: '1/4 Washers 5/8" OD 18-8SS'
+    external_pn: '92141A029'
+    description: '18-8 Stainless Steel Washer for 1/4" Screw Size, 0.281" ID, 0.625" OD'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 11 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '92141A029', price: '5.50', pack: 100 }
+
+  - key: '91025A568'
+    name: 'Black-Oxide Steel Threaded Stud, 1/4"-20 Thread Size, 7" Long'
+    external_pn: '91025A568'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: OP 4 parts list (p. 159)
+
+  - key: '91102A750'
+    name: 'Split Lock Washer for 1/4 Screw Size'
+    external_pn: '91102A750'
+    description: 'Zinc-Plated Steel Split Lock Washer for 1/4" Screw Size, 0.26" ID, 0.487" OD'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 12 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '91102A750', price: '3.02', pack: 100 }
+
+  - key: '3043T643'
+    name: 'U-Bolt with Mounting Plate, Galvanized, 1/4"-20 Thread Size, 1" ID'
+    external_pn: '3043T643'
+    description: 'U-Bolt with Mounting Plate, Zinc-Plated Steel, 1/4"-20 Thread Size, 1" ID'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.1 line 13 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '3043T643', price: '1.31' }
+
+  - key: nylon-zip-tie
+    name: 'Nylon Zip Tie, 0.188-inch width'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: OP 1 parts list (p. 139)
+    also_printed_as: [ZIP-TIE-188W]
+
+  - key: ptfe-thread-sealant-tape
+    name: PTFE Thread Sealant Tape
+    tier: DEV
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: OP 3 parts list (p. 151)
+
+  - key: fuel-bulkhead-subassembly
+    name: Fuel Bulkhead Subassembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 6 parts list (p. 173)
+
+  - key: oxidizer-bulkhead-subassembly
+    name: Oxidizer Bulkhead Subassembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 6 parts list (p. 173)
+
+  - key: propellant-tank-assembly
+    name: Propellant Tank Assembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 9 parts list (p. 197)
+
+  # ---- OPs 7 to 9: thrust chamber, fin brackets, thrust structure
+
+  - key: NZZL-45C20D-200E
+    name: 'Nozzle, for Throat Insert'
+    external_pn: NZZL-45C20D-200E
+    description: 'Nozzle, 45/20 Degree, 3.00” OD, 2.00” Exit, Bored for Throat Insert'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.4 line 19 (pp. 124-125)
+    made_from: '61ARB3'
+
+  - key: THRT-45C20D-100T
+    name: 'Throat Insert, Spring Retained'
+    external_pn: THRT-45C20D-100T
+    description: 'Throat Insert, 45/20 Degree, 1.00” Throat'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.4 line 21 (pp. 124-125)
+    made_from: CRB112
+
+  - key: CMBR-200DI-250B-5375L
+    name: Combustion Chamber
+    external_pn: CMBR-200DI-250B-5375L
+    description: 'Combustion Chamber, 2.00” ID, 2.50” Injector Bore, 5.375” Long, MS V1.2'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.4 line 20 (pp. 124-125)
+    made_from: '61ARDT3500'
+    also_printed_as: [CMBR-200DI-250B-525L]
+
+  - key: INJC-2X8NPT-38NPT-250T20-2XO230-BASIC
+    name: 'Injector, Basic Orifice Pattern'
+    external_pn: INJC-2X8NPT-38NPT-250T20-2XO230-BASIC
+    description: 'Injector, 2X 1/8NPT ports, 1X 3/8NPT Port, ¼-20 Tapped Hole, 2X -141 O-ring Glands, Basic Orifice Pattern'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: Section 4.2.4 line 18 (pp. 124-125)
+    made_from: '61ARB3'
+
+  - key: '50675K164'
+    name: '37 Degree Flared Adapter for 3/8" Tube OD x 3/8 NPT Male'
+    external_pn: '50675K164'
+    description: '37 Degree Flared Fitting for Copper Tubing Adapter for 3/8" Tube OD x 3/8 NPT Male'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 5 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '50675K164', price: '5.18' }
+
+  - key: '50785K171'
+    name: 'Pipe Nipple, 1/8NPT X 2"L, Brass'
+    external_pn: '50785K171'
+    description: 'High-Pressure Brass Pipe Fitting Nipple, Threaded on Both Ends, 1/8 Pipe Size, 2" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Igniter
+    source: Section 4.2.5 line 5 (pp. 126)
+    supplier: { key: mcmaster, vendor_pn: '50785K171', price: '2.78' }
+
+  - key: '50785K91'
+    name: 'High-Pressure Brass Straight Connector with Hex Body, 1/8 NPT Female'
+    external_pn: '50785K91'
+    description: 'High-Pressure Brass Pipe Fitting Straight Connector with Hex Body, 1/8 NPT Female'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Igniter
+    source: Section 4.2.5 line 8 (pp. 126)
+    supplier: { key: mcmaster, vendor_pn: '50785K91', price: '1.46' }
+
+  - key: '9396K79'
+    name: '-141 Silicone O-rings'
+    external_pn: '9396K79'
+    description: 'High-Temperature High-Purity Silicone O-Ring 3/32 Fractional Width, Dash Number 141'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 6 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '9396K79', price: '10.17', pack: 10 }
+
+  - key: '90213A101'
+    name: 'Inverted External Retaining Ring for 2.5" OD'
+    external_pn: '90213A101'
+    description: 'Inverted External Retaining Ring for 2-1/2" OD, Black-Phosphate 1060-1090 Spring Steel'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 7 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '90213A101', price: '1.18' }
+
+  - key: '94095K114'
+    name: 'Graphite Pipe Gasket, Size 1'
+    external_pn: '94095K114'
+    description: 'High-Temperature Graphite Gasket for ANSI Class 600, for Pipe Size 1, 1-5/16" ID'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 8 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '94095K114', price: '2.83' }
+
+  - key: FLNG-ST-25T-8X250C
+    name: 'Flange Plate, Thrust Chamber, Steel, 1/4"'
+    external_pn: FLNG-ST-25T-8X250C
+    description: 'Chamber Flange, Steel, .25” Thick, 8X 1/4" Clearance Holes, MS V1.2'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 9 (pp. 124-125)
+    supplier: { key: sendcutsend, price: '9.28' }
+
+  - key: BRKT-90A-125T-2X250C
+    name: 'Bracket, Thrust Chamber Mounting, Aluminum, 1/8"'
+    external_pn: BRKT-90A-125T-2X250C
+    description: 'Bracket, Thrust Chamber Mounting, 90-degree Angle, 1/8" Thick Aluminum, 2X 1/4" Clearance Holes, MS V1.2'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 10 (pp. 124-125)
+    supplier: { key: sendcutsend, price: '5.18' }
+
+  - key: '90281A102'
+    name: '1/4-20 x 8"L Black Oxide Threaded on Both Ends Stud'
+    external_pn: '90281A102'
+    description: 'Black-Oxide Steel Threaded on Both Ends Stud 1/4"-20 Thread Size, 8" Long, 1" Long Threads'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 14 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '90281A102', price: '2.59' }
+
+  - key: '90015A410'
+    name: 'Low-Profile Ultra-Wd Truss Head Slotted Screw 1/4"-20 Thread, 3/4" Long'
+    external_pn: '90015A410'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 15 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '90015A410', price: '8.32' }
+
+  - key: '9368T14'
+    name: 'High-Temperature Dry-Running 841 Bronze Sleeve Bearing for 1/4" Shaft Diameter and 3/8" Housing ID, 3/8" Long'
+    external_pn: '9368T14'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 16 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '9368T14', price: '0.97' }
+
+  - key: '8284N57'
+    name: 'Garter Spring Hard Drawn Steel, 1.529" OD, 1.341" ID'
+    external_pn: '8284N57'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.4 line 17 (pp. 124-125)
+    supplier: { key: mcmaster, vendor_pn: '8284N57', price: '5.31' }
+
+  - key: '91306A279'
+    name: '1/4-20 X 7/8 Button Head Hex Drive Screws'
+    external_pn: '91306A279'
+    description: 'Button Head Hex Drive Screws Zinc-Plated Alloy Steel, 1/4"-20 Thread, 7/8" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: Section 4.2.1 line 8 (pp. 118-119)
+    supplier: { key: mcmaster, vendor_pn: '91306A279', price: '9.30', pack: 50 }
+
+  - key: o-ring-grease
+    name: O-ring Grease
+    tier: DEV
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: OP 7 parts list (p. 181)
+
+  - key: '8982K402'
+    name: 'Aluminum Angle, 1" X 1" X 1/8" X 24"L'
+    external_pn: '8982K402'
+    description: 'Multipurpose 6061 Aluminum 90 Degree Angle with Round Edge, 1/8" Thickness, 1" High x 1" Wide Outside'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 15 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '8982K402', price: '7.59' }
+    also_printed_as: ['89822K402', '8982K402-OM971']
+
+  - key: FIN-STD-250T-4X250C
+    name: 'Fin, Standard Profile, Plywood, 1/4" Thick, 4X 1/4" Clearance Holes'
+    external_pn: FIN-STD-250T-4X250C
+    description: 'Fin, Standard Profile, Plywood, 1/4" Thick, 4X 1/4" Clearance Holes* *(Or alternative/custom fins)'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 8 parts list (p. 192)
+
+  - key: AERO-100X100X0125
+    name: 'Aerodynamic Fin Bracket Tip, for 1.00 X 1.00 X .125 Aluminum Angle'
+    external_pn: AERO-100X100X0125
+    description: 'Aerodynamic Fin Bracket Tip, for 1.00 X 1.00 X .125 Aluminum Angle (Optional)'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 8 parts list (p. 192)
+
+  - key: TMPLT-FIN-BRKT-1X1-AFT
+    name: 'Fin Bracket Template, Aft'
+    external_pn: TMPLT-FIN-BRKT-1X1-AFT
+    description: 'Fin Bracket Drill Jig, Aft'
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Airframe
+    source: Section 4.3.1 line 26 (pp. 128-130)
+    made_from: printer filament
+
+  - key: TMPLT-FIN-BRKT-1X1-FWD
+    name: 'Fin Bracket Template, Forward'
+    external_pn: TMPLT-FIN-BRKT-1X1-FWD
+    description: 'Fin Bracket Drill Jig, Fwd'
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Airframe
+    source: Section 4.3.1 line 27 (pp. 128-130)
+    made_from: printer filament
+
+  - key: thrust-chamber-assembly
+    name: Thrust Chamber Assembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 9 parts list (p. 197)
+
+  - key: fin-bracket-assembly
+    name: Fin Bracket Assembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: OP 9 parts list (p. 197)
+
+  - key: SPCR-400SD-250C0313C
+    name: 'Spacer, Fin Bracket to Tank'
+    external_pn: SPCR-400SD-250C0313C
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 16 (pp. 128-130)
+    also_printed_as: [SPCR-400SD-250C-0313C]
+
+  - key: '91255A839'
+    name: '5/16-24 X 7/8" Button Head Screws'
+    external_pn: '91255A839'
+    description: 'Button Head Hex Drive Screw Black-Oxide Alloy Steel, 5/16"-24 Thread, 7/8" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 18 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '91255A839', price: '4.17', pack: 10 }
+
+  - key: '4468K031'
+    name: 'High-Pressure Braided Chemical Hose with Fittings Brass 1/2"-20 Thread Size Flare UNF Female, 3/8" OD - 14"'
+    external_pn: '4468K031'
+    description: 'High-Pressure Braided Chemical Hose with Fittings Brass 1/2"-20 Thread Size Flare UNF Female, 3/8" OD (14 in)'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 7 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '4468K031', price: '19.32' }
+
+  - key: '4468K865'
+    name: 'High-Pressure Braided Chemical Hose with Fittings Brass 9/16"-18 Thread Size Flare UNF Female, 7/16" OD – 12”'
+    external_pn: '4468K865'
+    description: 'High-Pressure Braided Chemical Hose with Fittings Brass 9/16"-18 Thread Size Flare UNF Female, 7/16" OD (12 in)'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 8 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '4468K865', price: '27.61' }
+
+  - key: SRV-Y-HRNS
+    name: '3-Pin Servo Y-Harness'
+    external_pn: SRV-Y-HRNS
+    description: '5 Pcs JR/Futaba Style Servo 1 to 2 Y Harness Leads Splitter Cable Male to Female Extension Lead Wire for RC Models Airplane 7cm'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 12 (pp. 122-123)
+    supplier: { key: amazon, price: '7.99' }
+
+  - key: SRV-3PIN-1MXT
+    name: '3-pin Servo Extension Cables, 1m'
+    external_pn: SRV-3PIN-1MXT
+    description: YXQ 1M Servo Extension Cable 3 Pin Male to Female Lead Wire for RC Airplane (10Pcs)
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Valves
+    source: Section 4.2.3 line 11 (pp. 122-123)
+    supplier: { key: amazon, price: '9.99', pack: 10 }
+    also_printed_as: [YXQ]
+
+  # ---- OPs 10 to 13: avionics bay, nose cone, airframe, recovery
+
+  - key: AVBY-HF-3994
+    name: 'Avionics Bay Coupler, Half, 3.994” OD, Printed'
+    external_pn: AVBY-HF-3994
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 10 (pp. 128-130)
+    made_from: printer filament
+    also_printed_as: [AVBY-HF-3992]
+
+  - key: AVBY-SB-4160
+    name: 'Avionics Bay Switch Band, 4.16” OD, Printed'
+    external_pn: AVBY-SB-4160
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 11 (pp. 128-130)
+    made_from: printer filament
+
+  - key: '92580A328'
+    name: '1/4-20 X 10"L Threaded Rod, B7 Medium Strength'
+    external_pn: '92580A328'
+    description: 'Grade B7 Medium-Strength Steel Threaded Rod 1/4"-20 Thread Size, 10" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 14 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '92580A328', price: '3.60' }
+
+  - key: AVBY-CR-4R
+    name: 'Avionics Bay Bulkhead Centering Ring, for 4-Rod Coupler'
+    external_pn: AVBY-CR-4R
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Recovery
+    source: Section 4.3.2 line 9 (pp. 131-132)
+    made_from: printer filament
+
+  - key: AVBY-SLD-225X600-6XM4C
+    name: 'Avionics Bay Sled, Plywood, 2.25” X 6.00”, 6X M4 Clearance Holes'
+    external_pn: AVBY-SLD-225X600-6XM4C
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Recovery
+    source: Section 4.3.2 line 7 (pp. 131-132)
+    made_from: printer filament + plywood
+    also_printed_as: [AVBY-PLY-SL-225X600]
+
+  - key: AVBY-MT-250R-M4C
+    name: 'Avionics Bay Sled Mount, for .25” Rods, M4 Clearance Holes'
+    external_pn: AVBY-MT-250R-M4C
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Recovery
+    source: Section 4.3.2 line 10 (pp. 131-132)
+    made_from: printer filament
+
+  - key: AVBY-BH-2X9V-250R-M4C
+    name: 'Avionics Bay Battery Holder, 2X 9V Batteries, for .25” Rods, M4 Clearance Holes'
+    external_pn: AVBY-BH-2X9V-250R-M4C
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Recovery
+    source: Section 4.3.2 line 11 (pp. 131-132)
+    made_from: printer filament
+    also_printed_as: [AVBY-BH-2X9V250R-M4C]
+
+  - key: '93505A211'
+    name: 'Hex Standoffs, 2-56, Aluminum'
+    external_pn: '93505A211'
+    description: 'Male-Female Threaded Hex Standoff Aluminum, 3/16" Hex Size, 1/4" Long, 2-56 Thread Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 12 (pp. 131-132)
+    supplier: { key: mcmaster, vendor_pn: '93505A211', price: '0.52' }
+
+  - key: '90604A303'
+    name: 'Pan Head Combination Phillips/Slotted Screws, 18-8 Stainless Steel, 2-56 Thread Size, 1/4" Long'
+    external_pn: '90604A303'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: OP 10 parts list (p. 206)
+
+  - key: '91755A200'
+    name: 'Nylon Washers, #2 Screw Size'
+    external_pn: '91755A200'
+    description: 'Self-Retaining Washer for # 2 & M2 Size, 0.115" ID, 0.203" OD, 0.022"-0.042" Thick'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 13 (pp. 131-132)
+    supplier: { key: mcmaster, vendor_pn: '91755A200', price: '3.97' }
+    also_printed_as: ['91755A152']
+
+  - key: EGTMR-QRK
+    name: Eggtimer Quark Dual Deploy Altimeter Kit
+    external_pn: EGTMR-QRK
+    description: Eggtimer Quark Deployment Controller
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 1 (pp. 131-132)
+    supplier: { key: eggtimerrocketry, price: '20.00' }
+
+  - key: '7712K511'
+    name: '9V Battery Connector'
+    external_pn: '7712K511'
+    description: 'Battery Holder 1 9V Battery, T-Shape with Single Layout, 1.04" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 15 (pp. 131-132)
+    supplier: { key: mcmaster, vendor_pn: '7712K511', price: '1.21' }
+
+  - key: '20GA-RBP'
+    name: '20GA Silicone Coated Wire, Red & Black, 10ft Each'
+    external_pn: '20GA-RBP'
+    description: '20 Gauge Wire 20 feet Silicone Wire Soft and Flexible Tinned Copper Wire High Temperature Resistance 10 ft Black and 10 ft Red Stranded Wire for 3D Printer, Test Leads, RC Applications'
+    unit: ft
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 18 (pp. 131-132)
+    supplier: { key: amazon, price: '8.99' }
+    also_printed_as: ['16GA-RBP']
+
+  - key: '71295K64'
+    name: 'Cable Tie, Standard, 9" Long'
+    external_pn: '71295K64'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Propulsion
+    source: OP 10 parts list (p. 206)
+
+  - key: '9V-BATT'
+    name: '9V Alkaline Batteries'
+    external_pn: '9V-BATT'
+    description: '9 Volt Battery'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 16 (pp. 131-132)
+    supplier: { key: retail-store, price: '8.00', pack: 2 }
+
+  - key: NSCN-SLDR-4X250R-8X832HNC
+    name: 'Nose Cone Shoulder, 4X 1/4" Rod Sleeves, for 8X 8-32 Hex Nuts with Clearance Holes'
+    external_pn: NSCN-SLDR-4X250R-8X832HNC
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 1 (pp. 128-130)
+    made_from: printer filament
+    also_printed_as: [NSCN-SLDR-4X250R8X832HNC]
+
+  - key: NSCN-SC1-4X250R
+    name: 'Nose Cone, Section 1, 4X 1/4" Rod Sleeves'
+    external_pn: NSCN-SC1-4X250R
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 2 (pp. 128-130)
+    made_from: printer filament
+
+  - key: NSCN-SC2-4X250R
+    name: 'Nose Cone, Section 2, 4X 1/4" Rod Sleeves'
+    external_pn: NSCN-SC2-4X250R
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 3 (pp. 128-130)
+    made_from: printer filament
+
+  - key: NSCN-TIP-4X250R-250HNC
+    name: 'Nose Cone, Tip, 4X 1/4" Rod Sleeves, 1/4" Clearance Hole with Hex Nut Capture'
+    external_pn: NSCN-TIP-4X250R-250HNC
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 4 (pp. 128-130)
+    made_from: printer filament
+    also_printed_as: [NSCN-TIP-4X250R250HNC]
+
+  - key: '98831A028'
+    name: '1/4-20 Nylon Threaded Rod, 24"L'
+    external_pn: '98831A028'
+    description: 'Nylon Threaded Rod 1/4"-20 Thread Size, 2 Feet Long (White)'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 5 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '98831A028', price: '6.35' }
+
+  - key: '95229A420'
+    name: 'Cadmium-Plated Steel MIL. Spec. Washer for 1/4" Screw Size, NAS 1149-F0432P'
+    external_pn: '95229A420'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 6 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '95229A420', price: '5.21' }
+
+  - key: '93135A013'
+    name: 'Nylon Pan Head Screws, Phillips, 2-56 Thread, 1/4" Long'
+    external_pn: '93135A013'
+    description: 'Nylon Pan Head Screws Phillips, 2-56 Thread, 1/4" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 14 (pp. 131-132)
+    supplier: { key: mcmaster, vendor_pn: '93135A013', price: '8.43' }
+    also_printed_as: ['94735A707']
+
+  - key: '3018T23'
+    name: 'Galvanized Steel Eyebolt with Nut and with Shoulder, for Lifting, 1/4"-20 Thread Size, 1-1/2" Thread Length, 3" Shank'
+    external_pn: '3018T23'
+    description: 'Galvanized Steel Eyebolt with Nut and with Shoulder for Lifting, 1/4"-20 Thread Size, 1-1/2" Thread Length, 3" Shank'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 7 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '3018T23', price: '5.54' }
+
+  - key: '92994A029'
+    name: '316 Stainless Steel Cap Nut, 1/4"-20 Thread Size'
+    external_pn: '92994A029'
+    description: '316 Stainless Steel Cap Nut Super-Corrosion-Resistant, 1/4"-20 Thread Size'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 8 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '92994A029', price: '2.99' }
+
+  - key: REC-TNSC-3KLB
+    name: 'Tubular Nylon Shock Cord, 3000lbf Breaking Strength'
+    external_pn: REC-TNSC-3KLB
+    description: '5/8" Yellow Tubular Nylon (50 ft)'
+    unit: ft
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 5 (pp. 131-132)
+    supplier: { key: csrocketry, price: '0.55' }
+    also_printed_as: [TNSC-3KLB]
+
+  - key: '20545T38'
+    name: 'Airframe - 4" Mailing Tube, 36"L'
+    external_pn: '20545T38'
+    description: 'Round Shipping Tube with Press-on End Caps, 4" ID, 36" Inside Length'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 9 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '20545T38', price: '8.60' }
+
+  - key: lower-airframe-tube
+    name: Lower Airframe Tube
+    external_pn: 20545T38-AF-LWR
+    description: 'lower airframe tube (18 inches, cut from 20545T38)'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: 'OP 12 step 1 (p. 227). In no parts list.'
+    also_printed_as: ['20545T38-AF-LWR']
+
+  - key: upper-airframe-tube
+    name: Upper Airframe Tube
+    external_pn: 20545T38-AF-UPR
+    description: 'upper airframe tube (18 inches, cut from 20545T38)'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: 'OP 12 step 1 (p. 227). In no parts list.'
+    also_printed_as: ['20545T38-AF-UPR']
+
+  - key: TMPLT-AF-LWR-416
+    name: Lower Airframe Template
+    external_pn: TMPLT-AF-LWR-416
+    description: 'Template, Hole and Slot Marking, Lower Airframe Tube'
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Airframe
+    source: Section 4.3.1 line 23 (pp. 128-130)
+    made_from: printer filament
+
+  - key: PLG-DRL-AF-LWR-416
+    name: 'Backing Plug, Sacrificial, for Lower Airframe Tube Drilling'
+    external_pn: PLG-DRL-AF-LWR-416
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Propulsion
+    source: OP 12 parts list (p. 226)
+    also_printed_as: [PLG-DRL-AF-LWR]
+
+  - key: TMPLT-AF-UPR-416
+    name: Upper Airframe Template
+    external_pn: TMPLT-AF-UPR-416
+    description: 'Template, Hole Marking, Upper Airframe Tube'
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Airframe
+    source: Section 4.3.1 line 24 (pp. 128-130)
+    made_from: printer filament
+
+  - key: PLG-DRL-AF-UPR1-416
+    name: Upper Airframe Backing Plug
+    external_pn: PLG-DRL-AF-UPR1-416
+    description: 'Backing Plug, Sacrificial, for Upper Airframe Tube Drilling'
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Airframe
+    source: Section 4.3.1 line 25 (pp. 128-130)
+    made_from: printer filament
+    also_printed_as: [PLG-DRIL-AF-UPR-416, PLG-DRL-AF-UPR1]
+
+  - key: TMPLT-AF-UPR1-416
+    name: Upper Airframe Nose Cone Screw Hole Template
+    external_pn: TMPLT-AF-UPR1-416
+    description: template to mark the positions of the nose cone screw holes on the forward end the upper airframe tube
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Propulsion
+    source: 'OP 12 step 6 (p. 227). In no parts list or appendix table; the name is from the step.'
+
+  - key: TMPLT-AF-UPR2-416
+    name: Upper Airframe Shear Pin Hole Template
+    external_pn: TMPLT-AF-UPR2-416
+    description: template to mark the positions of the shear pin holes on the aft end of the upper airframe tube
+    tier: DEV
+    tracking: bulk
+    procurement: make
+    tooling: true
+    category: Propulsion
+    source: 'OP 12 step 8 (p. 228). In no parts list or appendix table; the name is from the step.'
+
+  - key: CNPY-CHT-86IN
+    name: '7.2ft Hexagonal Tent Tarp, Main Chute Canopy'
+    external_pn: CNPY-CHT-86IN
+    description: 'Hikeman Hexagonal Tent Footprint,1-4 Person Ultralight Waterproof Tent Tarp Ground Sheet Mat with 6 Tent Stakes for Camping Hiking Picnic Backpacking (Medium)'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 2 (pp. 131-132)
+    supplier: { key: amazon, price: '24.99' }
+
+  - key: CRD-KVLR-250LB
+    name: '250lb Kevlar Cord, 100ft'
+    external_pn: CRD-KVLR-250LB
+    description: 'emma kites 100% Kevlar Braided String Utility Cord Abrasion Flame Resistant, Tactical Survival Fishing Assist Cord Model Rocket Paracord Trip Line Camping Cordage'
+    unit: ft
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 3 (pp. 131-132)
+    supplier: { key: amazon, price: '13.95' }
+
+  - key: REC-PRT-16
+    name: 'Parachute Protector, Nomex, 16 X 16”'
+    external_pn: REC-PRT-16
+    description: '16" SkyAngle Chute Protector'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 6 (pp. 131-132)
+    supplier: { key: csrocketry, price: '9.50' }
+
+  - key: REC-CHT-DRG-36
+    name: 'Drogue Parachute, 36” Diameter'
+    external_pn: REC-CHT-DRG-36
+    description: '36in Topflight Chute'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 4 (pp. 131-132)
+    supplier: { key: csrocketry, price: '20.00' }
+
+  - key: '8947T26'
+    name: Quick Link 1400lb Capacity
+    external_pn: '8947T26'
+    description: 'Oval-Shaped Threaded Connecting Link Type 316 Stainless Steel, 1/4" Thickness, 5/16" Opening, Not for Lifting'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Recovery
+    source: Section 4.3.2 line 17 (pp. 131-132)
+    supplier: { key: mcmaster, vendor_pn: '8947T26', price: '2.97' }
+
+  - key: '97654A620'
+    name: '18-8 Stainless Steel Flanged Button Head Screw, 1/4"-20 Thread, 1-1/4" Long'
+    external_pn: '97654A620'
+    description: '18-8 Stainless Steel Flanged Button Head Screw 1/4"-20 Thread, 1-1/4" Long'
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Airframe
+    source: Section 4.3.1 line 20 (pp. 128-130)
+    supplier: { key: mcmaster, vendor_pn: '97654A620', price: '6.44', pack: 5 }
+
+  - key: RLBTN-A-1515-250C
+    name: 'Rail Button, 1515, Printed, Part A'
+    external_pn: RLBTN-A-1515-250C
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 21 (pp. 128-130)
+    made_from: printer filament
+
+  - key: RLBTN-B-1515-250C
+    name: 'Rail Button, 1515, Printed, Part B'
+    external_pn: RLBTN-B-1515-250C
+    tier: FLIGHT
+    tracking: bulk
+    procurement: make
+    category: Airframe
+    source: Section 4.3.1 line 22 (pp. 128-130)
+    made_from: printer filament
+
+  # ---- Ground support equipment, Section 6
+
+  - key: '79215A673'
+    name: 'Brass Nipple, Wrench Tighten, CGA 326, 1/4 NPT Male'
+    external_pn: '79215A673'
+    description: 'Hose Fitting for Compressed Gas Brass Nipple, Wrench Tighten, CGA 326, 1/4 NPT Male'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 16 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '79215A673', price: '8.49' }
+
+  - key: '79215A672'
+    name: Brass Female CGA 326 Nut for High-Pressure Nipple Hose Fitting for Compressed Gas
+    external_pn: '79215A672'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 17 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '79215A672', price: '5.90' }
+
+  - key: '50785K92'
+    name: 'High-Pressure Brass Straight Connector, 1/4 NPT Female'
+    external_pn: '50785K92'
+    description: 'High-Pressure Brass Pipe Fitting Straight Connector, 1/4 NPT Female'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 20 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '50785K92', price: '1.78' }
+
+  - key: '50675K162'
+    name: '37 Degree Flared Adapter for 1/4" Tube OD x 1/4 NPT Male'
+    external_pn: '50675K162'
+    description: '37 Degree Flared Fitting for Copper Tubing Adapter for 1/4" Tube OD x 1/4 NPT Male'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 19 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '50675K162', price: '3.71' }
+
+  - key: '4468K041'
+    name: 'High-Pressure Braided Chemical Hose with Fittings Brass 7/16"-20 Thread Size Flare UNF Female, 5/16" OD – 14”'
+    external_pn: '4468K041'
+    description: 'High-Pressure Braided Chemical Hose with Fittings Brass 7/16"-20 Thread Size Flare UNF Female, 5/16" OD (14 in)'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 18 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '4468K041', price: '16.14' }
+    also_printed_as: ['4468K811']
+
+  - key: '50785K273'
+    name: 'High-Pressure Brass Through-Wall Straight Connector, 1/4 NPT Female'
+    external_pn: '50785K273'
+    description: 'High-Pressure Brass Pipe Fitting Through-Wall Straight Connector, 1/4 NPT Female'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 21 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '50785K273', price: '9.63' }
+
+  - key: '97149A370'
+    name: '3/4-16 Hex Nut, 18-8 Black Oxide'
+    external_pn: '97149A370'
+    description: '18-8 Stainless Steel Hex Nut Black-Oxide, 3/4"-16 Thread Size'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 22 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '97149A370', price: '1.79' }
+
+  - key: '50785K222'
+    name: 'High-Pressure Brass Right-Angle Tee Adapter, 1/4 NPT Female x Male'
+    external_pn: '50785K222'
+    description: 'High-Pressure Brass Pipe Fitting Right-Angle Tee Adapter, 1/4 NPT Female x Male'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 23 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '50785K222', price: '5.71' }
+
+  - key: '3846K93'
+    name: 'Pressure Gauge with Steel Case, 1/4 NPT Male Center Back Connection, 2" Dial, 0-2000 PSI'
+    external_pn: '3846K93'
+    description: 'Single Scale Pressure Gauge with Steel Case 1/4 NPT Male Center Back Connection, 2" Dial (0 to 2,000 psi)'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 28 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '3846K93', price: '15.85' }
+    also_printed_as: ['3846K8']
+
+  - key: '5485K22'
+    name: 'High-Pressure Brass Straight Connector, 1/4NPT Male'
+    external_pn: '5485K22'
+    description: 'High-Pressure Brass Pipe Fitting Straight Connector, 1/4 NPT Male'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 24 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '5485K22', price: '2.67' }
+
+  - key: '9396T32'
+    name: 'High-Pressure Push to Connect, 1/4 Tube OD, 1/4NPT Male'
+    external_pn: '9396T32'
+    description: 'High-Pressure Push-to-Connect Tube Fitting for Air and Water, Adapter, 1/4" Tube OD x 1/4 NPTF Male'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 25 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '9396T32', price: '3.84' }
+    also_printed_as: ['9696T32']
+
+  - key: '50785K272'
+    name: 'High-Pressure Brass Through-Wall Straight Connector, 1/8 NPT Female'
+    external_pn: '50785K272'
+    description: 'High-Pressure Brass Pipe Fitting Through-Wall Straight Connector, 1/8 NPT Female'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 27 (pp. 238, 240)'
+    supplier: { key: mcmaster, vendor_pn: '50785K272', price: '6.97' }
+
+  - key: '7768K26'
+    name: 'Brass Threaded Check Valve, 1/4 NPT Male x NPT Female'
+    external_pn: '7768K26'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: GSE OP 3 parts list (p. 248)
+
+  - key: '91111'
+    name: '21 Inch Steel Toolbox, Voyager, HFT'
+    external_pn: '91111'
+    description: VOYAGER 21 in. Steel Toolbox
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 11 (pp. 237, 239)'
+    supplier: { key: harborfreight, price: '29.99' }
+
+  - key: fill-valve-assembly
+    name: Fill Valve Assembly
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: GSE OP 5 parts list (p. 256)
+
+  - key: fill-line-bulkhead-assembly
+    name: Fill Line Bulkhead Assembly
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: GSE OP 5 parts list (p. 256)
+
+  - key: push-to-connect-tee
+    name: Push-to-connect tee
+    external_pn: '9396T61'
+    description: push-to-connect tee (step 6)
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.3, OP 5 step 6 (p. 261). In no parts list or bill of material.'
+    also_printed_as: ['9396T61']
+
+  - key: 'DTUS_FSI6X_10CH'
+    name: FlySky FS-I6X Transmitter w/ iA10B Receiver
+    external_pn: 'DTUS_FSI6X_10CH'
+    description: FLYSKY FS-i6X 10CH 2.4GHz RC Transmitter Controller/W iA10B Receiver Upgrade Cable for RC Helicopter Plane Quadcopter Glider
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 1 (pp. 237, 239)'
+    supplier: { key: amazon, price: '59.99' }
+    also_printed_as: [FS-iA10B, FS-i6X]
+
+  - key: '090600AFA'
+    name: '12V to 5V Voltage Regulator'
+    external_pn: '090600AFA'
+    description: 'DROK 12v to 5v Volt Converter, DC 8-35V to 5V 3A 15W Voltage Regulator Board Power Supply Module, 9V 12V 24V Waterproof Car Volt Step Down Buck Converter'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 6 (pp. 237, 239)'
+    supplier: { key: amazon, price: '12.99' }
+    also_printed_as: [DROK-12V-5V]
+
+  - key: LCATMC1569
+    name: 'Relay Module, PWM Controlled, 10A 30V'
+    external_pn: LCATMC1569
+    description: LICHIFIT High Voltage 1CH PWM RC Aircraft Remote Control Signal Relay Switch K1 Navigation Light Controller
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 5 (pp. 237, 239)'
+    supplier: { key: amazon, price: '11.99' }
+    also_printed_as: [PWM-RLY-10A]
+
+  - key: BRKT-EGSE-2X8C
+    name: 'Bracket, Electronics Mounting, GSE, 2X #8 Clearance Holes'
+    external_pn: BRKT-EGSE-2X8C
+    tier: GROUND
+    tracking: bulk
+    procurement: make
+    category: GSE
+    source: GSE OP 6 parts list (p. 262)
+
+  - key: CVR-ANT-2X8C
+    name: 'Cover, Receiver Antennas, GSE, 2X #8 Clearance Holes'
+    external_pn: CVR-ANT-2X8C
+    tier: GROUND
+    tracking: bulk
+    procurement: make
+    category: GSE
+    source: GSE OP 6 parts list (p. 262)
+
+  - key: '9489T519'
+    name: '1/4-20 x 2" Eye Bolt'
+    external_pn: '9489T519'
+    description: 'Routing Eyebolt with Nut - Not for Lifting 316 Stainless Steel with Bent-Closed Eye, 1/4"-20 Thread, 2" Shank'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 12 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '9489T519', price: '2.87' }
+
+  - key: GSW-17
+    name: GSW-17-SPST Toggle Switch with Screw Terminals
+    external_pn: GSW-17
+    description: 'Gardner Bender GSW-17 Electrical Toggle Switch, SPST, ON-OFF, 6 A/120V AC, Screw Terminal'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 7 (pp. 237, 239)'
+    supplier: { key: amazon, price: '5.99' }
+    also_printed_as: [GSW-17-SPST]
+
+  - key: AZ18080602-03
+    name: Toggle Switch Guards
+    external_pn: AZ18080602-03
+    description: Antrader Plastic 12mm Mount Dia. Toggle Switch Cover Dustproof Safety Waterproof Safety Flip Cover Cap Red 6-Pack
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 2 (pp. 237, 239)'
+    supplier: { key: amazon, price: '8.49', pack: 6 }
+    also_printed_as: [TGL-GRD-12MM]
+
+  - key: '7159K3'
+    name: 'Straight-Blade Receptacle with Screw Terminals, 5-15 NEMA, Side Terminal'
+    external_pn: '7159K3'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 8 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '7159K3', price: '3.36' }
+    also_printed_as: ['7159K91']
+
+  - key: '7526K53'
+    name: Nylon Wall Plate for NEMA Outlets
+    external_pn: '7526K53'
+    description: 'Nylon Wall Plate for NEMA Outlet, for 1 Device'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: 'Section 6.2 line 9 (pp. 237, 239)'
+    supplier: { key: mcmaster, vendor_pn: '7526K53', price: '0.73' }
+    also_printed_as: ['7526K23']
+
+  - key: '16-3-10FTXT'
+    name: '10 ft. x 16/3 Gauge Indoor/Outdoor Extension Cord'
+    external_pn: '16-3-10FTXT'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: GSE OP 7 parts list (p. 274)
+
+  - key: ALG-CLP-INS
+    name: 'Alligator Electrical Clip, Insulated'
+    external_pn: ALG-CLP-INS
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: GSE OP 7 parts list (p. 274)
+
+  - key: QDC-750x125FLG-270MB-O007
+    name: 'Quick Disconnect, ¾” x ⅛” Flange, .270 Male Barb, -007 O-Ring Gland'
+    external_pn: QDC-750x125FLG-270MB-O007
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: Fluid System
+    source: Section 4.2.2 line 19 (pp. 120-121)
+    made_from: '8974K299'
+    also_printed_as: [QDC-750X125FLG-270MB-O007-8NPT]
+
+  - key: '9452K15'
+    name: '-007 Buna-N O-rings'
+    external_pn: '9452K15'
+    description: 'Oil-Resistant Buna-N O-Ring 1/16 Fractional Width, Dash Number 007'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: Fluid System
+    source: Section 4.2.2 line 16 (pp. 120-121)
+    supplier: { key: mcmaster, vendor_pn: '9452K15', price: '4.25', pack: 100 }
+
+  - key: gse-system
+    name: GSE System
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: GSE OP 8 parts list (p. 276)
+
+  - key: '92295A100'
+    name: 'Thread-Forming Screws for Plastic, Number 4 Size, 1/4" Long'
+    external_pn: '92295A100'
+    tier: GROUND
+    tracking: bulk
+    procurement: buy
+    category: GSE
+    source: GSE OP 8 parts list (p. 276)
+
+  # ---- Assemblies the procedures produce that the guidebook's parts lists do not name.
+  # The names are the guidebook's own words for the thing where it has them.
+
+  - key: propulsion-system
+    name: Propulsion System
+    description: 'Propellant tank assembly, thrust chamber assembly, fin brackets and feedlines, integrated. The product of OP 9.'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Propulsion
+    source: 'OP 9 (pp. 196-204); Section 2.3.1'
+
+  - key: avionics-bay-assembly
+    name: Avionics Bay Assembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Avionics
+    source: 'OP 10 (pp. 205-216)'
+
+  - key: nose-cone-assembly
+    name: Nose Cone Assembly
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Airframe
+    source: 'OP 11 (pp. 217-224)'
+
+  - key: mojave-sphinx
+    name: Mojave Sphinx
+    description: 'The complete vehicle. The product of OP 13.'
+    tier: FLIGHT
+    tracking: serialized
+    procurement: make
+    category: Airframe
+    source: 'OP 13 (pp. 229-234)'
+
+  - key: purge-system
+    name: Purge System
+    description: 'Optional CO2 purge valve assembly for static testing. The product of GSE OP 3.'
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: 'Section 6.3, OP 3 (pp. 248-250)'
+
+  - key: gse-servo-cable
+    name: Servo Cable
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: 'Section 6.3, OP 7 (pp. 274-275)'
+
+  - key: gse-ignition-cable
+    name: Ignition Cable
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: 'Section 6.3, OP 7 (pp. 274-275)'
+
+  - key: gse-fill-line
+    name: Fill Line
+    tier: GROUND
+    tracking: serialized
+    procurement: make
+    category: GSE
+    source: 'Section 6.3, OP 7 (pp. 274-275)'
+
+  # ---------------------------------------------------------------- consumables (Section 4.4)
+  # Line 1, nitrous oxide, is left out: the table gives a price and a quantity of 20 with no unit.
+
+  - key: e85
+    name: E85
+    description: Fuel. Section 4.4 prints no unit for the quantity; Section 7.1.1 asks for about 1/2 gallon.
+    unit: gal
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: Section 4.4 line 2 (p. 133)
+    supplier: { key: retail-store, price: '3.09' }
+
+  - key: A3-4T
+    name: A3-4T (4-pack)
+    external_pn: A3-4T
+    description: Estes A3-4T motor, used as the igniter.
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: Section 4.4 line 3 (p. 133)
+    supplier: { key: retail-store, price: '10.00', pack: 4 }
+
+  - key: '1834'
+    name: MJG Firewire E-matches (Pack of 20)
+    external_pn: '1834'
+    description: Firewire Electric Match Bundle of 20
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: Section 4.4 line 4 (p. 133)
+    supplier: { key: csrocketry, price: '15.00', pack: 20 }
+
+  - key: '1318'
+    name: 'Black Powder, 4F, 1lb'
+    external_pn: '1318'
+    description: Goex 4F Black Powder (1 lb)
+    tier: FLIGHT
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: Section 4.4 line 5 (p. 133)
+    supplier: { key: csrocketry, price: '33.00' }
+
+  - key: '52555T644'
+    name: Nitrile Gloves (Pack of 20)
+    external_pn: '52555T644'
+    description: 'Disposable Nitrile Gloves, Textured, 4 Mil Thick (Large)'
+    tier: DEV
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: Section 4.4 line 6 (p. 133)
+    supplier: { key: mcmaster, price: '7.90', pack: 20 }
+
+  - key: '7619A11'
+    name: 'Vinyl Electrical Tape, 3/4" X 60ft'
+    external_pn: '7619A11'
+    description: 'Electrical Tape, 3/4" Wide, 60 Feet Long, Black'
+    tier: DEV
+    tracking: bulk
+    procurement: buy
+    category: Consumables
+    source: Section 4.4 line 7 (p. 133)
+    supplier: { key: mcmaster, price: '1.66' }
