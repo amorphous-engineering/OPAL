@@ -110,7 +110,7 @@
 		data-order={leaf ? op.order : undefined}
 		bind:clientHeight={headHeight}
 		class={cn(
-			'group/row sticky top-11 z-20 flex min-h-9 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))] px-3 py-1 hover:bg-accent lg:top-0',
+			'group/row sticky top-0 z-20 flex min-h-9 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))] px-3 py-1 hover:bg-accent',
 			open && 'border-b border-border',
 			focused && 'outline outline-1 -outline-offset-1 outline-foreground/25',
 			au && dropMarker(au, op.order),

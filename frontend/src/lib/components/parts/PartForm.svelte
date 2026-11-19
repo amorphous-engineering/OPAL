@@ -533,7 +533,7 @@
 		</div>
 	</div>
 
-	<aside class="min-w-0 xl:sticky xl:top-14 xl:self-start">
+	<aside class="min-w-0 xl:sticky xl:top-3 xl:self-start">
 		<PartTag
 			pn={shownPn || null}
 			{name}

@@ -56,7 +56,7 @@
 
 {#if on && (held.length || completes || canSkip || issueHref)}
 	<div
-		class="sticky bottom-6 z-[5] -mx-3 -mb-2 grid grid-cols-1 gap-2 border-t border-dotted bg-background px-3 py-1.5 lg:-bottom-4"
+		class="sticky bottom-0 z-[5] -mx-3 -mb-2 grid grid-cols-1 gap-2 border-t border-dotted bg-background px-3 py-1.5 lg:-bottom-4"
 		data-step-actions={step.order}
 	>
 		<div class="flex flex-wrap items-center gap-2">

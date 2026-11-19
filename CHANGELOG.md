@@ -33,7 +33,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **The stock list opens on its records**, one row per OPAL number. BY PART is a click away, and a link to low stock still opens by part.
 - **A work order's issues show all of them by default.** The toggle narrows them to the OP in focus.
 - **Plugin panels and external links moved to the work order's Details tab.**
-- **Scroll bars match the page**: a ruled box on a dithered track, in day and night.
+- **Scroll bars match the page**: a ruled box on a dithered track, in day and night. The page scrolls between the header and the status bar, which stay full width.
 - **Wording for any kind of hardware.** A new organization's tier presets are Critical, Standard and Bulk, and examples no longer assume a rocket.
 
 ### Fixed

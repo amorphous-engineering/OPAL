@@ -137,7 +137,7 @@
 </script>
 
 <footer
-	class="sticky bottom-0 z-30 grid h-6 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-t border-border bg-muted px-2 font-mono text-xs"
+	class="z-30 grid h-6 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-t border-border bg-muted px-2 font-mono text-xs"
 >
 	<span class="flex items-center gap-2 whitespace-nowrap" role="status" title={reason || undefined}>
 		{#if ticker === 'ONLINE'}

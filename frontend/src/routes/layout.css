@@ -226,12 +226,28 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* Scroll bars: a box on a dithered track, ruled like the rest of the page. Chromium and Safari
-   take the pseudo-elements; Firefox, which has none, gets the plain colours. Chromium ignores the
-   pseudo-elements wherever scrollbar-color is set, so Firefox's rule stays behind @supports. */
+/* Scroll bars: a box on a dithered track, ruled like the rest of the page and set 3 px off the
+   content. The gap is a transparent border; the rules are inset shadows inside it, so the track
+   and the thumb are each a closed box. Chromium and Safari take the pseudo-elements; Firefox,
+   which has none, gets the plain colours. Chromium ignores the pseudo-elements wherever
+   scrollbar-color is set, so Firefox's rule stays behind @supports. */
 ::-webkit-scrollbar {
-	width: 14px;
-	height: 14px;
+	width: 17px;
+	height: 17px;
+	background: transparent;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-thumb {
+	background-clip: padding-box;
+	box-shadow: inset 0 0 0 1px var(--border);
+}
+::-webkit-scrollbar-track:vertical,
+::-webkit-scrollbar-thumb:vertical {
+	border-left: 3px solid transparent;
+}
+::-webkit-scrollbar-track:horizontal,
+::-webkit-scrollbar-thumb:horizontal {
+	border-top: 3px solid transparent;
 }
 ::-webkit-scrollbar-track {
 	background-color: var(--background);
@@ -243,28 +259,19 @@
 	);
 	background-size: 2px 2px;
 }
-::-webkit-scrollbar-track:vertical {
-	border-left: 1px solid var(--border);
-}
-::-webkit-scrollbar-track:horizontal {
-	border-top: 1px solid var(--border);
-}
 ::-webkit-scrollbar-thumb {
-	background: var(--card);
-	border: 1px solid var(--border);
+	background-color: var(--card);
 	min-height: 24px;
 	min-width: 24px;
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: var(--accent);
+	background-color: var(--accent);
 }
 ::-webkit-scrollbar-thumb:active {
-	background: var(--foreground);
+	background-color: var(--foreground);
 }
 ::-webkit-scrollbar-corner {
-	background: var(--background);
-	border-top: 1px solid var(--border);
-	border-left: 1px solid var(--border);
+	background: transparent;
 }
 @supports not selector(::-webkit-scrollbar) {
 	* {
