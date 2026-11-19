@@ -16,6 +16,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Corrective action can link a procedure revision.** The issue cannot close until the next version of that procedure is released.
 - **Issues beside the work are grouped by when their hold is due**, one line each: blocking now, due by the end of each OP, due by the end of the work order, other open, and closed folded away. The red HELD BY band across the work order is gone.
 - **The issue page names the step**: Containment reads STEP 5.4, and Work order reads WO-0002 OP 5.2.
+- **A purchase receipt records the supplier's lot**, typed on the receive row of a bulk part. Each bulk part says whether its receipts need one: as its tier says, always (O-rings, adhesives) or never (parts made to print). A serialized part never needs a lot, since its serial identifies it.
 
 ### Fixed
 - **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.

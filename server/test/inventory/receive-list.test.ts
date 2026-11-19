@@ -90,7 +90,7 @@ describe('receiving stock', () => {
 		const body = { partId: p.id, quantity: '4', location: 'TR-1' };
 		const refused = await s.call('POST', '/inventory', body);
 		expect(refused.status).toBe(422);
-		expect(refused.body.fields.lotNumber).toContain('lot number');
+		expect(refused.body.fields.lotNumber).toContain("supplier's lot");
 		const ok = await s.call('POST', '/inventory', { ...body, lotNumber: 'LOT-T1' });
 		expect(ok.body.items[0].lotNumber).toBe('LOT-T1');
 		const bypass = await s.call('POST', '/inventory', { ...body, enforceTierRules: false });

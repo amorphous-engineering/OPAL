@@ -1,4 +1,4 @@
-import { PART_STATES, PROCUREMENT, TRACKING_TYPES } from '@opal/shared';
+import { LOT_RULES, PART_STATES, PROCUREMENT, TRACKING_TYPES } from '@opal/shared';
 import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { user } from './core.ts';
@@ -15,6 +15,8 @@ export const part = sqliteTable(
 		category: text('category'),
 		unitOfMeasure: text('unit_of_measure').notNull(),
 		trackingType: text('tracking_type', { enum: TRACKING_TYPES }).notNull(),
+		/** Whether a receipt asks for the supplier's lot. See LOT_RULES. */
+		lotRule: text('lot_rule', { enum: LOT_RULES }).notNull().default('tier'),
 		procurement: text('procurement', { enum: PROCUREMENT }).notNull(),
 		tier: integer('tier').notNull(),
 		reorderPoint: integer('reorder_point'),
@@ -42,6 +44,7 @@ export const part = sqliteTable(
 		index('part_category_idx').on(t.category),
 		index('part_tier_idx').on(t.tier),
 		oneOf('part_tracking_check', 'tracking_type', TRACKING_TYPES),
+		oneOf('part_lot_rule_check', 'lot_rule', LOT_RULES),
 		oneOf('part_procurement_check', 'procurement', PROCUREMENT),
 		oneOf('part_state_check', 'state', PART_STATES)
 	]

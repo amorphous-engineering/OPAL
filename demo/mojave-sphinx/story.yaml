@@ -69,6 +69,8 @@ events:
       location: Stockroom
       all: true
       short: { '4468K865': 0 }
+      # The O-ring bags print the supplier's lot; a swollen O-ring is traced back by it.
+      lots: { '9452K226': 'B4417-26', '9396K79': 'S2093-26' }
 
   - at: '2026-07-04T16:10:00Z'
     by: build
@@ -667,7 +669,7 @@ events:
     order: { key: po-counter-launch, supplier: retail-store, destination: Stockroom, for: *launch }
   - at: '2026-10-08T21:20:00Z'
     by: build
-    receive: { order: po-mcmaster-launch, location: Stockroom, all: true }
+    receive: { order: po-mcmaster-launch, location: Stockroom, all: true, lots: { '9452K226': 'B4561-26' } }
   - at: '2026-10-09T20:45:00Z'
     by: build
     receive: { order: po-csrocketry-launch, location: Stockroom, all: true }
@@ -717,7 +719,7 @@ events:
 
   - at: '2026-10-15T21:50:00Z'
     by: build
-    receive: { order: po-mcmaster-second, location: Stockroom, all: true }
+    receive: { order: po-mcmaster-second, location: Stockroom, all: true, lots: { '9452K226': 'B4561-26', '9396K79': 'S2140-26' } }
   - at: '2026-10-17T16:20:00Z'
     by: build
     receive: { order: po-counter-second, location: Stockroom, all: true }
@@ -924,7 +926,7 @@ events:
 
   - at: '2026-10-23T21:00:00Z'
     by: build
-    receive: { order: po-mcmaster-prep, location: Stockroom, all: true }
+    receive: { order: po-mcmaster-prep, location: Stockroom, all: true, lots: { '9452K226': 'B4602-26' } }
   - at: '2026-10-23T21:10:00Z'
     by: build
     receive: { order: po-counter-prep, location: Stockroom, all: true }

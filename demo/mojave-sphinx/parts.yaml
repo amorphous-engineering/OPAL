@@ -19,6 +19,8 @@
 # supplier.price: as printed in Section IV. It is the price of the pack when `pack` is given.
 # tier, tracking, category: chosen for this demo. On the vehicle is FLIGHT; raw stock, tooling and
 #   consumables are DEV. Machined parts and assemblies are serialized; the rest is tracked by lot.
+# lot_rule: `required` where the supplier's lot is traced: the O-rings, which age and swell. No tier
+#   asks for a lot, so every other receipt takes none.
 #
 # OPAL assigns its own number (SPX-F-0001 and so on) when the part is created.
 
@@ -52,6 +54,7 @@ parts:
     description: 'Oil-Resistant Buna-N O-Ring 1/8 Fractional Width, Dash Number 238'
     tier: FLIGHT
     tracking: bulk
+    lot_rule: required
     procurement: buy
     category: Propulsion
     source: Section 4.2.1 line 5 (pp. 118-119)
@@ -687,6 +690,7 @@ parts:
     description: 'High-Temperature High-Purity Silicone O-Ring 3/32 Fractional Width, Dash Number 141'
     tier: FLIGHT
     tracking: bulk
+    lot_rule: required
     procurement: buy
     category: Propulsion
     source: Section 4.2.4 line 6 (pp. 124-125)

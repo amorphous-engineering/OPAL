@@ -134,6 +134,13 @@
       "when": 1795043302933,
       "tag": "0018_project_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795052421341,
+      "tag": "0019_part_lot_rule",
+      "breakpoints": true
     }
   ]
 }

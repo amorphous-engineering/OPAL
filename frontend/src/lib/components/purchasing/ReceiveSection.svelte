@@ -1,5 +1,6 @@
 <script lang="ts">
-	// Receive against open lines: quantity, location, serial. The order number is the lot.
+	// Receive against open lines: quantity, location, and the supplier's lot (bulk) or the serial
+	// (one serialized unit).
 	// Blank quantity leaves a line outstanding.
 	// Stock already received shows as rows above the line's input row, with its OPAL number.
 	import { Section, confirm, ErrorBanner } from '#lib/components/opal/index.js';
@@ -34,6 +35,7 @@
 	interface Draft {
 		qty: string;
 		location: string;
+		lot: string;
 		serial: string;
 	}
 	let drafts = $state<Record<number, Draft>>({});
@@ -41,7 +43,7 @@
 	let error = $state<string | null>(null);
 
 	function d(id: number): Draft {
-		return (drafts[id] ??= { qty: '', location: '', serial: '' });
+		return (drafts[id] ??= { qty: '', location: '', lot: '', serial: '' });
 	}
 
 	// Rows exist before the template reads them (the template must not create state).
@@ -81,11 +83,16 @@
 				error = `${l.partName}: a location is required to receive this line`;
 				return;
 			}
+			if (l.lotRequired && !row.lot.trim()) {
+				error = `${l.partName}: enter the supplier's lot`;
+				return;
+			}
 			lines.push({
 				lineId: l.id,
 				quantity: String(row.qty).trim(),
 				location: row.location.trim() || null,
-				serialNumber: row.serial.trim() || null,
+				lotNumber: l.trackingType === 'bulk' ? row.lot.trim() || null : null,
+				serialNumber: l.trackingType === 'serialized' ? row.serial.trim() || null : null,
 				allowOverReceipt: over(l) > 0
 			});
 		}
@@ -209,7 +216,13 @@
 											placeholder={l.autoSerial ? 'Auto serial' : 'Serial'}
 											aria-label={`Serial for ${l.partName}`}
 											class="h-7 w-32 font-mono text-xs"
-										/>{:else}<span class="font-mono text-xs">{purchase.reference}</span>{/if}</td
+										/>{:else}<Input
+											bind:value={row.lot}
+											placeholder={l.lotRequired ? 'Lot (required)' : 'Lot'}
+											required={l.lotRequired && !!row.qty}
+											aria-label={`Lot for ${l.partName}`}
+											class="h-7 w-32 font-mono text-xs"
+										/>{/if}</td
 								>
 								<td></td>
 							</tr>

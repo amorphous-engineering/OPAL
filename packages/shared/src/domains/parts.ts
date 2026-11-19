@@ -5,6 +5,12 @@ import { zTimestamp } from '../time.ts';
 import { MAX_CSV, MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, zJsonObject } from '../limits.ts';
 
 export const TRACKING_TYPES = ['serialized', 'bulk'] as const;
+/**
+ * Whether receiving a bulk part asks for the supplier's lot: as its tier says, always, or never.
+ * Serialized parts never need one: the serial identifies the unit.
+ */
+export const LOT_RULES = ['tier', 'required', 'none'] as const;
+export type LotRule = (typeof LOT_RULES)[number];
 export const PROCUREMENT = ['make', 'buy', 'both'] as const;
 /** draft (identity mutable) -> active (identity locked) -> obsolete (retired, still referenced). */
 export const PART_STATES = ['draft', 'active', 'obsolete'] as const;
@@ -39,6 +45,7 @@ export const zPart = z.object({
 	category: z.string().nullable(),
 	unitOfMeasure: z.string(),
 	trackingType: z.enum(TRACKING_TYPES),
+	lotRule: z.enum(LOT_RULES),
 	procurement: z.enum(PROCUREMENT),
 	tier: z.number().int(),
 	/** Display name of the tier in the project configuration; null when unconfigured. */
@@ -67,7 +74,9 @@ const partFields = {
 	reorderPoint: zQty.nullable().optional(),
 	isTooling: z.boolean().optional(),
 	calibrationIntervalDays: z.number().int().positive().nullable().optional(),
-	metadata: zJsonObject().nullable().optional()
+	metadata: zJsonObject().nullable().optional(),
+	/** Default `tier`. */
+	lotRule: z.enum(LOT_RULES).optional()
 };
 
 export const zPartCreate = z.object({

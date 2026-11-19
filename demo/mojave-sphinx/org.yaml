@@ -16,14 +16,14 @@ organization:
       code: F
       description: Flight hardware. Pressure-bearing and recovery-critical parts, traced by serial.
       default_tracking: serialized
-      require_lot: true
+      require_lot: false
       auto_serial: true
     - level: 2
       name: GROUND
       code: G
       description: Ground support equipment. Fill system, ignition, controls.
       default_tracking: serialized
-      require_lot: true
+      require_lot: false
       auto_serial: false
     - level: 3
       name: DEV

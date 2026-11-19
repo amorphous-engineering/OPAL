@@ -27,6 +27,7 @@
 		Procurement,
 		SchemaTier,
 		TrackingType,
+		LotRule,
 		VariantBom
 	} from '@opal/shared';
 	import FormField from './FormField.svelte';
@@ -80,6 +81,7 @@
 	let procurement = $state<Procurement>(s0?.procurement ?? 'make');
 	let procurementTouched = $state(editing || variantMode);
 	let tracking = $state<TrackingType>(s0?.trackingType ?? 'bulk');
+	let lotRule = $state<LotRule>(s0?.lotRule ?? 'tier');
 	let trackingTouched = $state(editing || variantMode);
 	let category = $state(s0?.category ?? '');
 	let uom = $state(s0?.unitOfMeasure ?? 'ea');
@@ -199,6 +201,7 @@
 				category: category.trim() || null,
 				unitOfMeasure: uom.trim() || 'ea',
 				trackingType: tracking,
+				lotRule,
 				procurement,
 				reorderPoint: String(reorder).trim() === '' ? null : String(reorder).trim(),
 				isTooling: tooling,
@@ -390,6 +393,21 @@
 						<NativeSelect.Option value="serialized">SERIALIZED</NativeSelect.Option>
 					</NativeSelect.Root>
 				</FormField>
+				{#if tracking === 'bulk'}
+					<FormField label="Supplier lot" for="pf-lot">
+						<NativeSelect.Root id="pf-lot" class="w-full" bind:value={lotRule}>
+							<NativeSelect.Option value="tier"
+								>AS TIER{tierInfo
+									? tierInfo.requireLot
+										? ' (REQUIRED)'
+										: ' (NONE)'
+									: ''}</NativeSelect.Option
+							>
+							<NativeSelect.Option value="required">REQUIRED</NativeSelect.Option>
+							<NativeSelect.Option value="none">NONE</NativeSelect.Option>
+						</NativeSelect.Root>
+					</FormField>
+				{/if}
 				<FormField label="Category" for="pf-category">
 					<Input id="pf-category" bind:value={category} list="pf-categories" autocomplete="off" />
 					<datalist id="pf-categories">

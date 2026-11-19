@@ -205,6 +205,7 @@ for (const p of partsFile.parts) {
 		tier: tierLevel.get(p.tier) ?? fail(`no tier '${p.tier}'`),
 		unitOfMeasure: p.unit ?? 'ea',
 		trackingType: p.tracking,
+		lotRule: p.lot_rule ?? undefined,
 		procurement: p.procurement,
 		externalPn: p.external_pn ?? null,
 		description: reflow(p.description),
@@ -488,22 +489,31 @@ const handlers: Record<string, (by: Actor, e: Rec) => Promise<void>> = {
 		});
 		order.set(e.key, await call(by, 'POST', `/purchases/${po.id}/place`, {}));
 	},
-	/** `lines` as given, or `all: true` for everything still owed. `short` names what came in short: part key to quantity received. */
+	/**
+	 * `lines` as given, or `all: true` for everything still owed. `short` names what came in short: part key to quantity received.
+	 * `lots` gives the supplier's lot of a part: part key to lot.
+	 */
 	async receive(by, e) {
 		const po = order.get(e.order) ?? fail(`no order '${e.order}'`);
+		const lots = new Map<number, string>(Object.entries(e.lots ?? {}).map(([k, v]) => [partOf(k).id as number, String(v)]));
 		let lines: Rec[];
 		if (e.all) {
 			const short = new Map<number, number>(Object.entries(e.short ?? {}).map(([k, q]) => [partOf(k).id as number, Number(q)]));
 			lines = (po.lines as Rec[])
 				.map((l) => {
 					const owed = Number(l.qtyOrdered) - Number(l.qtyReceived ?? 0);
-					return { lineId: l.id, quantity: String(short.has(l.partId) ? short.get(l.partId) : owed), location: e.location ?? null };
+					return {
+						lineId: l.id,
+						quantity: String(short.has(l.partId) ? short.get(l.partId) : owed),
+						location: e.location ?? null,
+						lotNumber: lots.get(l.partId) ?? null
+					};
 				})
 				.filter((l) => Number(l.quantity) > 0);
 		} else {
 			lines = e.lines.map((l: Rec) => {
 				const line = (po.lines as Rec[]).find((x) => x.partId === partOf(l.part).id) ?? fail(`order '${e.order}' has no line for '${l.part}'`);
-				return { lineId: line.id, quantity: String(l.quantity), location: e.location ?? null };
+				return { lineId: line.id, quantity: String(l.quantity), location: e.location ?? null, lotNumber: l.lot ?? lots.get(line.partId) ?? null };
 			});
 		}
 		order.set(e.order, await call(by, 'POST', `/purchases/${po.id}/receive`, { lines }));

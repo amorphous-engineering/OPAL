@@ -51,6 +51,7 @@ export function toPart(r: Row, names: TierNames): Part {
 		category: r.category,
 		unitOfMeasure: r.unitOfMeasure,
 		trackingType: r.trackingType,
+		lotRule: r.lotRule,
 		procurement: r.procurement,
 		tier: r.tier,
 		tierName: names.get(r.tier) ?? null,
@@ -290,6 +291,7 @@ export function createRow(ctx: Ctx, input: PartCreateInput): Row {
 		category: blank(input.category) ?? null,
 		unitOfMeasure: input.unitOfMeasure,
 		trackingType: input.trackingType ?? defaultTracking(ctx.db, input.tier),
+		lotRule: input.lotRule ?? 'tier',
 		procurement: input.procurement ?? (externalPn ? 'buy' : 'make'),
 		tier: input.tier,
 		reorderPoint,
@@ -364,6 +366,7 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 	if (input.category !== undefined) patch.category = blank(input.category);
 	if (input.reorderPoint !== undefined) patch.reorderPoint = reorderQty(input.reorderPoint);
 	if (input.isTooling !== undefined) patch.isTooling = input.isTooling;
+	if (input.lotRule !== undefined) patch.lotRule = input.lotRule;
 	if (input.calibrationIntervalDays !== undefined) patch.calibrationIntervalDays = input.calibrationIntervalDays;
 	if (input.metadata !== undefined) {
 		patch.metadata = input.metadata === null ? null : validateMetadata(ctx.db, input.metadata, { requireAll: true });
@@ -444,6 +447,7 @@ export function revise(ctx: Ctx, input: { id: number; reason: string }): Part {
 		category: src.category,
 		unitOfMeasure: src.unitOfMeasure,
 		trackingType: src.trackingType,
+		lotRule: src.lotRule,
 		procurement: src.procurement,
 		tier: src.tier,
 		reorderPoint: src.reorderPoint,
@@ -489,6 +493,7 @@ export function createVariant(ctx: Ctx, input: z.output<typeof zVariantCreate>):
 		category: keep(blank(input.category), src.category),
 		unitOfMeasure: input.unitOfMeasure ?? src.unitOfMeasure,
 		trackingType: input.trackingType ?? src.trackingType,
+		lotRule: input.lotRule ?? src.lotRule,
 		procurement: input.procurement ?? src.procurement,
 		tier: src.tier,
 		reorderPoint: keep(reorderQty(input.reorderPoint), src.reorderPoint),
