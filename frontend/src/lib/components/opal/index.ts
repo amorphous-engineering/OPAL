@@ -1,4 +1,6 @@
 export { default as ActionLink } from './ActionLink.svelte';
+export { default as BankKey } from './BankKey.svelte';
+export { default as KeyBank } from './KeyBank.svelte';
 export { default as DataTable } from './DataTable.svelte';
 export type { Column } from './types.js';
 export { default as FilterBar } from './FilterBar.svelte';

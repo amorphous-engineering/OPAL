@@ -7,6 +7,7 @@ import {
 	conflict,
 	notFound,
 	parseQty,
+	storeDesignator,
 	type CalloutKind
 } from '@opal/shared';
 import { and, eq, inArray, like, or, sql } from 'drizzle-orm';
@@ -25,7 +26,7 @@ import {
 	stepImage
 } from '../../db/schema/index.ts';
 import { insert, remove, update } from '../../write.ts';
-import { nextDesignator } from '../designators.ts';
+import { nextDesignator, peekValue } from '../designators.ts';
 import { detachAll } from '../platform/attachments.ts';
 import { type ProcedureRow, draftRow, presentDraft, procedureRow, stepRows } from './draft.ts';
 import { buildSnapshot, snapshotsEquivalent } from './snapshot.ts';
@@ -189,6 +190,11 @@ export function requireOpenProject(db: Db, id: number) {
 	if (!p) throw notFound('Project');
 	if (p.state !== 'active') throw conflict('project_archived', `Project ${p.code} is archived`);
 	return p;
+}
+
+/** The T-number the next create would take, shown before anything is created. Not reserved. */
+export function nextTemplateNumber(ctx: Ctx): string {
+	return storeDesignator('T', peekValue(ctx, 'T'));
 }
 
 export function create(

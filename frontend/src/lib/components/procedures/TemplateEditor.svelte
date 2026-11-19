@@ -82,7 +82,7 @@
 
 	const tabs = [
 		{ id: 'document', label: 'Document' },
-		{ id: 'graph', label: 'Graph' },
+		{ id: 'sequence', label: 'Sequence' },
 		{ id: 'details', label: 'Details' }
 	];
 	const tab = $derived(
@@ -213,7 +213,7 @@
 						title="Show only the operation selected in the sidebar"
 						onclick={() => store.setFocusMode(!store.focusMode)}>Focus</button
 					>
-				{:else if tab === 'graph'}
+				{:else if tab === 'sequence'}
 					{@render viewToggle()}
 				{/if}
 			{/snippet}
@@ -250,12 +250,12 @@
 			id="exec-scroll"
 			class={cn(
 				'min-h-0 min-w-0 flex-1 lg:pb-4 [&_[data-doc-mode]>section:first-of-type]:rounded-t-none [&_[data-doc-mode]>section:first-of-type]:border-t-0',
-				tab === 'graph' ? 'min-h-80 lg:overflow-hidden' : 'lg:overflow-y-auto'
+				tab === 'sequence' ? 'min-h-80 lg:overflow-hidden' : 'lg:overflow-y-auto'
 			)}
 		>
 			{#if tab === 'details'}
 				<TemplateDetails {data} editing onchange={onreload} />
-			{:else if tab === 'graph'}
+			{:else if tab === 'sequence'}
 				{#if store.loading}
 					<div class="h-24 animate-pulse bg-muted"></div>
 				{:else if store.error}

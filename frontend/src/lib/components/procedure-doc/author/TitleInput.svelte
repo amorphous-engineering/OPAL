@@ -13,8 +13,9 @@
 	type="text"
 	data-title-input={step.order}
 	class={cn(
-		'min-w-0 flex-1 border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-border focus:border-ring focus:bg-background focus:outline-none',
-		!step.title.trim() && 'border-error/60',
+		// Dashed like every field that is still pencil, so a title reads as editable.
+		'min-w-0 flex-1 border border-dashed border-foreground bg-background px-1.5 py-0.5 text-sm focus:border-solid focus:border-ring focus:outline-none',
+		!step.title.trim() && 'border-error',
 		className
 	)}
 	value={step.title}

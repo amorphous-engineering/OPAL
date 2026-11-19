@@ -15,6 +15,12 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **A new demo dataset, Mojave Sphinx**, adapted from Half Cat Rocketry's HCR-5100 guidebook under the GPL, in `demo/mojave-sphinx/`. `server/scripts/load-demo.ts` loads it into a new data folder through OPAL's own operations: 173 parts, 21 procedures, 35 work orders, purchase orders, issues, risks, requirements and datasets. LOAD DEMO in the app still loads the 1.x seed.
 
 ### Changed
+- **The template editor shows what a step has, and offers the rest once.** An open step shows its instructions and whatever it holds (callouts, images, parts, data, sign-offs, role, duration). One ADD bank offers the rest. Empty sections are no longer drawn as "none" in edit mode. The formatting toolbar shows only while you type in a box. Every OP has a + STEP key at its foot, and titles are drawn as fields.
+- **A new template starts from its details.** + NEW TEMPLATE opens the details with the T-number the template would take. Nothing is created, and no number is used, until CREATE, which goes straight into the editor.
+- **A routine step shows no sign-off.** A step anyone may complete no longer reads "Primary buyoff" in the editor or the reader. A declared sign-off reads Sign-off and Second sign-off, with "Any role" when it names none.
+- **A data field can use a unit outside OPAL's list**, typed as written; it is never converted. The common units come first in the picker. Only a number field has a unit, and the field's internal key is no longer shown.
+- **The Graph tab is now Sequence**, on templates and work orders. Which OPs wait on which, and whether an OP's steps go in order (IN ORDER, formerly SEQ), are set there, not in the document.
+- **Every action in the template editor is a key.** Blue text now only links somewhere. Row tools, field tools and the ADD list are banks of small keys.
 - **A purchase receipt records the supplier's lot** again, typed on the receive row of a bulk part. A serialized part takes its serial in its own field.
 - **A short step is one row with a tick.** A step with a title and nothing else (no instructions, pictures, fields, callouts or declared sign-off) completes from its row, and the traveler prints a run of them as tick rows. Routine steps print a blank for initials instead of "Primary buyoff".
 - **Contingency operations are numbered from C901**, so one is never read as a normal OP. Versions published before keep C1, C2, and the version diff treats C1 and C901 as the same step.

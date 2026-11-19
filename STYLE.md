@@ -56,7 +56,7 @@ from most to least important.
   the page exists for stands out.
 - No tints, because they are the first thing glare removes. The risk matrix is the one exception, because its
   bands are the information.
-- Accent blue marks identifiers and actions, never content.
+- Accent blue marks identifiers and links, never content.
 - Role marks are the one use of colour that is not state. Their palette (purple, teal, brown, magenta,
   slate) stays clear of red, amber, green, blue and yellow, and the letters carry the role.
 
@@ -80,11 +80,20 @@ visible, because a missing indicator proves nothing.
 
 ## Keys and actions
 
-- A key is a `Button`, 24px or 28px tall with 12px type. A text action is an `ActionLink`, in a section
-  header or a row. There is no third kind.
-- One primary key: the move the record is waiting on. Everything else is quiet.
+Every action is a box. Blue text goes somewhere: a record number, a link to another page. It never
+changes anything. Controls must look different from text (FAA HF-STD-001B, 8.13.1.2), and a blue
+action reads like the record numbers beside it.
+
+| Weight | Component | Used for |
+|---|---|---|
+| Primary key | `Button`, filled | The move the record is waiting on. One per page |
+| Key | `Button` outline, 24px or 28px, 12px type | Page and structure actions: + OP, + STEP, DONE |
+| Bank | `KeyBank` of `BankKey`s, one border and one shadow | Related small actions in a row or section: ADD, REMOVE, move |
+| Quiet bank | `KeyBank quiet` | Row tools. Flat and grey until the row is hovered or holds the focus |
+
 - An inert key is flat and readable, with no shadow and no half-faded blue.
-- A red key appears only as the commit inside a confirmation. Text actions are never red.
+- A red key appears only as the commit inside a confirmation.
+- `ActionLink` is being retired: the template editor no longer uses it, and the other pages follow.
 - Strikes (void, cancel, deactivate) go under MORE.
 
 ## Pages
@@ -95,6 +104,9 @@ visible, because a missing indicator proves nothing.
 - Filters and search are solid, because they are not part of a record. Fields in a form are dashed.
 - An empty section that applies shows its header and one line saying it is empty. A section that does
   not apply is absent.
+- In edit mode an empty section is absent, the way a dark cockpit leaves a normal system unlit. What
+  can be added is offered once, in an ADD bank. A reader still sees the empty line, because it
+  says the section was looked at.
 - Do not hide facts behind toggles. Tabs may split a large page. Editors stay behind EDIT.
 - Absolute timestamps. Dense rows may show a relative age with the full time in the tooltip.
 - Labels are nouns. No copy that explains the interface. Consequence text only in confirmations and

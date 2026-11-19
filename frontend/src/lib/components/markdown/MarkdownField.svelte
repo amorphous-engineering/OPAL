@@ -46,6 +46,7 @@
 		toolbarTail,
 		between,
 		quiet = false,
+		toolbarOnFocus = false,
 		class: className
 	}: {
 		value: string;
@@ -68,10 +69,14 @@
 		between?: Snippet;
 		/** One quiet line: the toolbar and mode switch appear once the editor has focus or content. */
 		quiet?: boolean;
+		/** The toolbar shows only while the editor has focus, under the box so the text stays put. */
+		toolbarOnFocus?: boolean;
 		class?: string;
 	} = $props();
 
 	let focused = $state(false);
+	/** toolbarOnFocus: the editor box or its floating toolbar holds the focus. */
+	let editing = $state(false);
 
 	let root = $state<HTMLDivElement | null>(null);
 	let host = $state<HTMLDivElement | null>(null);
@@ -266,6 +271,65 @@
 	];
 </script>
 
+{#snippet toolbar()}
+	<Toolbar.Root aria-label="Formatting">
+		{#if label}
+			<label class="label mr-1" for={id}>{label}</label>
+		{/if}
+		<Toolbar.Group type="multiple" value={marks} size="sm" variant="outline" class="gap-0">
+			{#each marked as t, i (t.mark)}
+				<Toolbar.GroupItem
+					value={t.mark}
+					class={cn('px-1.5 font-mono text-xs', t.cls, joined(i))}
+					title={t.title}
+					aria-label={t.title}
+					onmousedown={(e) => e.preventDefault()}
+					onclick={() => run(t.cmd)}>{t.label}</Toolbar.GroupItem
+				>
+			{/each}
+		</Toolbar.Group>
+		{#each tools as group, gi (gi)}
+			<span class="flex items-center">
+				{#each group as t, i (t.title)}
+					<Toolbar.Button
+						size="sm"
+						class={cn('px-1.5 font-mono text-xs', joined(i))}
+						title={t.title}
+						aria-label={t.title}
+						onmousedown={(e) => e.preventDefault()}
+						onclick={() => run(t.cmd)}>{t.label}</Toolbar.Button
+					>
+				{/each}
+			</span>
+		{/each}
+		<span class="ml-auto flex flex-wrap items-center gap-1">
+			{@render toolbarEnd?.()}
+			<Toolbar.Group
+				type="single"
+				value={markdownMode.value}
+				onValueChange={(v: string) => v && setMarkdownMode(v as (typeof MARKDOWN_MODES)[number])}
+				size="sm"
+				variant="outline"
+				class="gap-0"
+				aria-label="View mode"
+			>
+				{#each MARKDOWN_MODES as m, i (m)}
+					<Toolbar.GroupItem
+						value={m}
+						class={cn(
+							'font-mono text-xs uppercase',
+							joined(i),
+							'data-[state=on]:bg-foreground data-[state=on]:text-background'
+						)}
+						onmousedown={(e) => e.preventDefault()}>{m}</Toolbar.GroupItem
+					>
+				{/each}
+			</Toolbar.Group>
+			{@render toolbarTail?.()}
+		</span>
+	</Toolbar.Root>
+{/snippet}
+
 <div
 	bind:this={root}
 	class={cn('grid grid-cols-1 gap-2', className)}
@@ -274,64 +338,29 @@
 		if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focused = false;
 	}}
 >
-	{#if !quiet || focused || value}
-		<Toolbar.Root aria-label="Formatting">
-			{#if label}
-				<label class="label mr-1" for={id}>{label}</label>
-			{/if}
-			<Toolbar.Group type="multiple" value={marks} size="sm" variant="outline" class="gap-0">
-				{#each marked as t, i (t.mark)}
-					<Toolbar.GroupItem
-						value={t.mark}
-						class={cn('px-1.5 font-mono text-xs', t.cls, joined(i))}
-						title={t.title}
-						aria-label={t.title}
-						onmousedown={(e) => e.preventDefault()}
-						onclick={() => run(t.cmd)}>{t.label}</Toolbar.GroupItem
-					>
-				{/each}
-			</Toolbar.Group>
-			{#each tools as group, gi (gi)}
-				<span class="flex items-center">
-					{#each group as t, i (t.title)}
-						<Toolbar.Button
-							size="sm"
-							class={cn('px-1.5 font-mono text-xs', joined(i))}
-							title={t.title}
-							aria-label={t.title}
-							onmousedown={(e) => e.preventDefault()}
-							onclick={() => run(t.cmd)}>{t.label}</Toolbar.Button
-						>
-					{/each}
-				</span>
-			{/each}
-			<span class="ml-auto flex flex-wrap items-center gap-1">
-				{@render toolbarEnd?.()}
-				<Toolbar.Group
-					type="single"
-					value={markdownMode.value}
-					onValueChange={(v: string) => v && setMarkdownMode(v as (typeof MARKDOWN_MODES)[number])}
-					size="sm"
-					variant="outline"
-					class="gap-0"
-					aria-label="View mode"
-				>
-					{#each MARKDOWN_MODES as m, i (m)}
-						<Toolbar.GroupItem
-							value={m}
-							class={cn(
-								'font-mono text-xs uppercase',
-								joined(i),
-								'data-[state=on]:bg-foreground data-[state=on]:text-background'
-							)}
-							onmousedown={(e) => e.preventDefault()}>{m}</Toolbar.GroupItem
-						>
-					{/each}
-				</Toolbar.Group>
-				{@render toolbarTail?.()}
-			</span>
-		</Toolbar.Root>
+	{#if !toolbarOnFocus && (!quiet || focused || value)}
+		{@render toolbar()}
 	{/if}
 	{@render between?.()}
-	<div bind:this={host} class="min-w-0"></div>
+	{#if toolbarOnFocus}
+		<!-- The toolbar floats under the box while the editor itself has focus. It takes no space,
+		     so nothing moves when it goes, and a click on what lies below lands where it was aimed.
+		     Focus in the host content between (callout boxes) does not count. -->
+		<div
+			class="relative min-w-0"
+			onfocusin={() => (editing = true)}
+			onfocusout={(e) => {
+				if (!e.currentTarget.contains(e.relatedTarget as Node | null)) editing = false;
+			}}
+		>
+			<div bind:this={host} class="min-w-0"></div>
+			{#if editing}
+				<div class="absolute top-full right-0 left-0 z-30 mt-1 bg-background shadow-key2">
+					{@render toolbar()}
+				</div>
+			{/if}
+		</div>
+	{:else}
+		<div bind:this={host} class="min-w-0"></div>
+	{/if}
 </div>

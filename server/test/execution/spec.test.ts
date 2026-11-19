@@ -98,15 +98,20 @@ describe('out-of-spec capture', () => {
 });
 
 describe('authoring units and specs', () => {
-	test('an unknown unit code is refused on a new or changed field', async () => {
+	test('a typed unit outside the registry is kept as written; a blank one is refused', async () => {
 		const t = await setup();
 		const p = await t.proc('Units');
 		const r = await t.call('POST', `/procedures/${p.id}/steps`, {
 			title: 'Measure',
 			dataSchema: { fields: [{ name: 'x', type: 'number', unit: 'furlong' }] }
 		});
-		expect(r.status).toBe(422);
-		expect(r.json.message).toContain("unknown unit 'furlong'");
+		expect(r.status).toBeLessThan(300);
+		expect(r.json.dataSchema.fields[0].unit).toBe('furlong');
+		const blank = await t.call('POST', `/procedures/${p.id}/steps`, {
+			title: 'Measure',
+			dataSchema: { fields: [{ name: 'x', type: 'number', unit: '  ' }] }
+		});
+		expect(blank.status).toBe(422);
 	});
 
 	test('a spec on a field that is not a number is refused', async () => {

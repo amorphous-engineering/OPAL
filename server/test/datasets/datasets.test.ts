@@ -337,11 +337,13 @@ describe('units and specs', () => {
 		expect(r.status).toBeLessThan(300);
 	});
 
-	test('an unknown unit code is refused when a schema is created or changed', async () => {
+	test('a typed unit outside the registry is kept; a blank unit is refused', async () => {
 		const { api, ds } = await make([num()]);
-		const bad = { fields: [num({ unit: 'furlong' })] };
-		expect((await api('POST', '/datasets', { name: 'Bad', schema: bad })).status).toBe(422);
-		expect((await api('PATCH', `/datasets/${ds.id}`, { schema: bad })).status).toBe(422);
+		const typed = { fields: [num({ unit: 'furlong' })] };
+		expect((await api('POST', '/datasets', { name: 'Typed', schema: typed })).status).toBeLessThan(300);
+		expect((await api('PATCH', `/datasets/${ds.id}`, { schema: typed })).status).toBeLessThan(300);
+		const blank = { fields: [num({ unit: ' ' })] };
+		expect((await api('PATCH', `/datasets/${ds.id}`, { schema: blank })).status).toBe(422);
 	});
 
 	test('a spec together with min or max is refused on a dataset field', async () => {

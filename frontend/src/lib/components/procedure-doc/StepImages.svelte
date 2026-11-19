@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ActionLink } from '#lib/components/opal/index.js';
+	import { BankKey, KeyBank } from '#lib/components/opal/index.js';
 	// Authored reference imagery: instruction content, lazy-loaded, opens in the image
 	// viewer. A carousel shows three uniform 4:3 plates at a time (the image fills them, cover)
 	// and pages by three; the viewer shows the whole image. In author mode each figure carries
@@ -47,9 +47,27 @@
 	function add(files: FileList | File[] | null | undefined) {
 		if (au && step && files?.length) au.addImages(step, Array.from(files));
 	}
+
+	/** ADD IMAGE on the step: open the file picker. */
+	export function pick() {
+		picker?.click();
+	}
 </script>
 
-{#if images.length || au}
+{#if au}
+	<input
+		bind:this={picker}
+		type="file"
+		accept="image/*"
+		multiple
+		hidden
+		onchange={(e) => {
+			add(e.currentTarget.files);
+			e.currentTarget.value = '';
+		}}
+	/>
+{/if}
+{#if images.length}
 	<div
 		class={cn('grid gap-1.5', over && 'outline outline-1 outline-ring')}
 		role="group"
@@ -74,18 +92,6 @@
 				{#if au}
 					<span class="label">Images</span>
 					<Button size="sm" variant="outline" onclick={() => picker?.click()}>+ IMAGE</Button>
-					{#if !images.length}<span class="font-mono text-xs text-muted-foreground">none</span>{/if}
-					<input
-						bind:this={picker}
-						type="file"
-						accept="image/*"
-						multiple
-						hidden
-						onchange={(e) => {
-							add(e.currentTarget.files);
-							e.currentTarget.value = '';
-						}}
-					/>
 				{/if}
 				{#if paged}
 					<span class="ml-auto font-mono text-xs text-muted-foreground tabular-nums"
@@ -149,25 +155,19 @@
 										onkeydown={(e) => e.stopPropagation()}
 										oninput={(e) => au.setCaption(step, img.id!, e.currentTarget.value)}
 									/>
-									<div class="flex items-center gap-0.5">
-										<Button
-											size="sm"
-											variant="ghost"
+									<KeyBank label="Image tools">
+										<BankKey
 											aria-label="Move image earlier"
-											onclick={() => au.moveImage(step, img.id!, -1)}>←</Button
+											onclick={() => au.moveImage(step, img.id!, -1)}>←</BankKey
 										>
-										<Button
-											size="sm"
-											variant="ghost"
+										<BankKey
 											aria-label="Move image later"
-											onclick={() => au.moveImage(step, img.id!, 1)}>→</Button
+											onclick={() => au.moveImage(step, img.id!, 1)}>→</BankKey
 										>
-										<ActionLink
-											class="ml-auto"
-											aria-label="Remove image"
-											onclick={() => au.removeImage(step, img.id!)}>REMOVE</ActionLink
+										<BankKey aria-label="Remove image" onclick={() => au.removeImage(step, img.id!)}
+											>REMOVE</BankKey
 										>
-									</div>
+									</KeyBank>
 								{:else if img.caption}
 									<figcaption class="font-mono text-xs text-muted-foreground">
 										{img.caption}

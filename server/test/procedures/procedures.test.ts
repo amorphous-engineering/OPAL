@@ -32,6 +32,15 @@ describe('procedure records', () => {
 		expect(b.templateNumber).toBe('T-0002');
 	});
 
+	test('the next T-number can be read without taking it', async () => {
+		const s = await setup();
+		expect((await s.ok('GET', '/procedures/next-number')).templateNumber).toBe('T-0001');
+		expect((await s.ok('GET', '/procedures/next-number')).templateNumber).toBe('T-0001');
+		const a = await s.proc('A');
+		expect(a.templateNumber).toBe('T-0001');
+		expect((await s.ok('GET', '/procedures/next-number')).templateNumber).toBe('T-0002');
+	});
+
 	test('a clone gets a new number and the source keeps its own', async () => {
 		const s = await setup();
 		const src = await s.proc('Source');

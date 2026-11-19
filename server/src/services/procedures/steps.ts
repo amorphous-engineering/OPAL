@@ -3,7 +3,6 @@ import {
 	type ProcedureStep,
 	type zStepAdd,
 	type zStepUpdate,
-	isUnitCode,
 	notFound,
 	OpalError,
 	type CalloutKind
@@ -62,7 +61,7 @@ export function normalizeCallouts(value: { kind: CalloutKind; text: string }[] |
 type DataFields = { fields: { name: string; type: string; unit?: string; spec?: unknown; min?: number; max?: number }[] };
 
 /**
- * Authoring rules for new or changed data fields: a unit is a known code, a spec belongs to a
+ * Authoring rules for new or changed data fields: a unit is not blank, a spec belongs to a
  * number field and does not come with min or max. A field kept as it was is not re-checked, so
  * older drafts still save.
  */
@@ -70,7 +69,9 @@ export function checkDataFields(next: DataFields | null | undefined, prev: DataF
 	const before = new Map((prev?.fields ?? []).map((f) => [f.name, JSON.stringify(f)]));
 	for (const f of next?.fields ?? []) {
 		if (before.get(f.name) === JSON.stringify(f)) continue;
-		if (f.unit && !isUnitCode(f.unit)) throw invalid('invalid_input', `${f.name}: unknown unit '${f.unit}'`, { [`${f.name}.unit`]: 'Unknown unit' });
+		// A unit is a registry code or what the author typed; a typed one is shown as written and
+		// never converted.
+		if (f.unit !== undefined && !f.unit.trim()) throw invalid('invalid_input', `${f.name}: a unit cannot be blank`, { [`${f.name}.unit`]: 'Blank unit' });
 		if (f.spec && f.type !== 'number') throw invalid('invalid_input', `${f.name}: only a number field takes a spec`, { [`${f.name}.spec`]: 'Only a number field takes a spec' });
 		if (f.spec && (f.min !== undefined || f.max !== undefined)) {
 			throw invalid('invalid_input', `${f.name}: a spec replaces min and max; set one or the other`, { [`${f.name}.spec`]: 'Use a spec or min/max, not both' });

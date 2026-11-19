@@ -1,5 +1,5 @@
 /** Check point values against a dataset schema. */
-import { OpalError, type DatasetSchema, type PointValues, type SchemaField, isUnitCode, specResult } from '@opal/shared';
+import { OpalError, type DatasetSchema, type PointValues, type SchemaField, specResult } from '@opal/shared';
 
 const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}([T ].*)?$/.test(v) && !Number.isNaN(Date.parse(v));
 
@@ -25,13 +25,13 @@ export function outOfSpecFields(schema: DatasetSchema, values: PointValues): str
 	return schema.fields.filter((f) => f.spec && specResult(f.spec, values[f.name]) === 'out_of_spec').map((f) => f.name);
 }
 
-/** A schema being saved: units are known codes, a spec does not come with min or max. */
+/** A schema being saved: a unit is a registry code or typed text, a spec does not come with min or max. */
 export function checkSchema(schema: DatasetSchema): void {
 	for (const f of schema.fields) {
 		const bad = (msg: string, key: string) => {
 			throw new OpalError(422, 'invalid_input', `${f.name}: ${msg}`, { [`${f.name}.${key}`]: msg });
 		};
-		if (f.unit && !isUnitCode(f.unit)) bad(`unknown unit '${f.unit}'`, 'unit');
+		if (f.unit !== undefined && !f.unit.trim()) bad('a unit cannot be blank', 'unit');
 		if (f.spec && (f.min !== undefined || f.max !== undefined)) bad('a spec replaces min and max; set one or the other', 'spec');
 	}
 }

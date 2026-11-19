@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { ActionLink } from '#lib/components/opal/index.js';
+	import { BankKey, KeyBank } from '#lib/components/opal/index.js';
 	// A step's callouts, each labelled as the operator sees it, in an editable box with a kind
 	// toggle and a remove control. Pressing the label steps through warning, caution and info.
-	// Adding lives in CalloutAdd.
+	// Adding lives in the step's ADD bank.
 	import { cn } from '#lib/utils.js';
 	import CalloutLabel from '../CalloutLabel.svelte';
 	import { CALLOUT_LABEL, CALLOUT_ORDER } from '../callouts.js';
@@ -41,10 +41,11 @@
 						onclick={() => set(list.map((x, j) => (j === i ? { ...x, kind: next } : x)))}
 						><CalloutLabel kind={c.kind} /></button
 					>
-					<ActionLink
-						aria-label="Remove callout"
-						onclick={() => set(list.filter((_, j) => j !== i))}>×</ActionLink
-					>
+					<KeyBank label="Callout tools">
+						<BankKey aria-label="Remove callout" onclick={() => set(list.filter((_, j) => j !== i))}
+							>REMOVE</BankKey
+						>
+					</KeyBank>
 				</div>
 				<textarea
 					id={`callout-${step.order}-${i}`}

@@ -3,7 +3,7 @@
 	// its fixture). One serialized part per slot. The key is set once from the first label and never
 	// edited, so a kit line that installs into the slot keeps pointing at it.
 	import type { UnitSlot } from '@opal/shared';
-	import { ActionLink } from '#lib/components/opal/index.js';
+	import { BankKey, KeyBank } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -32,7 +32,8 @@
 	type Slot = UnitSlot & { partNumber?: string; partName?: string };
 	const save = (next: Slot[]) => au.edit(step, { units: next });
 
-	function add(p: PartHit | null) {
+	/** ADD UNITS on the OP: a slot for the chosen part. */
+	export function add(p: PartHit | null) {
 		if (!p) return;
 		save([
 			...slots,
@@ -51,77 +52,80 @@
 		save(slots.map((s) => (s.key === key ? { ...s, ...change } : s)));
 </script>
 
-<div class="grid grid-cols-1 gap-1.5" data-unit-slots-editor={step.order}>
-	<div class="flex items-center gap-2">
-		<span class="label">Units</span>
-		<PartPicker meta="tracking_type" onselect={add}>
-			{#snippet trigger({ props })}
-				<Button {...props} size="sm" variant="outline">+ UNIT</Button>
-			{/snippet}
-		</PartPicker>
-	</div>
-	{#if slots.length}
-		<table class="w-full border-collapse text-xs">
-			<thead>
-				<tr class="border-b border-border bg-muted/60 text-left">
-					{#each ['LABEL', 'PART', 'REQUIRED', ''] as h (h)}
-						<th class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
-							>{h}</th
-						>
-					{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each slots as s (s.key)}
-					<tr class="border-b border-border">
-						<td class="px-2 py-1">
-							<Input
-								class="h-7 min-w-40"
-								aria-label={`Label of ${s.label}`}
-								value={s.label}
-								onkeydown={(e) => e.stopPropagation()}
-								onchange={(e) => {
-									const label = e.currentTarget.value.trim();
-									if (label) patch(s.key, { label });
-								}}
-							/>
-						</td>
-						<td class="px-2 py-1">
-							<span class="font-mono">{s.partNumber ?? ''}</span>
-							<span>{s.partName ?? ''}</span>
-							<PartPicker
-								meta="tracking_type"
-								onselect={(p: PartHit | null) =>
-									p &&
-									patch(s.key, { partId: p.id, partNumber: p.internal_pn ?? '', partName: p.name })}
+{#if slots.length}
+	<div class="grid grid-cols-1 gap-1.5" data-unit-slots-editor={step.order}>
+		<div class="flex items-center gap-2">
+			<span class="label">Units</span>
+			<PartPicker meta="tracking_type" onselect={add}>
+				{#snippet trigger({ props })}
+					<Button {...props} size="sm" variant="outline">+ UNIT</Button>
+				{/snippet}
+			</PartPicker>
+		</div>
+		{#if slots.length}
+			<table class="w-full border-collapse text-xs">
+				<thead>
+					<tr class="border-b border-border bg-muted/60 text-left">
+						{#each ['LABEL', 'PART', 'REQUIRED', ''] as h (h)}
+							<th
+								class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
+								>{h}</th
 							>
-								{#snippet trigger({ props })}
-									<button
-										{...props}
-										type="button"
-										class="ml-2 font-mono text-xs text-info hover:underline">CHANGE</button
-									>
-								{/snippet}
-							</PartPicker>
-						</td>
-						<td class="px-2 py-1">
-							<Checkbox
-								aria-label={`${s.label} is required`}
-								checked={s.required}
-								onCheckedChange={(v) => patch(s.key, { required: !!v })}
-							/>
-						</td>
-						<td class="px-2 py-1 text-right">
-							<ActionLink
-								aria-label={`Remove ${s.label}`}
-								onclick={() => save(slots.filter((x) => x.key !== s.key))}>REMOVE</ActionLink
-							>
-						</td>
+						{/each}
 					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{:else}
-		<span class="font-mono text-xs text-muted-foreground">none</span>
-	{/if}
-</div>
+				</thead>
+				<tbody>
+					{#each slots as s (s.key)}
+						<tr class="border-b border-border">
+							<td class="px-2 py-1">
+								<Input
+									class="h-7 min-w-40"
+									aria-label={`Label of ${s.label}`}
+									value={s.label}
+									onkeydown={(e) => e.stopPropagation()}
+									onchange={(e) => {
+										const label = e.currentTarget.value.trim();
+										if (label) patch(s.key, { label });
+									}}
+								/>
+							</td>
+							<td class="px-2 py-1">
+								<span class="font-mono">{s.partNumber ?? ''}</span>
+								<span>{s.partName ?? ''}</span>
+								<PartPicker
+									meta="tracking_type"
+									onselect={(p: PartHit | null) =>
+										p &&
+										patch(s.key, {
+											partId: p.id,
+											partNumber: p.internal_pn ?? '',
+											partName: p.name
+										})}
+								>
+									{#snippet trigger({ props })}
+										<Button {...props} size="sm" variant="outline" class="ml-2">CHANGE</Button>
+									{/snippet}
+								</PartPicker>
+							</td>
+							<td class="px-2 py-1">
+								<Checkbox
+									aria-label={`${s.label} is required`}
+									checked={s.required}
+									onCheckedChange={(v) => patch(s.key, { required: !!v })}
+								/>
+							</td>
+							<td class="px-2 py-1 text-right">
+								<KeyBank label={`${s.label} tools`}>
+									<BankKey
+										aria-label={`Remove ${s.label}`}
+										onclick={() => save(slots.filter((x) => x.key !== s.key))}>REMOVE</BankKey
+									>
+								</KeyBank>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		{/if}
+	</div>
+{/if}

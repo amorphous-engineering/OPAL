@@ -3,6 +3,7 @@
 	// (drafts), never in this component, so a document refresh cannot clobber
 	// what the operator is typing. Saved with the first sign-off.
 	import { newFieldKey } from './author/field-key.js';
+	import { focusWhenDrawn } from './author/focus.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -25,14 +26,17 @@
 	const fields = $derived(step.data_schema?.fields ?? []);
 	const authoring = $derived(ctl.mode === 'author');
 
-	function addField() {
+	/** A new field starts unlabelled with its label box focused. Its key is internal. */
+	export function addField() {
 		const name = newFieldKey(fields.map((f) => f.name));
+		const at = fields.length;
 		ctl.author?.edit(step, {
 			data_schema: {
 				...(step.data_schema ?? {}),
-				fields: [...fields, { name, label: 'Field', type: 'text' }]
+				fields: [...fields, { name, label: '', type: 'text' }]
 			}
 		});
+		focusWhenDrawn(`fld-${step.order}-${at}-label`);
 	}
 	const errors = $derived(ctl.fieldErrors(step));
 	const filled = (v: unknown) =>
@@ -71,7 +75,24 @@
 	}
 </script>
 
-{#if fields.length || authoring}
+{#if authoring}
+	{#if fields.length}
+		<!-- Authoring: the definitions only. The operator's inputs are what Preview shows. -->
+		<section class="border border-border bg-muted/40" aria-label="Data capture">
+			<header class="flex h-8 items-center gap-3 border-b border-border px-3">
+				<span class="label text-foreground">Data</span>
+				<span class="ml-auto"
+					><Button size="sm" variant="outline" onclick={addField}>+ FIELD</Button></span
+				>
+			</header>
+			{#each fields, i (i)}
+				<div class="border-t border-dotted px-3 [header+&]:border-t-0">
+					<FieldEditor {step} index={i} />
+				</div>
+			{/each}
+		</section>
+	{/if}
+{:else if fields.length}
 	<!-- Data capture is its own panel: one field per row, label and spec on the
 	     left, the input on the right, so it never reads as part of the prose. -->
 	<section
@@ -92,16 +113,8 @@
 					>{fields.length} {fields.length === 1 ? 'field' : 'fields'}</span
 				>
 			{/if}
-			{#if authoring}
-				<span class="ml-auto"
-					><Button size="sm" variant="outline" onclick={addField}>+ FIELD</Button></span
-				>
-			{/if}
 		</header>
-		{#if !fields.length}
-			<p class="px-3 py-2 font-mono text-xs text-muted-foreground sm:col-span-full">none</p>
-		{/if}
-		{#each fields as f, i (authoring ? i : f.name)}
+		{#each fields as f (f.name)}
 			{@const id = `cap-${step.order}-${f.name}`}
 			{@const err = errors[f.name]}
 			<div
@@ -249,7 +262,6 @@
 					{/if}
 					{#if err}<p class="text-xs text-error">{err}</p>{/if}
 				</div>
-				{#if authoring}<div class="sm:col-span-2"><FieldEditor {step} index={i} /></div>{/if}
 			</div>
 		{/each}
 	</section>

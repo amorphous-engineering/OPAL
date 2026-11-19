@@ -17,19 +17,14 @@
 	import StepStamp from './StepStamp.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import SignoffTable from './SignoffTable.svelte';
-	import SignoffEditor from './author/SignoffEditor.svelte';
 	import AuthorChips from './author/AuthorChips.svelte';
-	import CalloutAdd from './author/CalloutAdd.svelte';
-	import CalloutsEditor from './author/CalloutsEditor.svelte';
-	import MarkdownEditor from './author/MarkdownEditor.svelte';
+	import AuthorBody from './author/AuthorBody.svelte';
 	import RowTools from './author/RowTools.svelte';
 	import SaveBadge from './author/SaveBadge.svelte';
-	import StepProps from './author/StepProps.svelte';
 	import TitleInput from './author/TitleInput.svelte';
 	import { dragOver, dropHere, dropMarker } from './author/dnd.js';
 	import { isBlocked, isTerminal, type DocOp } from './types.js';
 	import StepUnits from '#lib/components/units/StepUnits.svelte';
-	import UnitSlotsEditor from '#lib/components/units/UnitSlotsEditor.svelte';
 
 	let { op }: { op: DocOp } = $props();
 	const ctl = useDoc();
@@ -166,7 +161,9 @@
 		{/if}
 		{#if draftRl}<State value="draft" />{/if}
 		{#if op.strict_sequence}
-			<Badge variant="outline" class={mutedBadge} title="Sub-steps complete in order">SEQ</Badge>
+			<Badge variant="outline" class={mutedBadge} title="Its steps complete in order"
+				>IN ORDER</Badge
+			>
 		{/if}
 		{#if !au}
 			{#if leaf}
@@ -191,12 +188,6 @@
 			{/if}
 		{/if}
 		<span class="flex-1"></span>
-		{#if au && op.waiting_on_ops.length}
-			<span
-				class="hidden font-mono text-xs whitespace-nowrap text-muted-foreground md:inline"
-				title="Starts after these OPs are done">AFTER OP {op.waiting_on_ops.join(', ')}</span
-			>
-		{/if}
 		{#if au}<AuthorChips step={op.step} />{/if}
 		<CursorChips
 			cursors={op.step.cursors}
@@ -243,25 +234,26 @@
 			{/if}
 		{/if}
 	</div>
+	{#snippet addStep()}
+		{#if au}
+			<div class="border-t border-border px-3 py-2">
+				<Button
+					size="sm"
+					variant="outline"
+					title="Add a step at the end of this OP"
+					onclick={() => au.addStep(op, op.steps[op.steps.length - 1] ?? op.step)}>+ STEP</Button
+				>
+			</div>
+		{/if}
+	{/snippet}
 	{#if open}
 		{#if leaf}
 			<StepBody step={op.step} {op} />
+			{@render addStep()}
 		{:else}
 			{#if au}
-				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
-					<MarkdownEditor
-						id={`instr-${op.order}`}
-						label="Instructions"
-						value={op.instructions}
-						onchange={(v) => au.edit(op.step, { instructions: v })}
-					>
-						{#snippet actions()}<CalloutAdd step={op.step} />{/snippet}
-						{#snippet badge()}<SaveBadge step={op.step} />{/snippet}
-						{#snippet between()}<CalloutsEditor step={op.step} />{/snippet}
-					</MarkdownEditor>
-					<SignoffEditor step={op.step} {op} />
-					<StepProps step={op.step} {op} isOp={true} />
-					<UnitSlotsEditor step={op.step} />
+				<div class="border-b border-border px-3 py-3">
+					<AuthorBody step={op.step} {op} />
 				</div>
 			{:else if op.callouts?.length || op.instructions}
 				<div class="grid grid-cols-1 gap-3 border-b border-border px-3 py-3">
@@ -327,13 +319,7 @@
 			{#each op.steps as s (s.order)}
 				<StepRow step={s} {op} />
 			{/each}
-			{#if au}
-				<div class="border-t border-border bg-muted/20 px-3 py-1">
-					<ActionLink onclick={() => au.addStep(op, op.steps[op.steps.length - 1] ?? op.step)}
-						>+ STEP</ActionLink
-					>
-				</div>
-			{/if}
+			{@render addStep()}
 			{#if footer}
 				<div class="grid grid-cols-1 gap-2 border-t border-border bg-muted/30 px-3 py-3">
 					{#if opSignoffs}<SignoffTable step={op.step} {op} />{/if}

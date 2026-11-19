@@ -1,40 +1,21 @@
 <script lang="ts">
+	// A new template opens as its details: the T-number it would take, name, project, type and
+	// description. Nothing is created until CREATE, so leaving costs no number. CREATE goes
+	// straight into the editor.
 	import { goto } from '$app/navigation';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { MarkdownField } from '#lib/components/markdown/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
-	import { opal } from '#lib/api.js';
-	import ProjectSelect from '#lib/components/procedures/ProjectSelect.svelte';
-	import type { ProcedureType } from '@opal/shared';
-	import { PageHeader, toastError, ErrorBanner } from '#lib/components/opal/index.js';
+	import { page } from '$app/state';
+	import { PageHeader } from '#lib/components/opal/index.js';
+	import DetailsDialog from '#lib/components/procedures/DetailsDialog.svelte';
 
-	let name = $state('');
-	let description = $state('');
-	let type = $state<ProcedureType>('op');
-	let projectId = $state(0);
-	let busy = $state(false);
-	let error = $state<string | null>(null);
+	let open = $state(true);
+	// The list's project filter carries over, so a template starts in the project being looked at.
+	const projectId = $derived(Number(page.url.searchParams.get('project')) || 0);
+	let leaving = false;
 
-	async function submit(e: SubmitEvent) {
-		e.preventDefault();
-		busy = true;
-		error = null;
-		try {
-			const p = await opal.procedures.create({
-				projectId,
-				name: name.trim(),
-				description: description.trim() || null,
-				procedureType: type
-			});
-			await goto(`/procedures/${p.id}`);
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Could not create template';
-			toastError(err);
-		} finally {
-			busy = false;
-		}
+	function leave() {
+		if (leaving) return;
+		leaving = true;
+		void goto('/procedures');
 	}
 </script>
 
@@ -43,29 +24,12 @@
 	crumbs={[{ label: 'Templates', href: '/procedures' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-2xl grid-cols-1 gap-4 px-4 py-4" onsubmit={submit}>
-	<ErrorBanner message={error} />
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="name">Name</Label>
-		<Input id="name" bind:value={name} required maxlength={255} autofocus />
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="project">Project</Label>
-		<ProjectSelect id="project" bind:value={projectId} />
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="type">Type</Label>
-		<NativeSelect id="type" bind:value={type} class="max-w-xs">
-			<NativeSelectOption value="op">OP — work order, no output</NativeSelectOption>
-			<NativeSelectOption value="build">BUILD — produces an assembly</NativeSelectOption>
-		</NativeSelect>
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="description">Description (markdown)</Label>
-		<MarkdownField id="description" bind:value={description} minRows={6} />
-	</div>
-	<div class="flex gap-2">
-		<Button type="submit" disabled={busy || !name.trim() || !projectId}>CREATE</Button>
-		<Button type="button" variant="outline" href="/procedures">CANCEL</Button>
-	</div>
-</form>
+<DetailsDialog
+	bind:open
+	{projectId}
+	oncancel={leave}
+	oncreated={(p) => {
+		leaving = true;
+		return goto(`/procedures/${p.id}?edit=1`);
+	}}
+/>
