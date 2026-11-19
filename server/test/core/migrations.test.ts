@@ -233,3 +233,58 @@ describe('retiring the aborted status', () => {
 		expect(gates()).toEqual([]);
 	});
 });
+
+describe('renaming bug to anomaly', () => {
+	/** A database from before the rename, holding one issue of each given type. */
+	function older(types: string[]) {
+		const path = join(tempDir(), 'opal.db');
+		openDb(path, migrationsUpTo('0012_far_ravenous'));
+		const db = new Database(path);
+		db.run('PRAGMA foreign_keys = OFF');
+		types.forEach((t, i) =>
+			db.run("INSERT INTO issue (id, issue_number, project_id, title, issue_type, actual_behavior, created_at, updated_at) VALUES (?, ?, 1, 'x', ?, 'it hummed', 'x', 'x')", [i + 1, `IT-000000000${i + 1}`, t])
+		);
+		db.close();
+		return path;
+	}
+	const types = (path: string) => {
+		const db = new Database(path);
+		const rows = db.query('SELECT issue_type, actual_behavior FROM issue ORDER BY id').all();
+		db.close();
+		return rows;
+	};
+
+	test('a stored bug reads as an anomaly after the upgrade, and the other types keep theirs', () => {
+		const path = older(['bug', 'non_conformance', 'task', 'improvement']);
+		openDb(path);
+		expect(types(path)).toEqual(['anomaly', 'non_conformance', 'task', 'improvement'].map((t) => ({ issue_type: t, actual_behavior: 'it hummed' })));
+	});
+
+	test('the upgraded table refuses bug', () => {
+		const db = openDb(older(['task'])).$client;
+		expect(() => db.run("UPDATE issue SET issue_type = 'bug' WHERE id = 1")).toThrow();
+	});
+});
+
+describe('releasing redlines written before drafts existed', () => {
+	test('a redline OP from an older database reads released by its author, and its steps follow it', () => {
+		const path = join(tempDir(), 'opal.db');
+		openDb(path, migrationsUpTo('0013_issue_anomaly_type'));
+		seedWorkOrder(path, 'in_work');
+		const db = new Database(path);
+		db.run('PRAGMA foreign_keys = OFF');
+		db.run("INSERT INTO user (id, username, name, created_at, updated_at) VALUES (7, 'ann', 'Ann', 'x', 'x')");
+		db.run("INSERT INTO issue (id, issue_number, project_id, title, issue_type, created_at, updated_at) VALUES (1, 'IT-0000000001', 1, 'x', 'non_conformance', 'x', 'x')");
+		db.run("INSERT INTO adhoc_step (id, execution_id, issue_id, parent_id, position, number, title, created_by_id, created_at) VALUES (1, 1, 1, NULL, 0, '1R1', 'Rework', 7, '2026-10-01T00:00:00.000Z')");
+		db.run("INSERT INTO adhoc_step (id, execution_id, issue_id, parent_id, position, number, title, created_by_id, created_at) VALUES (2, 1, 1, 1, 0, '1R1.1', 'Grind', 7, '2026-10-01T00:00:00.000Z')");
+		db.close();
+		openDb(path);
+		const after = new Database(path);
+		const rows = after.query('SELECT id, released_at, released_by_id FROM adhoc_step ORDER BY id').all();
+		after.close();
+		expect(rows).toEqual([
+			{ id: 1, released_at: '2026-10-01T00:00:00.000Z', released_by_id: 7 },
+			{ id: 2, released_at: null, released_by_id: null }
+		]);
+	});
+});

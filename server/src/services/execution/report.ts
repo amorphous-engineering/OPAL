@@ -9,7 +9,8 @@ import { captureDisplay, readingOf } from './document.ts';
 import { closureOf } from './executions.ts';
 import { productionRows } from './material.ts';
 import { isActive, isRoutine, loadModel, opRowOf } from './model.ts';
-import { signoffRecords, userNames } from './present.ts';
+import { presentUnits, removalRows } from './units.ts';
+import { signoffRecords, userNames, waiverRecords } from './present.ts';
 
 export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): ExecutionReport {
 	const db = ctx.db;
@@ -19,10 +20,12 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 	}
 	const ids = m.rows.map((r) => r.id);
 	const recs = signoffRecords(db, ids);
+	const waivers = waiverRecords(db, ids);
 	const names = userNames(db, [
 		m.exec.createdById,
 		...m.rows.map((r) => r.se.completedById),
-		...[...recs.values()].flat().map((s) => s.signedById)
+		...[...recs.values()].flat().map((s) => s.signedById),
+		...[...waivers.values()].flat().map((w) => w.waivedById)
 	]);
 	const nm = (id: number | null) => (id === null ? null : (names.get(id) ?? null));
 
@@ -35,13 +38,27 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 		completedAt: r.se.completedAt,
 		operator: nm(r.se.completedById),
 		// A routine step's slot is the stamp in `operator`, not a signature to list.
-		signoffs: (isRoutine(r) ? [] : (recs.get(r.id) ?? [])).map((s) => ({
-			slot: s.slot,
-			label: s.label,
-			role: s.role,
-			signedBy: nm(s.signedById),
-			signedAt: s.signedAt
-		}))
+		// A waived slot prints in its place, as the line written on it rather than a signature.
+		signoffs: isRoutine(r)
+			? []
+			: [
+					...(recs.get(r.id) ?? []).map((s) => ({
+						slot: s.slot,
+						label: s.label,
+						role: s.role,
+						signedBy: nm(s.signedById),
+						signedAt: s.signedAt,
+						waived: null
+					})),
+					...(waivers.get(r.id) ?? []).map((w) => ({
+						slot: w.slot,
+						label: w.label,
+						role: w.role,
+						signedBy: null,
+						signedAt: null,
+						waived: { by: nm(w.waivedById), at: w.waivedAt, reason: w.reason }
+					}))
+				].sort((a, b) => a.slot - b.slot)
 	}));
 
 	const dataCollects = m.rows.flatMap((r) => {
@@ -123,6 +140,8 @@ export function buildReport(ctx: Pick<Ctx, 'db'>, executionId: number): Executio
 			closure: closureOf(db, m.exec)
 		},
 		generatedAt: now(),
+		units: presentUnits(db, m),
+		removals: removalRows(db, m),
 		endItems,
 		operations,
 		dataCollects,

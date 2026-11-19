@@ -1,0 +1,156 @@
+# Fin Bracket Assembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 8: Fin Bracket Subassemblies (pp. 191-195).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: fin-bracket-assembly
+name: Fin Bracket Assembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 8: Fin Bracket Subassemblies'
+  pages: 191-195
+
+description: |
+  Drill a length of aluminum angle and mount a fin to it, with an optional printed aerodynamic
+  tip on its leading end.
+
+  Tools: drill press or mill (a hand drill may be used), drill bits for 0.332 in and 0.281 in
+  holes, automatic center punch, hex key and wrench, deburring
+  knife or file. For the optional tip: adhesive suitable for non-porous materials such as epoxy,
+  heat gun.
+
+  FIN-STD-250T-4X250C may be replaced with alternative or custom fins.
+
+  One work order builds one fin bracket assembly. The vehicle needs four identical assemblies, so
+  this procedure is run four times.
+
+output:
+  part: fin-bracket-assembly
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 192), divided by four: the guidebook lists parts for
+# four assemblies, and one work order here builds one. The templates are not divided.
+kit:
+  - part: '8982K402'
+    quantity: 1
+  - part: FIN-STD-250T-4X250C
+    quantity: 1
+  - part: '91306A279'
+    quantity: 4
+  - part: '92141A029'
+    quantity: 8
+  - part: '91102A750'
+    quantity: 4
+  - part: '95505A601'
+    quantity: 4
+  - part: AERO-100X100X0125
+    quantity: 1
+  - part: TMPLT-FIN-BRKT-1X1-AFT
+    quantity: 1
+    usage: tooling
+  - part: TMPLT-FIN-BRKT-1X1-FWD
+    quantity: 1
+    usage: tooling
+
+operations:
+  - title: Fin Bracket Subassemblies
+    source: { section: 'Section V, OP 8', pages: 191-195 }
+    workcenter: SHOP
+    images:
+      - file: photos/op-08/fin-bracket-assembly.png
+        caption: Fin bracket assembly.
+        source_page: 191
+    steps:
+      - title: Drill the aluminum angle
+        source: { step: 1, page: 193 }
+        instructions: |
+          Drill one 0.332 in hole and seven 0.281 in holes in QTY 1 piece of 1 in x 1 in x 0.125 in
+          aluminum angle. The 3D printed templates may be used to mark the hole locations. If the
+          templates are not used, refer to the drawing below. A drill press or mill is
+          recommended. If using a drill press or hand drill, use an automatic center punch at each
+          hole location prior to drilling to help prevent the bit from walking.
+        images:
+          - file: photos/op-08/templates-on-angle.jpg
+            caption: Fin bracket templates on the aluminum angle, aft end marked AFT.
+            source_page: 193
+          - file: photos/op-08/angle-hole-drawing.png
+            caption: Aluminum angle hole locations, dimensioned drawing.
+            source_page: 193
+
+      - title: Mount the fin
+        source: { step: 2, page: 194 }
+        instructions: |
+          Mount QTY 1 FIN-STD-250T-4X250C fin (or alternate/custom fin) to the drilled aluminum
+          angle using QTY 4 91306A279 screws, QTY 8 92141A029 flat washers, QTY 4 91102A750 split
+          lock washers, and QTY 4 95505A601 hex nuts, as shown below. Tighten the 4 screws
+          approximately 1/4 turn past full compression of the split lock washers.
+        images:
+          - file: photos/op-08/fin-on-bracket.jpg
+            caption: Fin mounted on the aluminum angle with four screws.
+            source_page: 194
+          - file: photos/op-08/fin-on-bracket-side.jpg
+            caption: Fin mounted on the aluminum angle, side view with washers and hex nuts.
+            source_page: 194
+
+      - title: Install the aerodynamic tip
+        source: { step: 3, page: 195 }
+        instructions: |
+          Optional: If the leading edges of the aluminum angle have not been tapered, install QTY
+          1 AERO-100X100X0125 printed aerodynamic bracket tip onto the aluminum angle as shown.
+
+          *Deburr the edges of the aluminum angle with a deburring knife or file prior to
+          installation.*
+
+          *The printed aerodynamic bracket tip is designed to be a press fit, however tolerances
+          of both printed parts and aluminum angle may vary. If loose, it may be bonded on using an
+          adhesive suitable for non-porous materials, such as epoxy. If tight, installation may be
+          aided by beveling the edges of the aluminum angle using a file, or carefully warming the
+          aluminum angle and/or printed part using a heat gun to soften the printed plastic.*
+        images:
+          - file: photos/op-08/bracket-tip.jpg
+            caption: Fin bracket assembly with the aerodynamic tip on the leading end.
+            source_page: 195
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - >-
+    One work order here builds one fin bracket assembly. The guidebook builds four identical
+    assemblies in one pass. Every kit quantity is the guidebook's parts list quantity (p. 192)
+    divided by four, except the two fin bracket templates, which are tooling and kept at 1 each.
+  - >-
+    The parts list note "All steps in this OP will be performed four times to build four identical
+    fin bracket assemblies. The quantities listed are for four complete assemblies." is rewritten
+    for the description: one work order builds one assembly; the vehicle needs four.
+  - >-
+    Steps 1.1, 1.2 and 1.3 are put in the singular where the guidebook speaks of all four: "QTY 4
+    pieces" is "QTY 1 piece"; "QTY 4 FIN-STD-250T-4X250C Fins (or alternate/custom fins)" is "QTY
+    1 FIN-STD-250T-4X250C fin (or alternate/custom fin)"; "per fin" is dropped; "Tighten 16X
+    screws" is "Tighten the 4 screws"; "QTY 4 AERO-1X1X125-TIP printed aerodynamic bracket tips"
+    is "QTY 1 AERO-100X100X0125 printed aerodynamic bracket tip", and "they" in its note is "it".
+  - >-
+    The aluminum angle is called the aluminum angle throughout. Step 2 calls it the drilled
+    aluminum angle brackets and step 3 the aluminum angle fin brackets.
+  - >-
+    The 91102A750 washers are called split lock washers throughout. Step 2 prints "QTY 4
+    91102A750" with no noun and later says "the lock washer".
+  - >-
+    Step 1.1: "1X .332” and 7X .281” holes" is written "one 0.332 in hole and seven 0.281 in holes", and
+    "1”X1”X.125”" is written "1 in x 1 in x 0.125 in".
+  - 'Step 1.3: the part number printed in the step is replaced by the number from the parts list.'
+  - 'Step 1.3: a period is added to the end of the note "Deburr the edges ... prior to installation".'
+  - >-
+    The aerodynamic tip, marked (Optional) in the parts list, is in the kit with quantity 1. Step
+    1.3 is optional; if it is skipped the tip is not used.
+  - >-
+    The parts list footnote "*(Or alternative/custom fins)" is in the description as "may be
+    replaced with alternative or custom fins".
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - Image captions are new. The drawing on p. 193 is cut from a page render at higher resolution.

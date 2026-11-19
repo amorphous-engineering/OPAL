@@ -1,0 +1,1418 @@
+# What the team has done so far, in date order.
+#
+# Everything here is fictional: the people, the dates, the orders, the measurements and the notes.
+# The loader enters each event through OPAL's own operations, as the person named in `by`, with the
+# clock set to `at` (UTC).
+#
+# Where the team stands at the end of the file: the first vehicle and the ground equipment are
+# built. The first launch attempt ended in a dumped load and a work order closed short. The second
+# flew and came down without its main parachute. The vehicle is on the rail for a third time, with
+# open issues due at different points of that work order. A second vehicle is under way: its tank
+# assembly is on the bench, held by an open non-conformance, and one order for it has not come.
+#
+# An event states its time with `at`, or follows the one before it by `after` minutes.
+#
+# Parts the team prints, machines or has cut are booked into stock by a `make` event. The guidebook
+# gives drawings and print settings for them (Appendices C to E), not steps, so the dataset has no
+# procedure for making them.
+
+events:
+  # ------------------------------------------------------------ release and first orders
+  - at: '2026-06-29T17:00:00Z'
+    by: build
+    publish:
+      note: First release. Adapted from HCR-5100 R01.
+      procedures:
+        - servo-actuated-ball-valve
+        - drill-tank-tube
+        - fuel-bulkhead-subassembly
+        - oxidizer-bulkhead-subassembly
+        - propellant-tank-assembly
+        - thrust-chamber-assembly
+        - fin-bracket-assembly
+        - propulsion-system
+
+  - at: '2026-06-30T17:05:00Z'
+    by: build
+    order:
+      key: po-mcmaster-aft
+      supplier: mcmaster
+      destination: Stockroom
+      notes: Tank, thrust chamber, fin brackets and propulsion plumbing.
+      for: &aft
+        - { procedure: servo-actuated-ball-valve, times: 2 }
+        - drill-tank-tube
+        - fuel-bulkhead-subassembly
+        - oxidizer-bulkhead-subassembly
+        - propellant-tank-assembly
+        - thrust-chamber-assembly
+        - { procedure: fin-bracket-assembly, times: 4 }
+        - propulsion-system
+
+  - at: '2026-06-30T17:20:00Z'
+    by: build
+    order: { key: po-sendcutsend-aft, supplier: sendcutsend, destination: Stockroom, for: *aft }
+
+  - at: '2026-06-30T17:31:00Z'
+    by: build
+    order: { key: po-amazon-aft, supplier: amazon, destination: Stockroom, for: *aft }
+
+  - at: '2026-06-30T17:40:00Z'
+    by: build
+    order: { key: po-counter-aft, supplier: retail-store, destination: Stockroom, for: *aft }
+
+  # One hose was on backorder.
+  - at: '2026-07-03T22:40:00Z'
+    by: build
+    receive:
+      order: po-mcmaster-aft
+      location: Stockroom
+      all: true
+      short: { '4468K865': 0 }
+      # The O-ring bags print the supplier's lot; a swollen O-ring is traced back by it.
+      lots: { '9452K226': 'B4417-26', '9396K79': 'S2093-26' }
+
+  - at: '2026-07-04T16:10:00Z'
+    by: build
+    receive: { order: po-counter-aft, location: Stockroom, all: true }
+
+  - at: '2026-07-04T18:15:00Z'
+    by: build
+    make:
+      location: Machine Shop
+      lot: SHOP-2026-07-04
+      for: *aft
+
+  - at: '2026-07-05T17:00:00Z'
+    by: build
+    baseline:
+      note: Half Cat standard liquid rocket design, HCR-5100 Section 1.3.
+      requirements:
+        - tank-construction
+        - tank-fasteners
+        - static-vent
+        - ullage
+        - bulkhead-retention
+        - vent-path
+        - piston
+        - piston-length
+        - piston-seals
+        - oxidizer
+        - remote-fill
+        - fuel
+        - chamber-material
+        - chamber-retention
+        - igniter
+        - main-valves
+        - feed-lines
+        - quick-disconnect
+        - thrust-structure
+        - thrust-structure-fasteners
+        - fin-attachment
+
+  - at: '2026-07-07T21:05:00Z'
+    by: build
+    receive: { order: po-amazon-aft, location: Stockroom, all: true }
+
+  - at: '2026-07-09T20:30:00Z'
+    by: build
+    receive: { order: po-sendcutsend-aft, location: Stockroom, all: true }
+
+  # ------------------------------------------------------------ the tank
+  - at: '2026-07-11T16:30:00Z'
+    by: build
+    build:
+      key: wo-tank-casing
+      procedure: drill-tank-tube
+      pace: 14
+      location: Assembly Bench
+      data:
+        '1.7': { vent_distance: '14.25' }
+      notes:
+        '1.1': One end was out of square. Filed it and checked it again with the paper.
+        '1.3': Drill press, with a drill stop.
+
+  - at: '2026-07-12T19:10:00Z'
+    by: qa
+    evidence:
+      requirement: tank-fasteners
+      part: TANK-36L-047V-2X8X313C
+      notes: >-
+        8 clearance holes at each end of the tank tube, drilled with the jig in {wo-tank-casing}
+        step 1.3. Open until the holes in the retaining rings are checked at tank assembly.
+
+  - at: '2026-07-12T19:14:00Z'
+    by: qa
+    evidence:
+      requirement: static-vent
+      part: TANK-36L-047V-2X8X313C
+      notes: >-
+        1.2 mm vent drilled 14.25 in from the forward end, {wo-tank-casing} step 1.7. Open until
+        its position against the piston is checked at tank assembly.
+
+  # The analysis in the guidebook uses a smaller hole than the procedure drills.
+  - at: '2026-07-12T19:40:00Z'
+    by: test
+    risk:
+      key: risk-closure-margin
+      title: Tank closure margin not shown for the hole size drilled
+      part: TANK-36L-047V-2X8X313C
+      owner: test
+      condition: >-
+        HCR-5100 Sections 2.4.3 and 2.4.4 (p. 72) work out bolt tear-out and casing tensile stress
+        with a 0.328 in bolt hole. OP 2 step 3 drills the tank tube 11/32 in, and {wo-tank-casing}
+        drilled it that size.
+      departure: >-
+        The margin at the closure joints of this tank is lower than the guidebook's figures, and
+        nobody has worked out by how much.
+      consequence: >-
+        A closure joint yields or tears out under tank pressure. The tank is pressurized only with
+        everyone at a safe distance, so the loss would be the vehicle and the launch.
+      probability: 2
+      impact: 4
+      watch:
+        observable: Tear-out and tensile margins worked out for an 11/32 in hole
+        threshold: Either margin below 0.3
+        contingency: Stop work on the tank and ask Half Cat Rocketry before any pressure is put in it.
+
+  - at: '2026-07-12T19:52:00Z'
+    by: test
+    issue:
+      key: task-margin
+      type: task
+      title: Work out the tank closure margins for an 11/32 in hole
+      assign: test
+      parts: [TANK-36L-047V-2X8X313C]
+      description: >-
+        Redo the bolt tear-out and casing tensile calculations of HCR-5100 Sections 2.4.3 and 2.4.4
+        (p. 72) with the hole size OP 2 drills. Ask Half Cat Rocketry which hole size the analysis
+        was meant for.
+
+  - at: '2026-07-12T19:55:00Z'
+    by: test
+    risk_issue: { risk: risk-closure-margin, issue: task-margin, role: research }
+
+  - at: '2026-07-12T20:00:00Z'
+    by: test
+    risk_disposition:
+      risk: risk-closure-margin
+      disposition: research
+      note: Open until {task-margin} gives the margins.
+
+  # Reference data the team keeps beside its own.
+  - at: '2026-07-13T18:00:00Z'
+    by: test
+    dataset: { key: static-fires }
+  - at: '2026-07-13T18:10:00Z'
+    by: test
+    dataset: { key: launches }
+
+  # The guidebook's own position on unrated fittings, taken on as an accepted risk.
+  - at: '2026-07-13T18:40:00Z'
+    by: build
+    risk:
+      key: risk-unrated-fittings
+      title: Fittings and tubing not rated to nitrous oxide vapor pressure
+      asset: Oxidizer fill line and vehicle plumbing
+      owner: build
+      condition: >-
+        HCR-5100 Section 1.3.4 (p. 13): "some tubing and many of the fittings used on Half Cat type
+        rockets will not be explicitly rated to the maximum expected operating pressures that are
+        possible with saturated N2O."
+      departure: A fitting or tube lets go while the system holds nitrous oxide.
+      consequence: Loss of the oxidizer load and damage to the vehicle or ground equipment. Injury if anyone is near.
+      probability: 2
+      impact: 5
+      residual_probability: 2
+      residual_impact: 2
+      watch:
+        observable: People inside the safe distance while the system is pressurized
+        threshold: Anyone
+        contingency: Stop the fill and vent, as Launch Operations has it.
+
+  - at: '2026-07-13T18:55:00Z'
+    by: build
+    risk_accept:
+      risk: risk-unrated-fittings
+      rationale: >-
+        The guidebook accepts these parts "so long as they are pressurized only when personnel are
+        at a safe distance from the system" (p. 13), and the requirement for remote fill holds us
+        to that. With nobody near, what is left is hardware.
+
+  # ------------------------------------------------------------ valves and bulkheads
+  - at: '2026-07-18T16:05:00Z'
+    by: build
+    build: { key: wo-valve-fuel, procedure: servo-actuated-ball-valve, pace: 9, location: Assembly Bench }
+
+  - at: '2026-07-18T17:40:00Z'
+    by: build
+    build: { key: wo-valve-oxidizer, procedure: servo-actuated-ball-valve, pace: 7, location: Assembly Bench }
+
+  - at: '2026-07-19T16:20:00Z'
+    by: build
+    build:
+      key: wo-fuel-bulkhead
+      procedure: fuel-bulkhead-subassembly
+      pace: 11
+      location: Assembly Bench
+
+  - at: '2026-07-25T16:10:00Z'
+    by: build
+    build:
+      key: wo-oxidizer-bulkhead
+      procedure: oxidizer-bulkhead-subassembly
+      pace: 10
+      pause_before: '1.9'
+
+  - at: '2026-07-25T18:02:00Z'
+    by: build
+    raise:
+      key: nc-short-tube
+      order: wo-oxidizer-bulkhead
+      step: '1.9'
+      title: Tube cut short
+      should_be: 3.625 to 3.875 in long.
+      actual: 3.50 in. Measured after the cut.
+      containment: step
+      assign: test
+
+  - at: '2026-07-26T17:15:00Z'
+    by: test
+    disposition:
+      issue: nc-short-tube
+      type: scrap
+      root_cause: Marked from the wrong end of the rule.
+      corrective_action: Cut a new piece from the same length of tubing and measure it before marking.
+      rationale: The short piece is scrap. There is tubing left on the 10 ft length for a new one.
+
+  - at: '2026-07-26T17:40:00Z'
+    by: build
+    build:
+      key: wo-oxidizer-bulkhead
+      procedure: oxidizer-bulkhead-subassembly
+      pace: 10
+      location: Assembly Bench
+      data:
+        '1.9': { tube_length: '3.75' }
+      notes:
+        '1.9': New piece, see {nc-short-tube}.
+
+  - at: '2026-07-27T18:30:00Z'
+    by: qa
+    close: { issue: nc-short-tube }
+
+  # ------------------------------------------------------------ tank assembly
+  - at: '2026-08-01T16:15:00Z'
+    by: build
+    build:
+      key: wo-tank-assembly
+      procedure: propellant-tank-assembly
+      pace: 13
+      location: Assembly Bench
+      data:
+        '1.4': { piston_depth: '12.19' }
+
+  - at: '2026-08-02T17:30:00Z'
+    by: qa
+    verify:
+      requirement: tank-fasteners
+      part: TANK-36L-047V-2X8X313C
+      notes: >-
+        Every radial screw passes through a clearance hole in the tank wall and through its
+        retaining ring. Looked at each one on {wo-tank-assembly}.
+
+  - at: '2026-08-02T17:36:00Z'
+    by: qa
+    verify:
+      requirement: bulkhead-retention
+      part: fuel-bulkhead-subassembly
+      notes: Separate retaining ring fitted behind the bulkhead, {wo-fuel-bulkhead}.
+
+  - at: '2026-08-02T17:38:00Z'
+    by: qa
+    verify:
+      requirement: bulkhead-retention
+      part: oxidizer-bulkhead-subassembly
+      notes: Separate retaining ring fitted behind the bulkhead, {wo-oxidizer-bulkhead}.
+
+  - at: '2026-08-02T17:44:00Z'
+    by: qa
+    verify:
+      requirement: tank-construction
+      part: propellant-tank-assembly
+      notes: >-
+        Aluminum round tube, a bulkhead at each end with O-rings on its diameter, held by radial
+        screws. {wo-tank-assembly}.
+
+  - at: '2026-08-02T17:50:00Z'
+    by: qa
+    evidence:
+      requirement: static-vent
+      part: TANK-36L-047V-2X8X313C
+      notes: >-
+        1.2 mm vent drilled 14.25 in from the forward end, {wo-tank-casing} step 1.7. Piston
+        seated 12.19 in from the end of the tube, {wo-tank-assembly} step 1.4. Which end each
+        distance is taken from has not been checked against the drawing, so this stays open.
+
+  - at: '2026-08-02T18:05:00Z'
+    by: qa
+    dataset: { key: tank-measurements }
+  - at: '2026-08-02T18:10:00Z'
+    by: qa
+    points:
+      dataset: tank-measurements
+      rows:
+        - { values: { measurement: Vent from the end of the tube, distance: 14.25 }, from: { order: wo-tank-casing, step: '1.7' } }
+        - { values: { measurement: Fill tube length, distance: 3.75 }, from: { order: wo-oxidizer-bulkhead, step: '1.9' } }
+        - { values: { measurement: Piston from the end of the tube, distance: 12.19 }, from: { order: wo-tank-assembly, step: '1.4' } }
+
+  # From the guidebook's maintenance schedule (Section 2.7, pp. 84-85).
+  - at: '2026-08-02T18:30:00Z'
+    by: test
+    risk:
+      key: risk-oring-swell
+      title: O-rings swell if the tank sits fuelled
+      part: propellant-tank-assembly
+      owner: test
+      condition: >-
+        HCR-5100 Section 2.7 (p. 84): "O-rings exposed to fuel will swell over time, so that they
+        may be unusable even after only one cycle if the rocket has been sitting for more than a
+        few days."
+      departure: The tank is fuelled, the launch slips, and the rocket sits.
+      consequence: >-
+        Table 2.9 (p. 85) gives fuel leakage out of the tank for the fuel bulkhead O-ring, and
+        difficulty pushing the piston into the fuel tank for the piston O-ring.
+      probability: 3
+      impact: 3
+      watch:
+        observable: Days between fuelling and launch
+        threshold: More than a few days, as the guidebook puts it
+        contingency: Replace the fuel bulkhead and piston O-rings before the next fill, as Vehicle Preparation allows.
+
+  - at: '2026-08-02T18:36:00Z'
+    by: test
+    risk_disposition:
+      risk: risk-oring-swell
+      disposition: watch
+
+  # ------------------------------------------------------------ thrust chamber and fin brackets
+  - at: '2026-08-08T16:00:00Z'
+    by: build
+    build: { key: wo-thrust-chamber, procedure: thrust-chamber-assembly, pace: 12, location: Assembly Bench }
+
+  - at: '2026-08-09T17:05:00Z'
+    by: qa
+    verify:
+      requirement: chamber-retention
+      part: thrust-chamber-assembly
+      notes: Flange plates on axial rods, nuts tightened onto the plates. {wo-thrust-chamber}.
+
+  - at: '2026-08-09T18:00:00Z'
+    by: test
+    build: { key: wo-fin-bracket-1, procedure: fin-bracket-assembly, pace: 14, location: Assembly Bench }
+  - at: '2026-08-09T19:00:00Z'
+    by: test
+    build: { key: wo-fin-bracket-2, procedure: fin-bracket-assembly, pace: 11, location: Assembly Bench }
+  - at: '2026-08-09T20:00:00Z'
+    by: test
+    build: { key: wo-fin-bracket-3, procedure: fin-bracket-assembly, pace: 10, location: Assembly Bench }
+  - at: '2026-08-09T21:00:00Z'
+    by: test
+    build: { key: wo-fin-bracket-4, procedure: fin-bracket-assembly, pace: 10, location: Assembly Bench }
+
+  - at: '2026-08-10T17:10:00Z'
+    by: qa
+    verify:
+      requirement: fin-attachment
+      part: fin-bracket-assembly
+      notes: Each fin is bolted to its angle bracket. {wo-fin-bracket-1} to {wo-fin-bracket-4}.
+
+  # The backordered hose.
+  - at: '2026-08-11T21:15:00Z'
+    by: build
+    receive: { order: po-mcmaster-aft, location: Stockroom, all: true }
+
+  # ------------------------------------------------------------ forward half and ground equipment
+  - at: '2026-08-13T17:00:00Z'
+    by: build
+    publish:
+      note: First release. Adapted from HCR-5100 R01.
+      procedures:
+        - avionics-bay-assembly
+        - nose-cone-assembly
+        - airframe-tubes
+        - vehicle-integration
+        - gse-fill-system
+        - gse-purge-system
+        - gse-system
+        - gse-cables-and-fill-line
+
+  - at: '2026-08-13T17:30:00Z'
+    by: build
+    order:
+      key: po-mcmaster-forward
+      supplier: mcmaster
+      destination: Stockroom
+      notes: Avionics bay, nose cone, airframe, integration and ground equipment.
+      for: &forward
+        - avionics-bay-assembly
+        - nose-cone-assembly
+        - airframe-tubes
+        - vehicle-integration
+        - { procedure: servo-actuated-ball-valve, times: 2 }
+        - gse-fill-system
+        - gse-purge-system
+        - gse-system
+        - gse-cables-and-fill-line
+
+  - at: '2026-08-13T17:42:00Z'
+    by: build
+    order: { key: po-amazon-forward, supplier: amazon, destination: Stockroom, for: *forward }
+  - at: '2026-08-13T17:50:00Z'
+    by: build
+    order: { key: po-csrocketry, supplier: csrocketry, destination: Stockroom, for: *forward }
+  - at: '2026-08-13T17:58:00Z'
+    by: build
+    order: { key: po-eggtimer, supplier: eggtimerrocketry, destination: Stockroom, for: *forward }
+  - at: '2026-08-13T18:05:00Z'
+    by: build
+    order: { key: po-sendcutsend-forward, supplier: sendcutsend, destination: Stockroom, for: *forward }
+  - at: '2026-08-13T18:12:00Z'
+    by: build
+    order: { key: po-harborfreight, supplier: harborfreight, destination: Stockroom, for: *forward }
+  - at: '2026-08-13T18:20:00Z'
+    by: build
+    order: { key: po-counter-forward, supplier: retail-store, destination: Stockroom, for: *forward }
+
+  - at: '2026-08-15T19:30:00Z'
+    by: build
+    receive: { order: po-counter-forward, location: Stockroom, all: true }
+
+  # Printed and cut parts for the forward half and the ground equipment.
+  - at: '2026-08-16T19:20:00Z'
+    by: test
+    make:
+      location: Machine Shop
+      lot: SHOP-2026-08-16
+      for: *forward
+
+  - at: '2026-08-18T22:10:00Z'
+    by: build
+    receive: { order: po-mcmaster-forward, location: Stockroom, all: true }
+  - at: '2026-08-20T20:45:00Z'
+    by: build
+    receive: { order: po-amazon-forward, location: Stockroom, all: true }
+
+  # ------------------------------------------------------------ propulsion system, held
+  - at: '2026-08-22T16:20:00Z'
+    by: build
+    build:
+      key: wo-propulsion
+      procedure: propulsion-system
+      pace: 15
+      pause_before: '1.6'
+
+  - at: '2026-08-22T17:48:00Z'
+    by: build
+    raise:
+      key: nc-captured-nut
+      order: wo-propulsion
+      step: '1.6'
+      title: Screw will not start in a captured nut
+      should_be: Each 91306A279 screw threads into its nut in the nut retaining ring.
+      actual: >-
+        One screw on the fuel side turns without starting. The nut looks to have turned in its
+        pocket in the printed ring. The other seven went in.
+      containment: step
+      priority: high
+      assign: test
+
+  - at: '2026-08-24T18:20:00Z'
+    by: test
+    comment:
+      issue: nc-captured-nut
+      text: >-
+        Getting at the nut means taking the fuel bulkhead back out of the tank. Before we do that
+        I want to know whether seven of eight is something Half Cat would fly. Asked them.
+
+  # ------------------------------------------------------------ ground equipment, started
+  - at: '2026-08-29T16:30:00Z'
+    by: test
+    build: { key: wo-valve-fill, procedure: servo-actuated-ball-valve, pace: 8, location: Assembly Bench }
+  - at: '2026-08-29T17:45:00Z'
+    by: test
+    build: { key: wo-valve-purge, procedure: servo-actuated-ball-valve, pace: 8, location: Assembly Bench }
+  - at: '2026-08-30T17:00:00Z'
+    by: test
+    build: { key: wo-gse-fill, procedure: gse-fill-system, pace: 12, location: Assembly Bench }
+
+  - at: '2026-08-30T19:10:00Z'
+    by: test
+    issue:
+      key: improve-valve-count
+      type: improvement
+      title: Build the four valves on one work order
+      description: >-
+        The vehicle and the ground equipment take four of the same valve. We cut four work orders
+        on four days and printed the mounts twice.
+      expected_benefit: One kit pull and one print run.
+
+  # ------------------------------------------------------------ operations released for review
+  - at: '2026-09-05T18:00:00Z'
+    by: build
+    publish:
+      note: First release. Adapted from HCR-5100 R01, Section VII.
+      procedures: [gse-transmitter-setup, vehicle-preparation, gse-setup, launch-operations, inspections-after-firing]
+
+  # ------------------------------------------------------------ the rest of the orders come in
+  - at: '2026-09-08T21:30:00Z'
+    by: build
+    receive: { order: po-csrocketry, location: Stockroom, all: true }
+  - at: '2026-09-09T20:10:00Z'
+    by: build
+    receive: { order: po-eggtimer, location: Stockroom, all: true }
+  - at: '2026-09-10T22:05:00Z'
+    by: build
+    receive: { order: po-sendcutsend-forward, location: Stockroom, all: true }
+  - at: '2026-09-11T19:40:00Z'
+    by: build
+    receive: { order: po-harborfreight, location: Stockroom, all: true }
+
+  # ------------------------------------------------------------ the captured nut, reworked
+  - at: '2026-09-12T16:30:00Z'
+    by: test
+    disposition:
+      issue: nc-captured-nut
+      type: rework
+      root_cause: The nut pocket in the printed ring came out oversize, and the nut turned in it.
+      corrective_action: >-
+        Took the fuel bulkhead out, fitted a newly printed nut retaining ring, and tried every
+        nut with a screw before the bulkhead went back in.
+      rationale: >-
+        A new ring is a morning's print. Seven screws of eight is not ours to accept.
+
+  - at: '2026-09-12T19:00:00Z'
+    by: build
+    build:
+      key: wo-propulsion
+      procedure: propulsion-system
+      pace: 15
+      location: Assembly Bench
+      notes:
+        '1.6': All eight screws started by hand. See {nc-captured-nut}.
+
+  - at: '2026-09-13T17:10:00Z'
+    by: qa
+    close: { issue: nc-captured-nut }
+
+  # ------------------------------------------------------------ forward half
+  - at: '2026-09-19T16:10:00Z'
+    by: test
+    build:
+      key: wo-avionics-bay
+      procedure: avionics-bay-assembly
+      pace: 13
+      location: Assembly Bench
+      data:
+        '1.12': { rod_protrusion: '0.27' }
+
+  - at: '2026-09-20T16:40:00Z'
+    by: build
+    build:
+      key: wo-nose-cone
+      procedure: nose-cone-assembly
+      pace: 12
+      location: Assembly Bench
+      data:
+        '1.1': { rod_length: '12' }
+        '1.3': { rod_protrusion: '0.50' }
+        '1.6': { knot_distance: '2.5' }
+
+  - at: '2026-09-26T16:15:00Z'
+    by: build
+    build:
+      key: wo-airframe
+      procedure: airframe-tubes
+      pace: 14
+      location: Assembly Bench
+      data:
+        '1.1': { upper_tube_length: '18', lower_tube_length: '18' }
+
+  # ------------------------------------------------------------ ground equipment, finished
+  - at: '2026-09-27T16:30:00Z'
+    by: test
+    build: { key: wo-gse-purge, procedure: gse-purge-system, pace: 11, location: Assembly Bench }
+
+  - at: '2026-10-03T16:00:00Z'
+    by: test
+    build: { key: wo-gse-system, procedure: gse-system, pace: 10, location: Assembly Bench }
+
+  - at: '2026-10-04T17:00:00Z'
+    by: test
+    build: { key: wo-gse-cables, procedure: gse-cables-and-fill-line, pace: 12, location: Assembly Bench }
+
+  # ------------------------------------------------------------ what a launch uses up
+  - at: '2026-10-05T17:00:00Z'
+    by: build
+    order:
+      key: po-mcmaster-launch
+      supplier: mcmaster
+      destination: Stockroom
+      notes: O-rings and shear pins for the first Vehicle Preparation.
+      for: &launch
+        - vehicle-preparation
+  - at: '2026-10-05T17:06:00Z'
+    by: build
+    order: { key: po-csrocketry-launch, supplier: csrocketry, destination: Stockroom, for: *launch }
+  - at: '2026-10-05T17:12:00Z'
+    by: build
+    order: { key: po-counter-launch, supplier: retail-store, destination: Stockroom, for: *launch }
+  - at: '2026-10-08T21:20:00Z'
+    by: build
+    receive: { order: po-mcmaster-launch, location: Stockroom, all: true, lots: { '9452K226': 'B4561-26' } }
+  - at: '2026-10-09T20:45:00Z'
+    by: build
+    receive: { order: po-csrocketry-launch, location: Stockroom, all: true }
+  - at: '2026-10-09T21:30:00Z'
+    by: build
+    receive: { order: po-counter-launch, location: Stockroom, all: true }
+
+  # ------------------------------------------------------------ the first vehicle
+  - at: '2026-10-10T16:00:00Z'
+    by: build
+    build:
+      key: wo-vehicle
+      procedure: vehicle-integration
+      pace: 12
+      location: Assembly Bench
+      data:
+        '1.6': { main_loop_distance: '7' }
+
+  # ------------------------------------------------------------ a second vehicle
+  - at: '2026-10-12T17:10:00Z'
+    by: build
+    order:
+      key: po-mcmaster-second
+      supplier: mcmaster
+      destination: Stockroom
+      notes: Tank and valves for the second vehicle, and what Vehicle Preparation uses up.
+      for: &second
+        - { procedure: servo-actuated-ball-valve, times: 2 }
+        - drill-tank-tube
+        - fuel-bulkhead-subassembly
+        - oxidizer-bulkhead-subassembly
+        - propellant-tank-assembly
+        - thrust-chamber-assembly
+        - vehicle-preparation
+  - at: '2026-10-12T17:22:00Z'
+    by: build
+    order: { key: po-sendcutsend-second, supplier: sendcutsend, destination: Stockroom, for: *second }
+  - at: '2026-10-12T17:30:00Z'
+    by: build
+    order: { key: po-amazon-second, supplier: amazon, destination: Stockroom, for: *second }
+  - at: '2026-10-12T17:36:00Z'
+    by: build
+    order: { key: po-csrocketry-second, supplier: csrocketry, destination: Stockroom, for: *second }
+  - at: '2026-10-12T17:45:00Z'
+    by: build
+    order: { key: po-counter-second, supplier: retail-store, destination: Stockroom, for: *second }
+
+  - at: '2026-10-15T21:50:00Z'
+    by: build
+    receive: { order: po-mcmaster-second, location: Stockroom, all: true, lots: { '9452K226': 'B4561-26', '9396K79': 'S2140-26' } }
+  - at: '2026-10-17T16:20:00Z'
+    by: build
+    receive: { order: po-counter-second, location: Stockroom, all: true }
+  - at: '2026-10-17T18:30:00Z'
+    by: test
+    make:
+      location: Machine Shop
+      lot: SHOP-2026-10-17
+      for: *second
+  # ------------------------------------------------------------ first launch attempt
+  # The team's own rule for the O-ring risk, written before the first trip to the site.
+  - at: '2026-10-17T19:10:00Z'
+    by: test
+    requirement:
+      key: fuel-contact
+      title: Time fuelled before launch
+      category: Operations
+      statement: The Mojave Sphinx shall be launched within 3 days of fuel loading.
+      rationale: |
+        Written by this team for {risk-oring-swell}. HCR-5100 Section 2.7 (p. 84) says O-rings
+        exposed to fuel "may be unusable even after only one cycle if the rocket has been sitting
+        for more than a few days". The guidebook gives no number. Three days is this team's
+        reading of "a few", and it is open to review.
+      verification: inspection
+      tbr: { owner: test, due: '2026-11-28T00:00:00Z' }
+      allocations:
+        - part: mojave-sphinx
+  - at: '2026-10-17T19:20:00Z'
+    by: test
+    baseline:
+      requirements: [fuel-contact]
+      label: Launch rules
+      note: In force for the first launch.
+
+  - at: '2026-10-18T15:00:00Z'
+    by: build
+    build:
+      key: wo-vehicle-prep
+      procedure: vehicle-preparation
+      pace: 3
+      units: { vehicle: wo-vehicle }
+      data:
+        '1.12': { piston_depth: '12.13' }
+        '3.4': { charge_powder: '8' }
+        '3.7': { battery_a_voltage: '9.4', battery_b_voltage: '9.5' }
+
+  # Filled, held once for the range, counted down. The igniter did not fire and the load was dumped.
+  - at: '2026-10-18T19:30:00Z'
+    by: build
+    build:
+      key: wo-launch-1
+      procedure: launch-operations
+      pace: 3
+      second: test
+      units: { vehicle: wo-vehicle, gse: wo-gse-system }
+      pause_before: '6.7'
+      data:
+        '1': { launch_number: '1', site: Club launch site, crew: 'Build Lead, Test Engineer, QA Inspector', ambient: '74' }
+        '2.7': { launch_angle: '3' }
+        '5.2': { fill_criterion: Time elapsed, planned_fill_time: '60' }
+        '6.5': { fill_time: '61' }
+  - by: build
+    after: 0.2
+    work:
+      order: wo-launch-1
+      steps:
+        - step: C901.1
+          after: 0.4
+          data: { hold_time: '24' }
+          note: The LCO held the range. Another flyer's recovery party was still downrange.
+        - step: C901.2
+          after: 0.2
+          data: { hold_action: Reopened the fill valve }
+          note: Fill valve open for 8 seconds, then closed.
+  - by: build
+    build:
+      key: wo-launch-1
+      procedure: launch-operations
+      pace: 1
+      second: test
+      pause_before: '7.1'
+      data:
+        '6.12': { outcome: Dumped propellants }
+      notes:
+        '6.12': No flame from the igniter. The vehicle valves opened and both propellants went out through the chamber.
+  - by: build
+    after: 4
+    issue:
+      key: an-no-ignition
+      type: anomaly
+      order: wo-launch-1
+      step: '6.12'
+      containment: wo
+      priority: high
+      assign: test
+      title: Igniter did not fire at the end of the count
+      description: >-
+        IGN and SRV went up together at step 6.11. Nothing came from the igniter. The vehicle valves
+        opened as they should and the load dumped. The vehicle stayed on the rail.
+  - by: build
+    work:
+      order: wo-launch-1
+      steps:
+        - { step: C902.1, after: 12 }
+        - { step: C902.2, after: 4, note: Igniter wires twisted together. No sign that the e-match had fired. }
+        - { step: C904.1, after: 5 }
+        - { step: C904.2, after: 2 }
+        - { step: C904.3, after: 6, note: Vehicle off the rail and back to the prep area. No second attempt today. }
+  - by: build
+    after: 25
+    close_short:
+      order: wo-launch-1
+      issue: an-no-ignition
+      reason: >-
+        The motor did not light and the propellants were dumped. The vehicle did not fly, so Flight
+        Observation, Nominal Pad Shutdown and Recovery do not apply.
+
+  - at: '2026-10-19T02:10:00Z'
+    by: test
+    comment:
+      issue: an-no-ignition
+      text: >-
+        Took the igniter cartridge apart at home. The motor is unburnt and the e-match has not
+        fired. It reads open on the meter: one lead is broken where it enters the head.
+  - at: '2026-10-19T16:20:00Z'
+    by: test
+    issue:
+      key: improve-igniter-check
+      type: improvement
+      title: Check e-match continuity after the igniter cartridge is packed
+      assign: build
+      description: >-
+        Vehicle Preparation tests the e-match at step 2.8, before it is handled. On
+        {an-no-ignition} a lead broke after that. A second meter check once the cap is back on
+        (step 2.17) would have caught it on the bench.
+      expected_benefit: A dead igniter is found at the prep table and not at the end of a count.
+  - at: '2026-10-19T16:30:00Z'
+    by: test
+    disposition:
+      issue: an-no-ignition
+      type: rework
+      root_cause: >-
+        A lead broke at the e-match head after the continuity test at Vehicle Preparation step
+        2.8, most likely when the leads were pulled through the nozzle at step 2.15. The e-match
+        was open from then on and could not fire. Nothing between step 2.8 and the count reads it
+        again: the spark check on the pad tests the ignition leads, not the e-match.
+      corrective_action: >-
+        A new e-match and igniter motor go in at the next Vehicle Preparation, as that procedure
+        already has it. Until the procedure says so, whoever packs the cartridge reads the e-match
+        with a meter again once the cap is back on: {improve-igniter-check}.
+      rationale: Nothing on the vehicle is hurt. The igniter is rebuilt every launch anyway.
+  - at: '2026-10-19T17:00:00Z'
+    by: build
+    order:
+      key: po-mcmaster-prep
+      supplier: mcmaster
+      destination: Stockroom
+      notes: What two more Vehicle Preparations use up.
+      for: &prep
+        - { procedure: vehicle-preparation, times: 2 }
+  - at: '2026-10-19T17:08:00Z'
+    by: build
+    order: { key: po-csrocketry-prep, supplier: csrocketry, destination: Stockroom, for: *prep }
+  - at: '2026-10-19T17:15:00Z'
+    by: build
+    order: { key: po-counter-prep, supplier: retail-store, destination: Stockroom, for: *prep }
+  - at: '2026-10-19T18:20:00Z'
+    by: qa
+    close: { issue: an-no-ignition }
+
+  - at: '2026-10-19T20:40:00Z'
+    by: build
+    receive: { order: po-amazon-second, location: Stockroom, all: true }
+  - at: '2026-10-21T21:15:00Z'
+    by: build
+    receive: { order: po-csrocketry-second, location: Stockroom, all: true }
+  # The thrust chamber flange plates for the second vehicle were not in the box.
+  - at: '2026-10-22T20:30:00Z'
+    by: build
+    receive:
+      order: po-sendcutsend-second
+      location: Stockroom
+      all: true
+      short: { FLNG-ST-25T-8X250C: 0 }
+  - at: '2026-10-22T20:50:00Z'
+    by: build
+    issue:
+      key: task-flange-plates
+      type: task
+      title: Chase the thrust chamber flange plates that did not come
+      assign: build
+      parts: [FLNG-ST-25T-8X250C]
+      description: >-
+        {po-sendcutsend-second} came without its flange plates. The second thrust chamber cannot
+        start until they are here.
+  - at: '2026-10-23T17:30:00Z'
+    by: build
+    start: { issue: task-flange-plates }
+  - at: '2026-10-23T17:32:00Z'
+    by: build
+    comment:
+      issue: task-flange-plates
+      text: Wrote to the supplier today with the packing slip. No ship date yet.
+
+  - at: '2026-10-23T21:00:00Z'
+    by: build
+    receive: { order: po-mcmaster-prep, location: Stockroom, all: true, lots: { '9452K226': 'B4602-26' } }
+  - at: '2026-10-23T21:10:00Z'
+    by: build
+    receive: { order: po-counter-prep, location: Stockroom, all: true }
+  - at: '2026-10-24T15:40:00Z'
+    by: build
+    receive: { order: po-csrocketry-prep, location: Stockroom, all: true }
+
+  - at: '2026-10-24T16:20:00Z'
+    by: build
+    build:
+      key: wo-tank-casing-2
+      procedure: drill-tank-tube
+      pace: 11
+      location: Assembly Bench
+      data:
+        '1.7': { vent_distance: '14.25' }
+
+  - at: '2026-10-25T16:30:00Z'
+    by: test
+    build: { key: wo-valve-fuel-2, procedure: servo-actuated-ball-valve, pace: 7, location: Assembly Bench }
+  - at: '2026-10-25T17:50:00Z'
+    by: test
+    build: { key: wo-valve-oxidizer-2, procedure: servo-actuated-ball-valve, pace: 7, location: Assembly Bench }
+
+  - at: '2026-10-31T16:10:00Z'
+    by: build
+    build: { key: wo-fuel-bulkhead-2, procedure: fuel-bulkhead-subassembly, pace: 9, location: Assembly Bench }
+
+  - at: '2026-11-01T17:00:00Z'
+    by: build
+    build:
+      key: wo-oxidizer-bulkhead-2
+      procedure: oxidizer-bulkhead-subassembly
+      pace: 9
+      location: Assembly Bench
+      data:
+        '1.9': { tube_length: '3.75' }
+
+
+  # ------------------------------------------------------------ second launch day: the vehicle had sat
+  # Twenty days after the dumped load. The piston O-rings had swollen, as the watched risk said they would.
+  - at: '2026-11-07T14:30:00Z'
+    by: build
+    build:
+      key: wo-vehicle-prep-2
+      procedure: vehicle-preparation
+      pace: 3
+      units: { vehicle: wo-vehicle }
+      pause_before: '1.8'
+  - by: build
+    after: 6
+    raise:
+      key: nc-piston-stuck
+      order: wo-vehicle-prep-2
+      step: '1.8'
+      title: Piston would not pull
+      priority: high
+      should_be: The piston comes out of the forward end of the tank on the extraction bolt.
+      actual: >-
+        It did not move by hand or with vise-grips on the bolt. Fuel last touched its O-rings on
+        {wo-vehicle-prep}, 20 days ago, and the load dumped on {wo-launch-1} left them wet.
+      containment: step
+      assign: test
+  - by: test
+    after: 22
+    disposition:
+      issue: nc-piston-stuck
+      type: rework
+      root_cause: >-
+        The piston O-rings swelled. Our rule counted days from fuel loading to launch and said
+        nothing about a vehicle that is fuelled, dumped and put away. Nobody pulled the piston
+        after {wo-launch-1}.
+      corrective_action: >-
+        Worked the piston out a little at a time with the vise-grips, turning it as it came. Both
+        O-rings were swollen and are discarded at step 1.9. Tank bore and piston wiped and looked
+        over: no marks. The rule is rewritten to count from the first time fuel touches the seals, flown or not.
+      rationale: New O-rings go in at step 1.10 in any case. The bore is clean, so the tank is good to fly.
+  - by: test
+    after: 3
+    risk_disposition:
+      risk: risk-oring-swell
+      disposition: realized
+      realized_as: nc-piston-stuck
+      note: Twenty days, against a threshold of a few. Found at the prep table, not on the pad.
+  - by: build
+    after: 4
+    build:
+      key: wo-vehicle-prep-2
+      procedure: vehicle-preparation
+      pace: 3
+      removals:
+        '1.9': [{ slot: vehicle, part: '9452K226', quantity: 2, note: 'Swollen. See {nc-piston-stuck}.' }]
+        '1.14': [{ slot: vehicle, part: '9452K226', quantity: 1, note: Swollen. }]
+      data:
+        '1.12': { piston_depth: '12.19' }
+        '3.4': { charge_powder: '8' }
+        '3.7': { battery_a_voltage: '9.3', battery_b_voltage: '9.4' }
+      notes:
+        '2.17': E-match read with the meter again after the cap went on. Continuity. See {improve-igniter-check}.
+        '3.18': Coupler wobbled in the tube. Three wraps of masking tape to take it up.
+
+  # It flew. The main parachute did not come out.
+  - by: build
+    after: 35
+    build:
+      key: wo-launch-2
+      procedure: launch-operations
+      pace: 3
+      second: test
+      units: { vehicle: wo-vehicle, gse: wo-gse-system }
+      pause_before: '7.4'
+      data:
+        '1': { launch_number: '2', site: Club launch site, crew: 'Build Lead, Test Engineer, QA Inspector', ambient: '58' }
+        '2.7': { launch_angle: '3' }
+        '5.2': { fill_criterion: Time elapsed, planned_fill_time: '60' }
+        '6.5': { fill_time: '60' }
+        '6.12': { outcome: Launched }
+        '7.2': { apogee_deployment: true }
+        '7.3': { main_deployment: false }
+      notes:
+        '7.3': Heard the main charges. Nothing came out. It came down under the drogue alone.
+  - by: build
+    after: 2
+    issue:
+      key: an-main-no-deploy
+      type: anomaly
+      order: wo-launch-2
+      step: '7.3'
+      priority: critical
+      assign: test
+      title: Main parachute did not deploy
+      description: >-
+        Drogue out at apogee. The main charges were heard on the way down, but the upper airframe
+        stayed on and the main never showed. The vehicle landed under drogue only.
+  - by: build
+    after: 3
+    build:
+      key: wo-launch-2
+      procedure: launch-operations
+      pace: 4
+      second: test
+      data:
+        '7.5': { touchdown_line: 'North-east of the pad, beyond the second dirt road' }
+      notes:
+        '9.2': Lying flat and in one piece. Upper airframe still on the avionics bay. Nose cone tip chipped.
+        '9.3': Not heard over the wind.
+  - by: test
+    after: 20
+    issue:
+      key: an-pad-camera
+      type: anomaly
+      order: wo-launch-2
+      step: '4.6'
+      priority: low
+      assign: test
+      title: Pad camera stopped before the count
+      description: The pad camera has about ten minutes from when it was started at step 4.6, and stops before the fill. There is no video of the launch.
+
+  # ------------------------------------------------------------ second tank assembly, held
+  - at: '2026-11-08T16:15:00Z'
+    by: build
+    build:
+      key: wo-tank-assembly-2
+      procedure: propellant-tank-assembly
+      pace: 12
+      pause_before: '1.4'
+
+  - at: '2026-11-08T17:05:00Z'
+    by: build
+    raise:
+      key: nc-piston-deep
+      order: wo-tank-assembly-2
+      step: '1.4'
+      title: Piston pushed past its depth
+      should_be: Top face of the piston 12.125 to 12.25 in from the end of the tank.
+      actual: >-
+        12.44 in. The mark on the pipe was hidden by a hand and the piston went in too far.
+      containment: step
+      assign: test
+  - at: '2026-11-08T17:20:00Z'
+    by: build
+    issue:
+      key: improve-depth-mark
+      type: improvement
+      title: Mark the piston depth all the way round the pipe
+      description: The one mark on the pipe is easy to cover with a hand. See {nc-piston-deep}.
+      expected_benefit: The depth can be read from any side while pushing.
+
+  # ------------------------------------------------------------ after the hard landing
+  - at: '2026-11-08T19:00:00Z'
+    by: build
+    build:
+      key: wo-inspect-1
+      procedure: inspections-after-firing
+      pace: 8
+      pause_before: '2.1'
+  - by: build
+    after: 5
+    raise:
+      key: nc-fin-fasteners
+      order: wo-inspect-1
+      step: '2.1'
+      title: Fin fasteners backed out on one bracket
+      should_be: Every fin fastener tight.
+      actual: Two screws on one fin bracket had backed out about a turn. No crack in the bracket or the fin.
+      containment: step
+      assign: test
+  - by: test
+    after: 15
+    disposition:
+      issue: nc-fin-fasteners
+      type: rework
+      root_cause: The landing under drogue on {wo-launch-2}. See {an-main-no-deploy}.
+      corrective_action: Both screws tightened, then every other fin fastener checked. The rest were tight.
+      rationale: Nothing is bent or cracked. Tight fasteners are what the inspection asks for.
+  - by: build
+    after: 2
+    build: { key: wo-inspect-1, procedure: inspections-after-firing, pace: 8 }
+  - at: '2026-11-08T20:10:00Z'
+    by: build
+    issue:
+      key: nc-nose-tip
+      type: non_conformance
+      title: Nose cone tip chipped
+      parts: [nose-cone-assembly]
+      should_be: Nose cone as built.
+      actual: A chip about the size of a fingernail off the tip, from the landing on {wo-launch-2}.
+  - at: '2026-11-08T20:30:00Z'
+    by: test
+    disposition:
+      issue: nc-nose-tip
+      type: use_as_is
+      root_cause: The landing under drogue on {wo-launch-2}.
+      corrective_action: None to the nose cone. The cause is dealt with on {an-main-no-deploy}.
+      rationale: The chip is at the tip only and the shoulder and eye bolt are sound. Fly it and look again after.
+  - at: '2026-11-08T21:00:00Z'
+    by: test
+    start: { issue: an-main-no-deploy }
+  - at: '2026-11-08T21:05:00Z'
+    by: test
+    comment:
+      issue: an-main-no-deploy
+      text: >-
+        Both main charges fired: the glove fingers are burnt and the upper tube is sooted. All four
+        shear pins sheared. The avionics bay coupler moved about half an inch and stopped. It took
+        two of us to pull it out by hand.
+  - at: '2026-11-08T21:20:00Z'
+    by: test
+    revise:
+      requirement: fuel-contact
+      title: Seals after fuel contact
+      statement: >-
+        The piston O-rings and the fuel bulkhead O-ring shall be replaced before oxidizer fill
+        unless fuel first touched them within 3 days.
+      rationale: |
+        Written by this team for {risk-oring-swell}, and rewritten after {nc-piston-stuck}. The
+        first wording counted from fuel loading to launch, and did not cover a vehicle that was
+        fuelled, dumped and put away. HCR-5100 Section 2.7 (p. 84) says O-rings exposed to fuel
+        "may be unusable even after only one cycle if the rocket has been sitting for more than a
+        few days". The guidebook gives no number. Three days is this team's reading of "a few",
+        and it is open to review.
+  - at: '2026-11-08T21:30:00Z'
+    by: test
+    baseline:
+      requirements: [fuel-contact]
+      label: Launch rules, second issue
+      note: After the piston stuck on {wo-vehicle-prep-2}.
+  - at: '2026-11-08T21:40:00Z'
+    by: qa
+    close: { issue: nc-fin-fasteners }
+  - at: '2026-11-08T21:44:00Z'
+    by: qa
+    close: { issue: nc-piston-stuck }
+
+  - at: '2026-11-09T18:00:00Z'
+    by: test
+    issue:
+      key: task-ground-test
+      type: task
+      title: Ground-test main ejection with shear pins and the coupler as flown
+      assign: build
+      parts: [mojave-sphinx]
+      description: >-
+        Pack the main as Vehicle Preparation has it, fit the four shear pins, and fire the main
+        charges on the bench. First with the three wraps of tape that flew on {wo-launch-2}, then
+        with less, until the coupler leaves the tube cleanly.
+  - at: '2026-11-09T18:10:00Z'
+    by: test
+    findings:
+      issue: an-main-no-deploy
+      root_cause: >-
+        The coupler was too tight in the upper airframe tube. It was shimmed with three wraps of
+        masking tape at step 3.18 of {wo-vehicle-prep-2} to stop a wobble, and nobody tried the
+        fit against a charge. We have never ground-tested main ejection, which the note under
+        step 3.19 of Vehicle Preparation asks for.
+      corrective_action: >-
+        Ground-test main ejection with the flight charge, the shear pins and the coupler shimmed
+        as it will fly: {task-ground-test}. It is now a requirement before a vehicle's first
+        flight.
+  - at: '2026-11-09T18:25:00Z'
+    by: test
+    risk:
+      key: risk-main-binding
+      title: Coupler binds and the main parachute stays in
+      part: mojave-sphinx
+      owner: test
+      condition: >-
+        The coupler is shimmed by feel at step 3.18 of Vehicle Preparation, and the fit changes
+        with every wrap of tape. On {wo-launch-2} it was too tight and the main did not deploy.
+      departure: The main charges fire and the airframe does not separate.
+      consequence: >-
+        The vehicle lands under drogue only. Last time that cost a chipped nose cone and loose fin
+        fasteners. On harder ground it could cost the vehicle.
+      probability: 3
+      impact: 4
+      residual_probability: 1
+      residual_impact: 4
+      watch:
+        observable: Wraps of tape on the coupler against the number that passed the ground test
+        threshold: Any difference
+        contingency: Repeat the ground test before flying.
+  - at: '2026-11-09T18:30:00Z'
+    by: test
+    risk_issue: { risk: risk-main-binding, issue: task-ground-test, role: mitigation }
+  - at: '2026-11-09T18:34:00Z'
+    by: test
+    risk_disposition:
+      risk: risk-main-binding
+      disposition: mitigate
+      note: '{task-ground-test} sets the fit. The new requirement keeps it tested.'
+  - at: '2026-11-09T18:50:00Z'
+    by: test
+    requirement:
+      key: ejection-test
+      title: Main ejection ground test
+      category: Recovery
+      statement: >-
+        Main parachute ejection shall be demonstrated on the ground, with the shear pins fitted and
+        the coupler shimmed as it will fly, before the first flight of each vehicle.
+      rationale: |
+        Written by this team after {an-main-no-deploy}. The note under step 3.19 of Vehicle
+        Preparation (HCR-5100 p. 296) says the shear pins "should be included in ground testing of
+        the main parachute ejection". We flew without one.
+      verification: demonstration
+      allocations:
+        - part: mojave-sphinx
+  - at: '2026-11-09T19:00:00Z'
+    by: test
+    baseline:
+      requirements: [ejection-test]
+      label: Recovery rules
+      note: After the main stayed in on {wo-launch-2}.
+  - at: '2026-11-09T19:20:00Z'
+    by: test
+    findings:
+      issue: an-pad-camera
+      root_cause: The battery showed one bar when the camera was switched on at step 4.6. It ran for about ten minutes.
+      corrective_action: Charge it the night before.
+  - at: '2026-11-09T19:40:00Z'
+    by: qa
+    close: { issue: nc-nose-tip }
+
+  - at: '2026-11-11T02:00:00Z'
+    by: build
+    start: { issue: task-ground-test }
+  - at: '2026-11-11T03:40:00Z'
+    by: build
+    comment:
+      issue: task-ground-test
+      text: >-
+        Two tests on the bench tonight, flight charge and four shear pins each time. With three
+        wraps of tape the coupler moved half an inch and stopped, the same as the flight. With one
+        wrap it left the tube cleanly and the canopy came out to the end of the shock cord. One
+        wrap still stops the wobble.
+  - at: '2026-11-11T03:45:00Z'
+    by: build
+    review: { issue: task-ground-test }
+  - at: '2026-11-11T17:30:00Z'
+    by: qa
+    close: { issue: task-ground-test }
+  - at: '2026-11-11T17:45:00Z'
+    by: test
+    verify:
+      requirement: ejection-test
+      part: mojave-sphinx
+      notes: Demonstrated on the bench on {task-ground-test} with one wrap of tape on the coupler.
+  - at: '2026-11-12T18:00:00Z'
+    by: test
+    review: { issue: an-main-no-deploy }
+  - at: '2026-11-13T17:15:00Z'
+    by: qa
+    close: { issue: an-main-no-deploy }
+  - at: '2026-11-13T17:20:00Z'
+    by: qa
+    close: { issue: an-pad-camera }
+
+  # ------------------------------------------------------------ third launch day, just started
+  - at: '2026-11-14T14:30:00Z'
+    by: build
+    build:
+      key: wo-vehicle-prep-3
+      procedure: vehicle-preparation
+      pace: 3
+      units: { vehicle: wo-vehicle }
+      removals:
+        '1.9': [{ slot: vehicle, part: '9452K226', quantity: 2 }]
+        '1.14': [{ slot: vehicle, part: '9452K226', quantity: 1 }]
+      data:
+        '1.12': { piston_depth: '12.16' }
+        '3.4': { charge_powder: '8' }
+        '3.7': { battery_a_voltage: '9.5', battery_b_voltage: '9.5' }
+      notes:
+        '2.17': E-match read again after the cap went on. Continuity.
+        '3.18': One wrap of tape on the coupler, as ground-tested on {task-ground-test}.
+
+  # The vehicle flies again with conditions. Each is an issue on the work order, due at a different point.
+  - by: build
+    after: 30
+    build:
+      key: wo-launch-3
+      procedure: launch-operations
+      pace: 3
+      second: test
+      units: { vehicle: wo-vehicle, gse: wo-gse-system }
+      pause_before: '2.5'
+      data:
+        '1': { launch_number: '3', site: Club launch site, crew: 'Build Lead, Test Engineer, QA Inspector', ambient: '55' }
+  - by: build
+    after: 2
+    raise:
+      key: nc-rail-guide
+      order: wo-launch-3
+      step: '2.4'
+      title: Lower rail guide drags in the rail
+      should_be: The rail guide slides freely in the rail slot.
+      actual: It slides, but drags at one spot. One edge is burred, most likely from the landing on {wo-launch-2}.
+      containment: op
+      assign: test
+  - by: qa
+    after: 4
+    issue:
+      key: an-controllers-unchecked
+      type: anomaly
+      order: wo-launch-3
+      step: '1'
+      containment: step
+      boundary: '4.1'
+      priority: high
+      assign: test
+      title: Deployment controllers not looked over since the hard landing
+      description: >-
+        Both controllers came down under drogue on {wo-launch-2}. They fired the charges on
+        {task-ground-test}, but nobody has opened the avionics bay since to look at the batteries
+        and the wiring. That wants doing before either controller is switched on.
+  - by: qa
+    after: 2
+    issue:
+      key: task-range-brief
+      type: task
+      order: wo-launch-3
+      step: '1'
+      containment: step
+      boundary: '5.3'
+      assign: build
+      title: Tell the range about the last recovery failure
+      description: >-
+        The main stayed in on {wo-launch-2}. The LCO and RSO should hear that from us, with what
+        we changed ({task-ground-test}), before we ask them for a launch window at step 5.3.
+  - by: test
+    after: 3
+    issue:
+      key: an-camera-footage
+      type: anomaly
+      order: wo-launch-3
+      step: '4.6'
+      containment: wo
+      assign: build
+      title: Confirm the pad camera recorded
+      description: >-
+        There was no video of the last flight ({an-pad-camera}). Play the clip back at the pad
+        before this work order closes, so a third launch without video is at least known on the day.
+  - by: qa
+    after: 3
+    issue:
+      key: improve-camera-battery
+      type: improvement
+      order: wo-launch-3
+      title: Carry a spare charged battery for the pad camera
+      expected_benefit: A flat battery at the pad costs a swap and not the video.

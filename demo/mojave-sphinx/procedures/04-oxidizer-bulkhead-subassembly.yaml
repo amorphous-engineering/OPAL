@@ -1,0 +1,223 @@
+# Oxidizer Bulkhead Subassembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 5: Oxidizer Bulkhead Subassembly (pp. 163-171).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: oxidizer-bulkhead-subassembly
+name: Oxidizer Bulkhead Subassembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 5: Oxidizer Bulkhead Subassembly'
+  pages: 163-171
+
+description: |
+  Assemble the oxidizer tank bulkhead with its fill check valve, nut ring, tank interface ring and
+  servo-actuated ball valve, then connect the QD fitting to the check valve with a short nylon tube.
+
+  Tools: wrenches, measuring tape, permanent marker, PTFE thread
+  sealant tape. Optional: scotch tape or similar.
+
+output:
+  part: oxidizer-bulkhead-subassembly
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 164).
+kit:
+  - part: SABV-04FF
+    quantity: 1
+  - part: BKHD-OX-O238-8NPT-4NPT
+    quantity: 1
+  - part: INRG-200S-8X3125C-8X250C
+    quantity: 1
+  - part: NTRG-8X3125WN-8X25HN
+    quantity: 1
+  - part: '94579A550'
+    quantity: 8
+  - part: '95505A601'
+    quantity: 8
+  - part: '44665K137'
+    quantity: 1
+  - part: '50675K163'
+    quantity: 1
+  - part: '7768K21'
+    quantity: 1
+  - part: '9396T31'
+    quantity: 2
+  - part: '50785K41'
+    quantity: 1
+  - part: '9685T3'
+    quantity: 3.75
+    unit: in
+  - part: QDC-750x125FLG-281FB-8NPT
+    quantity: 1
+
+operations:
+  - title: Oxidizer Bulkhead Subassembly
+    source: { section: 'Section V, OP 5', pages: 163-171 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-05/oxidizer-bulkhead-subassembly.png
+        caption: Oxidizer bulkhead subassembly.
+        source_page: 163
+    steps:
+      - title: Install the check valve
+        source: { step: 1, page: 165 }
+        instructions: |
+          Apply 2-3 clockwise wraps of PTFE tape to the male threads of QTY 1 9396T31 high-pressure
+          push-to-connect fitting (1/8 NPT) and QTY 1 7768K21 brass check valve. Thread the
+          push-to-connect fitting into the check valve, and tighten until snug. Then, thread the
+          check valve into the 1/8 NPT port on the BKHD-OX-O238-8NPT-4NPT oxidizer tank bulkhead and
+          tighten until snug. Once snug, continue to tighten the check valve until one corner of the
+          check valve points radially outward (less than 1/6 turn required). This will ensure
+          sufficient clearance to the nut ring.
+        images:
+          - file: photos/op-05/check-valve-on-bulkhead.jpg
+            caption: Check valve and push-to-connect fitting in the oxidizer tank bulkhead.
+            source_page: 165
+          - file: photos/op-05/check-valve-top.jpg
+            caption: Check valve with one corner pointing radially outward, top view.
+            source_page: 165
+
+      - title: Thread the nipple into the valve
+        source: { step: 2, page: 166 }
+        instructions: |
+          Apply 2-3 clockwise wraps of PTFE tape to both ends of QTY 1 44665K137 Aluminum Pipe
+          Nipple, and thread one end into port of QTY 1 SABV-04FF valve as shown. Note the
+          orientation of the valve bracket. Only tighten the pipe nipple to hand-tight at this time.
+
+      - title: Install the flared adapter
+        source: { step: 3, page: 166 }
+        instructions: |
+          Apply 2-3 clockwise wraps of PTFE tape to the threads of QTY 1 50675K163 37 degree flared
+          adapter fitting and thread into the other side of the SABV-04FF valve as shown. Note the
+          orientation of the valve bracket. Tighten the fitting until snug, 1-3 turns from finger
+          tight.
+        images:
+          - file: photos/op-05/nipple-and-flared-adapter-in-valve.jpg
+            caption: Pipe nipple and flared adapter fitting in the valve, side view.
+            source_page: 166
+
+      - title: Load the nut ring
+        source: { step: 4, page: 167 }
+        instructions: |
+          Place QTY 8 94579A550 5/16-24 weld nuts and QTY 8 95505A601 1/4-20 hex nuts into QTY 1
+          NTRG-8X3125WN-8X25HN printed nut ring as shown.
+
+          *A strip of scotch tape or similar may be used to retain the nuts prior to insertion into
+          the tank interface ring. Note that adhesive should not be used to bond the nuts in place.
+          They must be free to float within their cutouts to accommodate any hole misalignment.*
+        images:
+          - file: photos/op-05/nut-ring-with-nuts.jpg
+            caption: Nut ring with the weld nuts and hex nuts in place.
+            source_page: 167
+
+      - title: Place the tank interface ring
+        source: { step: 5, page: 168 }
+        instructions: |
+          Place QTY 1 tank interface ring onto the outer face of the oxidizer tank bulkhead as
+          shown.
+
+          *Note: the tank interface ring MUST be installed prior to integrating the valve assembly
+          onto the oxidizer tank bulkhead.*
+
+      - title: Insert the nut ring
+        source: { step: 6, page: 168 }
+        instructions: |
+          Insert the fully populated nut ring into QTY 1 INRG-200S-8X3125C-8X250C tank interface
+          ring as shown. The 5/16-24 weld nuts should align with the larger holes on the smaller
+          diameter portion of the tank interface ring. Align the nut ring and tank interface ring so
+          that the check valve aligns with the section that does NOT have a centering tab, as shown.
+        images:
+          - file: photos/op-05/nut-ring-in-interface-ring.jpg
+            caption: Nut ring seated in the tank interface ring on the oxidizer tank bulkhead.
+            source_page: 168
+          - file: photos/op-05/check-valve-clocking-top.jpg
+            caption: Check valve at the section with no centering tab, top view.
+            source_page: 168
+
+      - title: Thread the valve onto the bulkhead
+        source: { step: 7, page: 169 }
+        instructions: |
+          Thread the aluminum pipe nipple connected to the valve into the 1/4 NPT port on the
+          BKHD-OX-O238-8NPT-4NPT oxidizer tank bulkhead. Tighten until snug, then rotate no more
+          than one full turn until the valve assembly aligns with the diameter of the oxidizer tank
+          bulkhead as shown.
+        images:
+          - file: photos/op-05/valve-aligned-top.jpg
+            caption: Valve assembly aligned with the diameter of the oxidizer tank bulkhead, top view.
+            source_page: 169
+          - file: photos/op-05/valve-aligned-side.jpg
+            caption: Valve assembly on the oxidizer tank bulkhead, side view.
+            source_page: 169
+
+      - title: Assemble the QD fittings
+        source: { step: 8, page: 170 }
+        instructions: |
+          Apply 2-3 clockwise wraps of PTFE tape to the threads of QTY 1 50785K41 brass elbow
+          fitting and QTY 1 9396T31 push-to-connect fitting. Assemble the two fittings and QTY 1
+          QDC-750x125FLG-281FB-8NPT QD fitting as shown, tightening all threads until snug, 1-3
+          turns past finger tight.
+        images:
+          - file: photos/op-05/qd-fittings.jpg
+            caption: QD fitting, brass elbow fitting and push-to-connect fitting assembled.
+            source_page: 170
+
+      - title: Cut and mark the tube
+        source: { step: 9, page: 171 }
+        instructions: |
+          Cut a section of 9685T3 tubing 3.625-3.875 in long. Mark the tube at 0.56 in from each end
+          using a permanent marker.
+        data:
+          - name: tube_length
+            label: Tube section, length as cut
+            type: number
+            unit: in
+            required: true
+            spec: { kind: range, lower: '3.625', upper: '3.875' }
+
+      - title: Connect the tube
+        source: { step: 10, page: 171 }
+        instructions: |
+          Insert one end of the tube into the push-to-connect fitting on the check valve, until the
+          mark aligns with the top face of the fitting, or the tube is fully seated. Then, connect
+          the push-to-connect fitting on the QD assembly to the other end of the tube, inserting the
+          tube up to the mark, or until fully seated.
+        images:
+          - file: photos/op-05/tube-connected.jpg
+            caption: Tube connecting the check valve to the QD assembly.
+            source_page: 171
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - PTFE thread sealant tape, listed in the parts list with no quantity, is in the tools line, not the kit.
+  - 'The 9685T3 tubing is in the kit as 3.75 in, the length the parts list prints.'
+  - >-
+    Steps 1.1, 1.2, 1.3, 1.4, 1.6 and 1.7: the part number printed in the step is replaced by the
+    number from the parts list.
+  - >-
+    The bulkhead is called the oxidizer tank bulkhead throughout. The guidebook also calls it the
+    bulkhead (steps 5 and 7).
+  - >-
+    The tank interface ring is called the tank interface ring throughout. The guidebook also calls
+    it the Tank Interface Ring, the interface ring and, in step 4, the machined integration ring.
+  - 'The nut ring is called the nut ring throughout. Step 1 calls it the nut retaining ring.'
+  - >-
+    The 7768K21 check valve is called the check valve throughout. Steps 6 and 10 call it the
+    oxidizer fill check valve.
+  - 'Step 1.1: "(<1/6 turn required)" is written as "(less than 1/6 turn required)".'
+  - 'Step 1.3: the repeated word in "threads of of" is removed.'
+  - 'Step 1.7: "the oxidizer valve" is written "the valve".'
+  - 'Step 1.9: "inches" is written "in".'
+  - >-
+    Step 1.9: a data field records the length of the tube as cut, against the 3.625-3.875 in range
+    the step gives.
+  - Image captions are new.

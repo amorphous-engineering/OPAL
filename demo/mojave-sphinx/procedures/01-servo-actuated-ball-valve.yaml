@@ -1,0 +1,194 @@
+# Servo-Actuated Ball Valve Assembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 1: Assemble Servo-Actuated Ball Valves (pp. 138-144).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: servo-actuated-ball-valve
+name: Servo-Actuated Ball Valve Assembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 1: Assemble Servo-Actuated Ball Valves'
+  pages: 138-144
+
+description: |
+  Mount a servo and a ball valve in the printed Servo Valve Mount and connect the servo horn to
+  the valve handle.
+
+  Tools: wrenches, hex keys and screwdrivers, the device that
+  will control the servo, drill (only if the valve handle screw does not fit), 3D printer filament
+  (PLA+, PETG, or ABS recommended) for the printed parts.
+
+  One work order builds one valve assembly. The vehicle needs two, so this procedure is run twice.
+
+output:
+  part: SABV-04FF
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 139), halved: the guidebook lists parts for two
+# assemblies, and one work order here builds one.
+kit:
+  - part: SABV-MOUNT-V2
+    quantity: 1
+  - part: SABV-HCON-V2
+    quantity: 1
+  - part: '4112T22'
+    quantity: 1
+  - part: DS3225
+    quantity: 1
+  - part: '93475A210'
+    quantity: 1
+  - part: '92855A310'
+    quantity: 1
+  - part: '90272A194'
+    quantity: 1
+  - part: '90480A009'
+    quantity: 1
+  - part: nylon-zip-tie
+    quantity: 1
+  - part: '91280A044'
+    quantity: 4
+  - part: '90591A141'
+    quantity: 4
+  - part: '98689A113'
+    quantity: 4
+  - part: '92148A160'
+    quantity: 4
+
+operations:
+  - title: Assemble Servo-Actuated Ball Valves
+    source: { section: 'Section V, OP 1', pages: 138-144 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-01/servo-valve-assembly.png
+        caption: Servo-actuated ball valve assembly.
+        source_page: 138
+    steps:
+      - title: Check and secure the servo horn
+        source: { step: 1, page: 140 }
+        instructions: |
+          Ensure that the servo horn is installed on the servo in the correct orientation. Connect
+          the servo to whatever device you will be controlling it from, and verify that the servo
+          horn points in the correct direction when the servo is commanded to both the valve open
+          and valve closed states. Secure the servo horn to the spur gear using the M3 phillips
+          head screw included with the servo.
+
+          *Note: If this screw is lost or damaged, it may be replaced with PN 92000A76.*
+
+      - title: Install the servo in the mount
+        source: { step: 2, page: 140 }
+        instructions: |
+          Install the DS3225 servo into the Servo Valve Mount using QTY 4 91280A044 M4 hex head
+          screws, QTY 8 98689A113 flat washers, QTY 4 92148A160 lock washers, and QTY 4 90591A141
+          nuts as shown.
+
+          *Note: The 2 screws closest to the back of the Servo Valve Mount should be fully
+          tightened prior to installing the outer 2 fasteners. Socket head screws (PN 90128A215)
+          may be substituted to remove this dependency; hex head screws were selected to permit the use of an adjustable
+          wrench, without requiring a metric hex key.*
+        images:
+          - file: photos/op-01/servo-in-mount.jpg
+            caption: DS3225 servo installed in the Servo Valve Mount.
+            source_page: 140
+
+      - title: Mount the handle connector
+        source: { step: 3, page: 141 }
+        instructions: |
+          Move the servo horn so it points out from the Servo Valve Mount (Valve Closed position).
+          Mount the Servo Valve Handle Connector onto the servo horn as shown, using the M3 Socket
+          Head Cap Screw and washer installed in the threaded hole closest to the end of the servo
+          horn.
+
+          *Note: Servo horn and Servo Valve Handle Connector shown sectioned for visibility. Section
+          cut surfaces are highlighted in blue.*
+        images:
+          - file: photos/op-01/handle-connector-on-horn.jpg
+            caption: Servo Valve Handle Connector on the servo horn, section view.
+            source_page: 141
+
+      - title: Insert the ball valve
+        source: { step: 4, page: 142 }
+        instructions: |
+          Move the servo horn back to the Valve Open position, parallel to the back face of the
+          Servo Valve Mount. Then insert the 4112T22 ball valve into the Servo Valve Mount, so that
+          the valve handle slides into the Servo Valve Handle Connector and the indicated holes are
+          aligned.
+        images:
+          - file: photos/op-01/valve-into-mount.jpg
+            caption: Ball valve beside the Servo Valve Mount, arrow from the valve handle hole to the connector hole.
+            source_page: 142
+
+      - title: Fasten the connector to the handle
+        source: { step: 5, page: 143 }
+        instructions: |
+          Move the servo horn and valve handle to the valve closed position, and install QTY 1
+          90272A194 screw with QTY 1 92148A160 lock washer and QTY 1 90480A009 nut through the Servo
+          Valve Handle Connector and valve handle. The screw should fit through the existing
+          hole in the valve handle. If it does not, drill as necessary to achieve a clearance fit.
+
+          *Note: Valve handle and Servo Valve Handle Connector shown sectioned for visibility.
+          Section cut surfaces are highlighted in blue.*
+        images:
+          - file: photos/op-01/handle-screw-and-nut.jpg
+            caption: Screw and nut through the Servo Valve Handle Connector and valve handle, section view.
+            source_page: 143
+
+      - title: Zip tie the ball valve
+        source: { step: 6, page: 144 }
+        instructions: |
+          Complete the assembly by securing the ball valve in place with a nylon zip tie as shown in
+          the photo. The zip tie should pass through the small rectangular slot in the Servo Valve
+          Mount. Note that while the zip tie is not critical to the function of the valve, it
+          reduces movement of the valve body during actuation.
+        images:
+          - file: photos/op-01/zip-tied-assemblies.jpg
+            caption: Two completed assemblies, each with the ball valve secured by a zip tie.
+            source_page: 144
+
+      - title: Bag and label the assembly
+        source: { step: 7, page: 144 }
+        instructions: |
+          Bag and label the completed servo-actuated ball valve assembly with PN SABV-04FF and set
+          aside for integration on a later step.
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - >-
+    One work order here builds one valve assembly. The guidebook builds two in one pass. Every kit
+    quantity is the guidebook's parts list quantity (p. 139) divided by two.
+  - >-
+    The parts list note "All steps in this OP will be performed twice to build two identical valve
+    assemblies. The quantities listed are for two complete assemblies." is rewritten for the
+    description: one work order builds one valve assembly; the vehicle needs two.
+  - '3D printer filament, listed with no quantity, is in the tools line, not the kit.'
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - >-
+    The printed mount is called the Servo Valve Mount throughout. Step 2's note and step 4 also
+    call it the mount.
+  - >-
+    The printed handle connector is called the Servo Valve Handle Connector throughout. The notes
+    in steps 3 and 5 print it in lower case.
+  - >-
+    The 91280A044 screws are called hex head screws throughout. Step 2's note also calls them hex
+    cap screws.
+  - 'Step 2: "DS3225 Servo" is written "DS3225 servo". Step 3: "Servo horn" is written "servo horn".'
+  - 'Step 2: "2X" is written as a plain number.'
+  - >-
+    The valve handle is called the valve handle throughout. Step 4 calls it the handle and step 5
+    also calls it the ball valve handle.
+  - 'Step 6: "the valve" is written "the ball valve", as in step 4.'
+  - >-
+    Kit: the hex head screw is 91280A044, the number printed in step 2. The parts list prints
+    92180A044.
+  - 'Step 7: "assemblies" is written in the singular.'
+  - >-
+    The photo printed under step 7 (p. 144) is placed on step 6, which refers to it ("as shown in
+    the photo").
+  - Image captions are new.

@@ -138,6 +138,18 @@ export const zStockMoveRow = zStockLedgerRow.omit({ balance: true }).extend({
 });
 export type StockMoveRow = z.infer<typeof zStockMoveRow>;
 
+/**
+ * Completed work orders of one procedure that acted on a unit, or on an assembly it was in at
+ * the time. Derived, never stored.
+ */
+export const zUseCount = z.object({
+	procedureId: z.number().int(),
+	procedureNumber: z.string(),
+	procedureName: z.string(),
+	count: z.number().int()
+});
+export type UseCount = z.infer<typeof zUseCount>;
+
 export const zStockGenealogyRow = z.object({
 	/** 1 = direct component (or direct assembly). 2 = one level further. */
 	depth: z.number().int(),
@@ -149,9 +161,36 @@ export const zStockGenealogyRow = z.object({
 	partName: z.string(),
 	qtyUsed: zQty,
 	/** Time of the first consume move that links the pair. */
-	at: zTimestamp
+	at: zTimestamp,
+	/** Taken out again by work orders. `qtyUsed` less this is what is in it now. */
+	qtyRemoved: zQty,
+	/** The last time the pair was linked (a replacement installs again). */
+	installedAt: zTimestamp,
+	/** Last removal, when some was taken out. */
+	removedAt: zTimestamp.nullable(),
+	removedWoNumber: z.string().nullable(),
+	/** Uses of the assembly while this was in it, since `installedAt`, by procedure. */
+	usesSinceInstalled: z.array(zUseCount)
 });
 export type StockGenealogyRow = z.infer<typeof zStockGenealogyRow>;
+
+/** A work order that acted on this unit, or on an assembly it was in at the time (`via`). */
+export const zUnitWorkOrder = z.object({
+	executionId: z.number().int(),
+	woNumber: z.string(),
+	status: z.enum(['cut', 'in_work', 'completed', 'void', 'closed_short']),
+	procedureId: z.number().int(),
+	procedureNumber: z.string(),
+	procedureName: z.string(),
+	slotLabel: z.string().nullable(),
+	/** The assembly the work order named, when it named this unit only through it. */
+	viaOpal: z.string().nullable(),
+	recordedAt: zTimestamp,
+	completedAt: zTimestamp.nullable(),
+	/** It adds to the use counts: completed. */
+	counted: z.boolean()
+});
+export type UnitWorkOrder = z.infer<typeof zUnitWorkOrder>;
 
 export const zStockGenealogy = z.object({
 	opalNumber: z.string(),
@@ -258,6 +297,9 @@ export const zStockDetail = z.object({
 	corrections: z.array(zStockCorrection),
 	components: z.array(zStockGenealogyRow),
 	usedIn: z.array(zStockGenealogyRow),
+	/** Serialized units: completed work orders that acted on it, by procedure. */
+	uses: z.array(zUseCount),
+	workOrders: z.array(zUnitWorkOrder),
 	tests: z.array(zStockTestResult),
 	testTemplates: z.array(zStockTestTemplate),
 	testStatus: zStockTestStatus

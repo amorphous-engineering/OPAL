@@ -61,6 +61,7 @@ const NOT_A_STRIKE = new Set([
 	'datasets.archive',
 	'datasets.delete', // refused once a dataset has points
 	'execution.deleteRedline', // refused once a redline's work has started
+	'execution.removeComponent', // writes a new line, like a consume: a part taken out of a unit
 	'inventory.templates.delete',
 	'inventory.tests.delete', // pending tests only
 	'issues.removeLink',

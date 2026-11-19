@@ -60,6 +60,7 @@ const lastActionSql = sql<string>`COALESCE(NULLIF(MAX(
 	COALESCE(execution.completed_at, ''),
 	COALESCE((SELECT MAX(s.completed_at) FROM step_execution s WHERE s.execution_id = execution.id), ''),
 	COALESCE((SELECT MAX(o.signed_at) FROM signoff o JOIN step_execution s ON s.id = o.step_execution_id WHERE s.execution_id = execution.id), ''),
+	COALESCE((SELECT MAX(v.waived_at) FROM signoff_waiver v JOIN step_execution s ON s.id = v.step_execution_id WHERE s.execution_id = execution.id), ''),
 	COALESCE((SELECT MAX(n.created_at) FROM step_note n JOIN step_execution s ON s.id = n.step_execution_id WHERE s.execution_id = execution.id), ''),
 	COALESCE((SELECT MAX(c.created_at) FROM execution_comment c WHERE c.execution_id = execution.id), ''),
 	COALESCE((SELECT MAX(COALESCE(w.ended_at, w.started_at)) FROM work_interval w WHERE w.execution_id = execution.id), '')

@@ -56,6 +56,13 @@
 	--error-fill: #c8001e;
 	--error-on: #ffffff;
 	--info: #002dce;
+	/* Role marks: a fill behind the role's letters. Outside the state colours on purpose. */
+	--role-purple: #6a1b9a;
+	--role-teal: #00687a;
+	--role-brown: #6d4c41;
+	--role-magenta: #ad1457;
+	--role-slate: #455a64;
+	--role-on: #ffffff;
 	--brand: oklch(0.553 0.195 38.402);
 	--dev: #002dce;
 	--chart-1: #002dce;
@@ -109,6 +116,12 @@
 	--error-fill: #ff5c5c;
 	--error-on: #000000;
 	--info: #8ab4ff;
+	--role-purple: #ce93d8;
+	--role-teal: #4dd0e1;
+	--role-brown: #bcaaa4;
+	--role-magenta: #f48fb1;
+	--role-slate: #b0bec5;
+	--role-on: #000000;
 	--brand: #fb923c;
 	--dev: #8ab4ff;
 	--chart-1: #8ab4ff;
@@ -172,6 +185,12 @@
 	--color-error: var(--error);
 	--color-error-muted: var(--error-muted);
 	--color-info: var(--info);
+	--color-role-purple: var(--role-purple);
+	--color-role-teal: var(--role-teal);
+	--color-role-brown: var(--role-brown);
+	--color-role-magenta: var(--role-magenta);
+	--color-role-slate: var(--role-slate);
+	--color-role-on: var(--role-on);
 	--color-ok-fill: var(--ok-fill);
 	--color-ok-on: var(--ok-on);
 	--color-tan: var(--tan);
@@ -207,6 +226,59 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Scroll bars: a box on a dithered track, ruled like the rest of the page and set 3 px off the
+   content. The gap is a transparent border; the rules are inset shadows inside it, so the track
+   and the thumb are each a closed box. Chromium and Safari take the pseudo-elements; Firefox,
+   which has none, gets the plain colours. Chromium ignores the pseudo-elements wherever
+   scrollbar-color is set, so Firefox's rule stays behind @supports. */
+::-webkit-scrollbar {
+	width: 17px;
+	height: 17px;
+	background: transparent;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-thumb {
+	background-clip: padding-box;
+	box-shadow: inset 0 0 0 1px var(--border);
+}
+::-webkit-scrollbar-track:vertical,
+::-webkit-scrollbar-thumb:vertical {
+	border-left: 3px solid transparent;
+}
+::-webkit-scrollbar-track:horizontal,
+::-webkit-scrollbar-thumb:horizontal {
+	border-top: 3px solid transparent;
+}
+::-webkit-scrollbar-track {
+	background-color: var(--background);
+	background-image: conic-gradient(
+		color-mix(in srgb, var(--foreground) 22%, transparent) 25%,
+		transparent 0 50%,
+		color-mix(in srgb, var(--foreground) 22%, transparent) 0 75%,
+		transparent 0
+	);
+	background-size: 2px 2px;
+}
+::-webkit-scrollbar-thumb {
+	background-color: var(--card);
+	min-height: 24px;
+	min-width: 24px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background-color: var(--accent);
+}
+::-webkit-scrollbar-thumb:active {
+	background-color: var(--foreground);
+}
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+	* {
+		scrollbar-color: var(--quiet) var(--muted);
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
@@ -230,6 +302,31 @@
 	}
 	.label {
 		@apply font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase;
+	}
+	/* Hazard stripe: a person can be hurt. Only on the WARNING label, beside the word, never behind
+	   it. A pattern, so it still reads when glare or a mono printer takes the red away. */
+	.hazard {
+		background-image: repeating-linear-gradient(
+			135deg,
+			var(--error-fill) 0 3px,
+			var(--background) 3px 6px
+		);
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+	/* A role mark keeps its fill on paper: white letters on a dropped fill would vanish. */
+	.role-mark {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+	/* Paper is a day page whatever the app theme. */
+	.paper {
+		--role-purple: #6a1b9a;
+		--role-teal: #00687a;
+		--role-brown: #6d4c41;
+		--role-magenta: #ad1457;
+		--role-slate: #455a64;
+		--role-on: #ffffff;
 	}
 }
 
@@ -258,6 +355,17 @@
 	}
 	.prose-opal :where(a) {
 		@apply text-info underline;
+	}
+	/* A part number on paper is the number: a printed link has nowhere to go. */
+	.paper .prose-opal a[href^='/parts/number/'] {
+		color: inherit;
+		text-decoration: none;
+	}
+	@media print {
+		.prose-opal a[href^='/parts/number/'] {
+			color: inherit;
+			text-decoration: none;
+		}
 	}
 	.prose-opal :where(blockquote) {
 		@apply border-l-2 border-border pl-3 text-muted-foreground;

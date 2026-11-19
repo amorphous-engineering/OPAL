@@ -33,6 +33,7 @@
 		callouts: 'callouts',
 		dataSchema: 'data fields',
 		signoffs: 'sign-offs',
+		performer: 'role',
 		strictSequence: 'strict sequence',
 		dependsOn: 'dependencies',
 		kit: 'step kit',

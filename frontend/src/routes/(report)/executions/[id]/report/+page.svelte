@@ -1,8 +1,9 @@
 <script lang="ts">
+	import UnitsReport from '#lib/components/units/UnitsReport.svelte';
 	import { datetimeSec, stateLabel } from '#lib/format.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import ReportChart from '#lib/components/executions/ReportChart.svelte';
-	import { contracts, opUrl } from '@opal/shared';
+	import { contracts, opUrl, waivedText } from '@opal/shared';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -115,6 +116,11 @@
 			</table>
 		{:else}{@render none('End item')}{/if}
 
+		{#if r.units.length || r.removals.length}
+			{@render h2('Units acted on')}
+			<UnitsReport units={r.units} removals={r.removals} />
+		{/if}
+
 		{@render h2('Operations summary')}
 		{#if r.operations.length}
 			<table class="dense">
@@ -136,8 +142,14 @@
 							<td>
 								{#each o.signoffs as so (so.slot)}
 									<div data-signoff={so.slot}>
-										<b>{so.label}</b>{so.role ? ` (${so.role})` : ''}: {dash(so.signedBy)}
-										<span class="whitespace-nowrap">{ts(so.signedAt)}</span>
+										{#if so.waived}
+											<!-- Written on the slot by the one person there, never a signature. -->
+											<b>{so.label}</b>{so.role ? ` (${so.role})` : ''}
+											<span data-waived>{waivedText({ ...so.waived, at: ts(so.waived.at) })}</span>
+										{:else}
+											<b>{so.label}</b>{so.role ? ` (${so.role})` : ''}: {dash(so.signedBy)}
+											<span class="whitespace-nowrap">{ts(so.signedAt)}</span>
+										{/if}
 									</div>
 								{:else}—{/each}
 							</td>

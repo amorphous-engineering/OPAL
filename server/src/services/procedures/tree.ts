@@ -3,7 +3,7 @@
  *
  * A procedure is a two-level tree: top-level OPs (normal ones, then contingency ones), each
  * holding sub-steps. A step stores only its parent, its contingency flag (OPs) and its
- * position among its siblings. Document order, numbers ("1", "1.2", "C1") and levels are
+ * position among its siblings. Document order, numbers ("1", "1.2", "C901") and levels are
  * derived here, so numbering cannot drift. The functions are pure: they return the rows to
  * change and the caller writes them.
  */
@@ -56,6 +56,18 @@ export function documentOrder<T extends TreeNode>(nodes: T[]): T[] {
 	return out;
 }
 
+/**
+ * Contingency OPs count from C901, so on paper and in glare they cannot be read as OP 1. A published
+ * snapshot stores its numbers, so a version published before this series keeps C1, C2; `currentNumber`
+ * maps those to the series where two versions are compared.
+ */
+export const CONTINGENCY_BASE = 900;
+
+/** `C1.2` as numbered before the 900 series is `C901.2`; every other number is unchanged. */
+export function currentNumber(n: string): string {
+	return n.replace(/^C(\d+)/, (m, d: string) => (Number(d) < CONTINGENCY_BASE ? `C${CONTINGENCY_BASE + Number(d)}` : m));
+}
+
 export function numbering(nodes: TreeNode[]): Map<number, Numbered> {
 	const kids = childrenMap(nodes);
 	const tops = kids.get(null) ?? [];
@@ -64,7 +76,7 @@ export function numbering(nodes: TreeNode[]): Map<number, Numbered> {
 	let normal = 0;
 	let cont = 0;
 	for (const top of [...tops.filter((t) => !t.isContingency), ...tops.filter((t) => t.isContingency)]) {
-		numberOf.set(top.id, top.isContingency ? `C${++cont}` : String(++normal));
+		numberOf.set(top.id, top.isContingency ? `C${CONTINGENCY_BASE + ++cont}` : String(++normal));
 	}
 	let order = 0;
 	for (const top of [...tops.filter((t) => !t.isContingency), ...tops.filter((t) => t.isContingency)]) {

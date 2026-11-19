@@ -5,10 +5,13 @@ import type { DocField } from './types.js';
 
 export const unitOf = (f: DocField): string => (f.type === 'number' ? unitSymbol(f.unit) : '');
 
-/** "12.125 – 12.25 in", or the older min / max with the unit; empty when the field has none. */
+/**
+ * "12.125 – 12.25 in", or the older min / max with the unit; empty when the field has none.
+ * A bare unit is not a limit: the input and the readout already show it beside the value.
+ */
 export function limitsText(f: DocField): string {
 	if (f.spec) return specText(f.spec, f.unit);
-	if (f.min == null && f.max == null) return unitSymbol(f.unit);
+	if (f.min == null && f.max == null) return '';
 	const range = `${f.min ?? '…'} – ${f.max ?? '…'}`;
 	return f.unit ? `${range} ${unitSymbol(f.unit)}` : range;
 }

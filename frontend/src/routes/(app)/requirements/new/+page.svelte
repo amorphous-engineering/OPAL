@@ -94,7 +94,7 @@
 					bind:value={title}
 					maxlength={255}
 					required
-					placeholder="Short name, e.g. Chamber pressure"
+					placeholder="Short name, e.g. Operating temperature"
 				/>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">
@@ -103,7 +103,7 @@
 					id="statement"
 					bind:value={statement}
 					required
-					placeholder="The <subject> shall <one thought>, e.g. The engine shall sustain a chamber pressure of 20 bar ± 1 bar."
+					placeholder="The <subject> shall <one thought>, e.g. The enclosure shall operate from −20 °C to 50 °C."
 				/>
 			</div>
 			<div class="grid grid-cols-1 gap-1.5">

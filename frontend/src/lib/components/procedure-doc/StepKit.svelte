@@ -20,11 +20,21 @@
 			(step.status === 'pending' || step.status === 'in_progress')
 	);
 	const consumedParts = $derived(new Set(step.consumptions.map((c) => c.part_id)));
-	const open = $derived(workable ? step.step_kit.filter((k) => !consumedParts.has(k.part_id)) : []);
+	const open = $derived(
+		workable ? step.step_kit.filter((k) => !consumedParts.has(k.part_id) && !k.struck_by) : []
+	);
+	/** Lines a released redline replaced: struck, never drawn from. */
+	const struck = $derived(step.step_kit.filter((k) => k.struck_by));
 
 	let stock = $state<Record<number, StockRecord[]>>({});
 	let pick = $state<Record<number, { record: string; qty: string }>>({});
 	let busy = $state(false);
+
+	// "INTO CHASSIS OPAL-0042": the slot's label and the unit named there, once there is one.
+	const intoText = (key: string) => {
+		const u = ctl.actions.units?.named().find((x) => x.slot === key);
+		return `INTO ${(u?.slotLabel ?? key).toUpperCase()}${u?.opalNumber ? ` ${u.opalNumber}` : ''}`;
+	};
 
 	const options = (records: StockRecord[] | undefined): StockOption[] | undefined =>
 		records?.map((r) => ({ ...r, uom: r.part_uom }));
@@ -54,7 +64,8 @@
 			.map(({ k, p }) => ({
 				inventory_record_id: Number(p.record),
 				quantity: Number(p.qty),
-				usage_type: k.usage_type
+				usage_type: k.usage_type,
+				into: k.into ?? null
 			}));
 		if (!items.length || items.some((i) => !i.inventory_record_id) || !ctl.actions.consume) return;
 		busy = true;
@@ -96,10 +107,12 @@
 								>{qtyUnit(k.quantity_required, k.uom)}</td
 							>
 							<td class="px-2 py-1"
-								><State
-									value={k.usage_type}
-									tone={k.usage_type === 'tooling' ? 'info' : 'muted'}
-								/></td
+								>{#if k.into}<span class="font-mono text-xs whitespace-nowrap"
+										>{intoText(k.into)}</span
+									>{:else}<State
+										value={k.usage_type}
+										tone={k.usage_type === 'tooling' ? 'info' : 'muted'}
+									/>{/if}</td
 							>
 							<td class="px-2 py-1">
 								<StockPicker
@@ -130,15 +143,25 @@
 			</div>
 		{:else if !step.consumptions.length}
 			<ul class="m-0 list-none p-0 font-mono text-xs text-muted-foreground">
-				{#each step.step_kit as k (k.part_id)}
+				{#each step.step_kit.filter((k) => !k.struck_by) as k (k.part_id)}
 					<li>
 						{k.part_number ?? ''}
 						{k.part_name} × {qtyUnit(k.quantity_required, k.uom)}
 						{k.usage_type === 'tooling' ? '(TOOLING)' : ''}
+						{k.into ? intoText(k.into) : ''}
 					</li>
 				{/each}
 			</ul>
 		{/if}
+		{#each struck as k (k.part_id)}
+			<div class="font-mono text-xs text-muted-foreground">
+				<span class="line-through"
+					>{k.part_number ?? ''}
+					{k.part_name} × {qtyUnit(k.quantity_required, k.uom)}</span
+				>
+				replaced by {k.struck_by}
+			</div>
+		{/each}
 		{#each step.consumptions as c (c.id)}
 			<div class="font-mono text-xs text-muted-foreground">
 				<span class="text-ok">{c.usage_type === 'tooling' ? 'USED' : 'CONSUMED'}</span>

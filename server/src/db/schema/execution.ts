@@ -10,7 +10,9 @@ import {
 	EXECUTION_PRIORITIES,
 	EXECUTION_STATUSES,
 	EXEC_STEP_STATUSES,
-	type ProcedureDataSchema
+	type ProcedureDataSchema,
+	type RedlineKitLine,
+	type RedlineStrike
 } from '@opal/shared';
 import { sql } from 'drizzle-orm';
 import { type AnySQLiteColumn, check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -19,7 +21,7 @@ import { createdAt, id, oneOf, updatedAt } from './helpers.ts';
 import { issue } from './issues.ts';
 import { project, workcenter } from './org.ts';
 import { procedure, procedureVersion } from './procedures.ts';
-import { stockRecord } from './inventory.ts';
+import { stockMove, stockRecord } from './inventory.ts';
 
 export const execution = sqliteTable(
 	'execution',
@@ -105,6 +107,16 @@ export const adhocStep = sqliteTable(
 		dataSchema: text('data_schema', { mode: 'json' }).$type<ProcedureDataSchema>(),
 		/** Sign-off roles in slot order. Null: the default. */
 		signoffs: text('signoffs', { mode: 'json' }).$type<{ role: string | null }[]>(),
+		/** Parts this step consumes. */
+		kit: text('kit', { mode: 'json' }).$type<RedlineKitLine[]>(),
+		/** On the OP row: the snapshot kit lines this redline replaces, struck once it is released. */
+		strikes: text('strikes', { mode: 'json' }).$type<RedlineStrike[]>(),
+		/**
+		 * On the OP row. Null: a draft, pencil, which the floor cannot work. Signing the issue's
+		 * disposition releases its drafts; a draft written after that is released on its own.
+		 */
+		releasedAt: text('released_at'),
+		releasedById: integer('released_by_id').references(() => user.id, { onDelete: 'set null' }),
 		createdById: integer('created_by_id').references(() => user.id, { onDelete: 'set null' }),
 		createdAt: createdAt()
 	},
@@ -164,6 +176,29 @@ export const signoff = sqliteTable(
 		createdAt: createdAt()
 	},
 	(t) => [uniqueIndex('signoff_slot_uq').on(t.stepExecutionId, t.slot)]
+);
+
+/**
+ * A later slot set aside by the one person there, who could not sign it twice. Its own record,
+ * never a signature row: every reader of `signoff` takes a row there as a person attesting. Label
+ * and role are copied as a signature's are. No update or delete: it stands as written.
+ */
+export const signoffWaiver = sqliteTable(
+	'signoff_waiver',
+	{
+		id: id(),
+		stepExecutionId: integer('step_execution_id')
+			.notNull()
+			.references(() => stepExecution.id, { onDelete: 'cascade' }),
+		slot: integer('slot').notNull(),
+		label: text('label').notNull(),
+		role: text('role'),
+		reason: text('reason').notNull(),
+		waivedById: integer('waived_by_id').references(() => user.id, { onDelete: 'set null' }),
+		waivedAt: text('waived_at').notNull(),
+		createdAt: createdAt()
+	},
+	(t) => [uniqueIndex('signoff_waiver_slot_uq').on(t.stepExecutionId, t.slot)]
 );
 
 /** Append-only operator note. Files attach through the platform (owner type `step_note`). */
@@ -264,4 +299,75 @@ export const executionOutput = sqliteTable(
 		createdAt: createdAt()
 	},
 	(t) => [index('execution_output_execution_idx').on(t.executionId), check('execution_output_qty', sql`"quantity" > 0`)]
+);
+
+/**
+ * A unit a work order acts on, named on an OP: an existing serialized stock record, or borrowed
+ * gear OPAL does not hold (text only, no OPAL number, no count). The one home of "this work order
+ * acted on this unit". Use counts and a unit's work orders are queries over it.
+ */
+export const executionUnit = sqliteTable(
+	'execution_unit',
+	{
+		id: id(),
+		executionId: integer('execution_id')
+			.notNull()
+			.references(() => execution.id, { onDelete: 'cascade' }),
+		stepExecutionId: integer('step_execution_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stepExecution.id, { onDelete: 'cascade' }),
+		/** The declared slot's key. Null: hardware the procedure did not list. */
+		slot: text('slot'),
+		stockId: integer('stock_id').references((): AnySQLiteColumn => stockRecord.id),
+		borrowedName: text('borrowed_name'),
+		borrowedSerial: text('borrowed_serial'),
+		borrowedFrom: text('borrowed_from'),
+		recordedById: integer('recorded_by_id').references(() => user.id, { onDelete: 'set null' }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('execution_unit_execution_idx').on(t.executionId),
+		index('execution_unit_stock_idx').on(t.stockId),
+		uniqueIndex('execution_unit_stock_uq').on(t.executionId, t.stockId).where(sql`"stock_id" IS NOT NULL`),
+		uniqueIndex('execution_unit_slot_uq').on(t.executionId, t.slot).where(sql`"slot" IS NOT NULL`),
+		check('execution_unit_one_kind', sql`("stock_id" IS NULL) <> ("borrowed_name" IS NULL)`)
+	]
+);
+
+/**
+ * A component taken out of a unit a work order acts on. The ledger is append-only and a consume
+ * move names its assembly once, so the removal is its own fact; genealogy nets it. A serialized
+ * component put back on the shelf has its ledger move here; anything else is scrapped.
+ */
+export const componentRemoval = sqliteTable(
+	'component_removal',
+	{
+		id: id(),
+		executionId: integer('execution_id')
+			.notNull()
+			.references(() => execution.id),
+		stepExecutionId: integer('step_execution_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stepExecution.id),
+		assemblyStockId: integer('assembly_stock_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stockRecord.id),
+		stockId: integer('stock_id')
+			.notNull()
+			.references((): AnySQLiteColumn => stockRecord.id),
+		/** Qty units. */
+		quantity: integer('quantity').notNull(),
+		/** The move that put it back in stock. Null: scrapped. */
+		returnMoveId: integer('return_move_id').references((): AnySQLiteColumn => stockMove.id),
+		notes: text('notes'),
+		removedById: integer('removed_by_id').references(() => user.id, { onDelete: 'set null' }),
+		at: text('at').notNull(),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('component_removal_assembly_idx').on(t.assemblyStockId),
+		index('component_removal_stock_idx').on(t.stockId),
+		index('component_removal_execution_idx').on(t.executionId),
+		check('component_removal_qty', sql`"quantity" > 0`)
+	]
 );

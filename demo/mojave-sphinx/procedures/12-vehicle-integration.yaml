@@ -1,0 +1,300 @@
+# Recovery System & Airframe Integration
+#
+# Adapted from HCR-5100 R01, Section V, OP 13: Recovery System & Airframe Integration
+# (pp. 229-234).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: vehicle-integration
+name: Recovery System & Airframe Integration
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 13: Recovery System & Airframe Integration'
+  pages: 229-234
+
+description: |
+  Make the main parachute and the main and drogue recovery harnesses, connect them to the nose
+  cone assembly, the Avionics Bay Coupler assembly and the tank assembly, install the nose cone
+  assembly and the lower airframe tube, and install the rail buttons.
+
+  Tools: razor knife or scissors, measuring tape, 5/32 in hex key, Phillips screwdriver, wrench
+  (optional, for the quick links). See Required Tools, pp. 136-137.
+
+output:
+  part: mojave-sphinx
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 230), then the parts the steps install that the list
+# does not name: the screws of step 17 and the assemblies made by OP 9 to OP 12.
+kit:
+  - part: REC-TNSC-3KLB
+    quantity: 48
+    unit: ft
+  - part: CNPY-CHT-86IN
+    quantity: 1
+  - part: CRD-KVLR-250LB
+    quantity: 84
+    unit: ft
+  - part: REC-PRT-16
+    quantity: 2
+  - part: REC-CHT-DRG-36
+    quantity: 1
+  - part: '8947T26'
+    quantity: 4
+  - part: '90272A194'
+    quantity: 8
+  - part: '97654A620'
+    quantity: 2
+  - part: '92141A029'
+    quantity: 2
+  - part: RLBTN-A-1515-250C
+    quantity: 2
+  - part: RLBTN-B-1515-250C
+    quantity: 2
+  - part: '91306A279'
+    quantity: 6
+  - part: propulsion-system
+    quantity: 1
+  - part: avionics-bay-assembly
+    quantity: 1
+  - part: nose-cone-assembly
+    quantity: 1
+  - part: lower-airframe-tube
+    quantity: 1
+  - part: upper-airframe-tube
+    quantity: 1
+
+operations:
+  - title: Recovery System & Airframe Integration
+    source: { section: 'Section V, OP 13', pages: 229-234 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-13/vehicle-integrated.png
+        caption: Integrated vehicle, nose cone at right.
+        source_page: 229
+    steps:
+      - title: Cut the shroud lines
+        source: { step: 1, page: 231 }
+        instructions: |
+          *Note: Skip steps 1.1-1.3 if using a COTS parachute.*
+
+          Cut 3 sections of CRD-KVLR-250LB Kevlar cord, each approximately 28 feet in length.
+          Ensure all pieces are consistent in length to within ±3 inches. These will form the
+          shroud lines for the main parachute.
+
+      - title: Tie shroud lines to the tarp
+        source: { step: 2, page: 231 }
+        instructions: |
+          Tie the ends of each piece of Kevlar cord to the loops sewn onto the corners of the
+          hexagonal tarp, with minimal excess length after the knot. Ensure the ends of each section
+          of cord are tied to adjacent loops, rather than spanning across the canopy to the loop on
+          the opposite side. Any type of knot may be used; a non-slip loop knot is recommended.
+
+      - title: Tie the shroud line loop
+        source: { step: 3, page: 231 }
+        instructions: |
+          Gather the Kevlar cords from the middle of each section. Allow the canopy to bunch into a
+          triangle, so that the sewn loops onto which the shroud lines are tied all align with each
+          other. This will ensure the shroud lines are equal in length. Once the sewn loops are
+          aligned, tie a loop at the midsection of the bundled shroud lines using an overhand knot.
+          This will be used to connect the shroud lines to the shock cord via a quick link.
+
+      - title: Cut the shock cord
+        source: { step: 4, page: 231 }
+        instructions: |
+          Cut the remaining 48 ft of shock cord into two equal lengths of 24 ft each.
+
+      - title: Designate the two harnesses
+        source: { step: 5, page: 231 }
+        instructions: |
+          Designate one section of shock cord as the main recovery harness, and one section as the
+          drogue recovery harness.
+
+      - title: Tie the main parachute loop
+        source: { step: 6, page: 231 }
+        instructions: |
+          On the main recovery harness, tie a loop approximately 6 to 8 feet from one end, using an
+          overhand knot on a doubled section of cord. Alternate methods such as a Rigger's Loop Knot
+          or Alpine Butterfly may also be used if desired. This loop will be used to connect the
+          main parachute.
+        data:
+          - name: main_loop_distance
+            label: Main parachute loop, distance from the end of the harness
+            type: number
+            unit: ft
+            required: true
+            spec: { kind: range, lower: '6', upper: '8' }
+
+      - title: Tie the nose cone knot
+        source: { step: 7, page: 231 }
+        instructions: |
+          Connect the end of the main recovery harness closest to the loop to the short section of
+          shock cord on the nose cone assembly by tying a non-slip loop knot, with the loop passing
+          through the existing non-slip loop knot on the nose cone.
+
+      - title: Connect the main harness
+        source: { step: 8, page: 232 }
+        instructions: |
+          Pass the other end of the main recovery harness through the upper airframe tube, and tie
+          a second non-slip loop knot on the end of the harness. Connect this non-slip loop knot to
+          the U-bolt on the forward end of the Avionics Bay Coupler assembly with QTY 1 8947T26
+          quick link. Close the quick link and tighten hand tight. A wrench may be used, but is not
+          required.
+
+      - title: Tie the drogue harness ends
+        source: { step: 9, page: 232 }
+        instructions: |
+          Tie a non-slip loop knot on each end of the drogue recovery harness.
+
+      - title: Connect the drogue harness, tank end
+        source: { step: 10, page: 232 }
+        instructions: |
+          Connect one end of the drogue recovery harness to the U-bolt on the recovery bulkhead on
+          the tank assembly with QTY 1 8947T26 quick link. Close the quick link and tighten hand
+          tight. A wrench may be used, but is not required.
+
+      - title: Connect the drogue harness, avionics end
+        source: { step: 11, page: 232 }
+        instructions: |
+          Connect the other end of the drogue recovery harness to U-bolt on the lower end of the
+          Avionics Bay Coupler assembly with QTY 1 8947T26 quick link. Do not close the quick link
+          at this time.
+
+      - title: Attach the drogue parachute
+        source: { step: 12, page: 232 }
+        instructions: |
+          Tie the center of the shroud lines on the REC-CHT-DRG-36 drogue parachute into a
+          2-3-inch diameter loop using an overhand knot. Then, place this loop onto the 8947T26
+          quick link on the drogue recovery harness, where it connects to the Avionics Bay Coupler
+          assembly.
+
+      - title: Attach the drogue parachute protector
+        source: { step: 13, page: 232 }
+        instructions: |
+          Place the reinforced slit of QTY 1 REC-PRT-16 parachute protector onto the 8947T26 quick
+          link on the drogue recovery harness, where it connects to the Avionics Bay Coupler
+          assembly. Close the quick link and tighten hand tight. A wrench may be used, but is not
+          required.
+
+      - title: Attach the main parachute
+        source: { step: 14, page: 232 }
+        instructions: |
+          Using QTY 1 8947T26 quick link, connect the loop at the base of the main parachute shroud
+          lines to the loop on the main recovery harness, 6-8 feet from the nose cone end. Do not
+          close the quick link at this time.
+
+      - title: Attach the main parachute protector
+        source: { step: 15, page: 232 }
+        instructions: |
+          Place the reinforced slit of QTY 1 REC-PRT-16 parachute protector onto the 8947T26 quick
+          link at the base of the main parachute shroud lines, where it connects to the main
+          recovery harness. Close the quick link and tighten hand tight. A wrench may be used, but
+          is not required.
+
+      - title: Install the nose cone assembly
+        source: { step: 16, page: 233 }
+        instructions: |
+          Install the nose cone assembly into the forward end of the upper airframe tube, and
+          secure with QTY 8 90272A194 screws, threaded into the nuts in the nose cone shoulder.
+
+      - title: Mount the lower airframe tube
+        source: { step: 17, page: 233 }
+        instructions: |
+          Mount the lower airframe tube onto the forward tank interface ring using QTY 6 91306A279
+          screws and QTY 6 92141A029 washers in the locations shown. Tighten to snug using a 5/32 in
+          hex key.
+
+      # Printed as step 18: an italic note with no action.
+      - title: Avoid excessive torque
+        source: { step: 18, page: 233 }
+        callouts:
+          - caution: Excessive torque may damage the printed nut retaining ring.
+
+      - title: Assemble the rail buttons
+        source: { step: 19, page: 233 }
+        instructions: |
+          Place QTY 2 RLBTN-A-1515-250C, QTY 2 RLBTN-B-1515-250C, and QTY 2 92141A029 washers onto
+          QTY 2 97654A620 screws (one of each per screw) as shown to form a rail button assembly.
+        images:
+          - file: photos/op-13/rail-button-assembly.jpg
+            caption: Rail button assembly, side view.
+            source_page: 233
+
+      # Printed as step 12 (p. 234), after step 19.
+      - title: Install the forward rail button
+        source: { step: 20, page: 234 }
+        instructions: |
+          Install one rail button assembly into the unoccupied hole/nut on the forward tank
+          interface ring where shown, 90 degrees from the fuel line. Tighten to very slightly snug,
+          so that the rail button can rotate with minor resistance. It does not need to spin
+          freely.
+        images:
+          - file: photos/op-13/rail-button-forward-ring.jpg
+            caption: Rail button on the forward tank interface ring, above the fuel line.
+            source_page: 234
+
+      # Printed as step 13 (p. 234).
+      - title: Install the lower rail button
+        source: { step: 21, page: 234 }
+        instructions: |
+          Install the second rail button assembly into the hole/nut on the lower tank interface ring
+          where shown, 90 degrees from the fuel line (aligned with the upper rail button). Tighten
+          to very slightly snug, so that the rail button can rotate with minor resistance. It does
+          not need to spin freely.
+        images:
+          - file: photos/op-13/rail-button-lower-ring.jpg
+            caption: Rail button on the lower tank interface ring, among the fin brackets.
+            source_page: 234
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - >-
+    The guidebook numbers the two steps on p. 234 as 12 and 13. They follow step 19 and are steps
+    1.20 and 1.21 here.
+  - >-
+    Step 1.18 is printed as a numbered step that holds only the italic note "Note: excessive torque
+    may damage the printed nut retaining ring." It is kept as its own step, with the note set apart
+    as a caution.
+  - >-
+    The note printed above step 1 (p. 231), "Note: Skip steps 1-3 if using a COTS parachute.", is
+    placed at the top of step 1.1, with the step numbers written 1.1-1.3.
+  - >-
+    Kit: 91306A279, QTY 6, is added. Step 17 (p. 233) installs it; the parts list (p. 230) does not
+    name it.
+  - >-
+    Kit: 92141A029 keeps the parts list quantity, 2. Steps 17 and 19 use 8.
+  - >-
+    Kit: propulsion-system (OP 9), avionics-bay-assembly (OP 10), nose-cone-assembly (OP 11),
+    lower-airframe-tube and upper-airframe-tube (OP 12) are added, QTY 1 each. The parts list
+    (p. 230) names none of them; the steps use them as present from earlier OPs.
+  - >-
+    Steps 1.8 and 1.16: "20545T38-AF-UPR airframe tube" is written "upper airframe tube". The
+    number is not in any parts list (see OP 12).
+  - >-
+    The nose cone assembly is called the nose cone assembly throughout. Step 16 prints "Nose Cone
+    Assembly".
+  - >-
+    The avionics bay is called the Avionics Bay Coupler assembly throughout. Steps 12 and 13 call
+    it the Avionics Bay Coupler.
+  - 'Step 1.1: "+/-3 inches" is written "±3 inches".'
+  - 'Step 1.3: "the around lines" is written "the shroud lines".'
+  - 'Step 1.4: "48ft" is written "48 ft".'
+  - 'Step 1.6: "Rigger’s" is written with a straight apostrophe.'
+  - 'Step 1.15: "Place the the" is written "Place the".'
+  - 'Step 1.17: "5/32”" is written "5/32 in".'
+  - 'Step 1.6: a data field records the distance of the loop from the end of the harness, 6 to 8 ft as printed.'
+  - >-
+    The two pictures printed side by side under step 13 (p. 234) are placed one on each rail button
+    step: the right picture, the forward tank interface ring with the fuel line fitting, on step
+    1.20; the left picture, the lower tank interface ring among the fin brackets, on step 1.21. The
+    placement follows the vehicle drawing on p. 229.
+  - The vehicle drawing on p. 229 is drawn diagonally on the page and horizontally here.
+  - Image captions are new.

@@ -1,0 +1,78 @@
+# Datasets.
+#
+# The first two are Half Cat Rocketry's own development record, taken from the contents list of
+# HCR-5100 R01 Section III (p. 86): the total impulse of each static fire of the prototype and the
+# apogee of each launch. They are here as reference data for the team. They are not this team's
+# results. The third holds measurements this team recorded on its own work orders (fictional).
+#
+# Adapted from HCR-5100 R01. Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See README.md.
+
+datasets:
+  - key: static-fires
+    name: Half Cat static fires of the Mojave Sphinx prototype
+    description: |
+      Total impulse of each static fire, from HCR-5100 R01 Section 3.2 (contents list, p. 86).
+      Half Cat Rocketry's data, not this team's.
+    fields:
+      - { name: test, type: number, required: true }
+      - { name: date, type: date, required: true }
+      # OPAL has no unit for impulse, so the unit is in the name: newton seconds.
+      - { name: total_impulse_N_s, type: number, chart: true, required: true }
+    rows:
+      - { test: 1, date: '2023-11-04', total_impulse_N_s: 2716 }
+      - { test: 2, date: '2023-11-04', total_impulse_N_s: 2723 }
+      - { test: 3, date: '2023-11-04', total_impulse_N_s: 2464 }
+      - { test: 4, date: '2023-11-18', total_impulse_N_s: 2429 }
+      - { test: 5, date: '2023-11-18', total_impulse_N_s: 6080 }
+      - { test: 6, date: '2023-12-02', total_impulse_N_s: 4077 }
+      - { test: 7, date: '2023-12-02', total_impulse_N_s: 4362 }
+      - { test: 8, date: '2023-12-16', total_impulse_N_s: 5275 }
+      - { test: 9, date: '2023-12-16', total_impulse_N_s: 4533 }
+      - { test: 10, date: '2024-02-17', total_impulse_N_s: 4393 }
+      - { test: 11, date: '2024-02-17', total_impulse_N_s: 4231 }
+      - { test: 12, date: '2024-03-02', total_impulse_N_s: 4852 }
+      - { test: 13, date: '2024-03-02', total_impulse_N_s: 1889 }
+      - { test: 14, date: '2024-04-20', total_impulse_N_s: 4175 }
+      - { test: 15, date: '2024-05-04', total_impulse_N_s: 4992 }
+      - { test: 16, date: '2024-05-04', total_impulse_N_s: 2466 }
+      - { test: 17, date: '2024-05-04', total_impulse_N_s: 2258 }
+      - { test: 18, date: '2024-05-04', total_impulse_N_s: 4118 }
+      - { test: 19, date: '2024-05-04', total_impulse_N_s: 4046 }
+
+  - key: launches
+    name: Half Cat launches of Mojave Sphinx
+    description: |
+      Apogee of each launch, from HCR-5100 R01 Section 3.3 (contents list, p. 86). Launches 17
+      and 18 are marked SN02 there. Half Cat Rocketry's data, not this team's.
+    fields:
+      - { name: launch, type: number, required: true }
+      - { name: date, type: date, required: true }
+      - { name: apogee, type: number, unit: ft, chart: true, required: true }
+      - { name: vehicle, type: text }
+    rows:
+      - { launch: 1, date: '2023-07-15', apogee: 2589 }
+      - { launch: 2, date: '2023-10-07', apogee: 3595 }
+      - { launch: 3, date: '2023-11-18', apogee: 1800 }
+      - { launch: 4, date: '2023-12-02', apogee: 6181 }
+      - { launch: 5, date: '2023-12-16', apogee: 1200 }
+      - { launch: 6, date: '2024-01-06', apogee: 6359 }
+      - { launch: 7, date: '2024-01-06', apogee: 5765 }
+      - { launch: 8, date: '2024-01-06', apogee: 6453 }
+      - { launch: 9, date: '2024-02-17', apogee: 5285 }
+      - { launch: 10, date: '2024-03-16', apogee: 6850 }
+      - { launch: 11, date: '2024-04-07', apogee: 6400 }
+      - { launch: 12, date: '2024-04-07', apogee: 5800 }
+      - { launch: 13, date: '2024-04-07', apogee: 950 }
+      - { launch: 14, date: '2024-04-07', apogee: 1900 }
+      - { launch: 15, date: '2024-04-20', apogee: 5263 }
+      - { launch: 16, date: '2024-05-18', apogee: 3600 }
+      - { launch: 17, date: '2024-07-20', apogee: 4598, vehicle: SN02 }
+      - { launch: 18, date: '2024-07-20', apogee: 1363, vehicle: SN02 }
+
+  - key: tank-measurements
+    name: Tank measurements
+    description: Distances recorded while building the propellant tank, one point per work order step.
+    procedure: propellant-tank-assembly
+    fields:
+      - { name: measurement, type: text, required: true }
+      - { name: distance, type: number, unit: in, chart: true, required: true }

@@ -5,6 +5,7 @@ import { variantFormat } from '../designators.ts';
 import { zTimestamp } from '../time.ts';
 import { zTimeDisplay } from './auth.ts';
 import { MAX_SHORT, MAX_TEXT, zJsonObject } from '../limits.ts';
+import { zRoleCode, zRoleColor } from '../role-marks.ts';
 
 /** A boolean that arrives as 'true' or 'false' in a query string. */
 const zQueryBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]);
@@ -266,6 +267,12 @@ export const zRole = z.object({
 	description: z.string().nullable(),
 	key: z.string().nullable(),
 	isSystem: z.boolean(),
+	/** The letters of the role's mark on a step. Initials of the name until someone sets them. */
+	code: z.string(),
+	color: zRoleColor,
+	/** Null: an organization role. Set: a role of that project only, which passes no gate. */
+	projectId: z.number().int().nullable(),
+	projectCode: z.string().nullable(),
 	memberCount: z.number().int(),
 	createdAt: zTimestamp,
 	updatedAt: zTimestamp
@@ -307,10 +314,15 @@ const roles = {
 		name: 'roles.create',
 		method: 'POST',
 		path: '/roles',
-		summary: 'Create a role. Names are unique ignoring case.',
+		summary:
+			'Create a role, for the organization or for one project. Names are unique across the organization, ignoring case.',
 		input: z.object({
 			name: z.string().trim().min(1).max(50),
-			description: z.string().max(1000).nullable().optional()
+			description: z.string().max(1000).nullable().optional(),
+			/** A role of this project only: offered in its procedures, passing no gate. */
+			projectId: z.number().int().nullable().optional(),
+			code: zRoleCode.optional(),
+			color: zRoleColor.optional()
 		}),
 		output: zRole,
 		access: 'admin',
@@ -321,11 +333,13 @@ const roles = {
 		name: 'roles.update',
 		method: 'PATCH',
 		path: '/roles/:id',
-		summary: 'Rename or describe a role. A system role cannot be renamed.',
+		summary: 'Rename or describe a role, or set its mark. A system role cannot be renamed.',
 		input: z.object({
 			id: zId,
 			name: z.string().trim().min(1).max(50).optional(),
-			description: z.string().max(1000).nullable().optional()
+			description: z.string().max(1000).nullable().optional(),
+			code: zRoleCode.optional(),
+			color: zRoleColor.optional()
 		}),
 		output: zRole,
 		access: 'admin',

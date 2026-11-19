@@ -227,3 +227,63 @@ describe('a number an import marked as a duplicate', () => {
 		expect(canonicalDesignator('ACME-7-DUP2')).toBe('ACME-7-DUP2');
 	});
 });
+
+describe('part numbers written in prose', () => {
+	const c = numberCodec(4, scheme);
+	const found = (codec: typeof c, text: string) => codec.find(text).map((f) => [f.text, f.stored]);
+
+	test('a number at the shown width is found where it is written, with its stored form', () => {
+		expect(found(c, 'Fit SPX-F-0132 to SPX-D-0007.')).toEqual([
+			['SPX-F-0132', 'SPX-F-0000000132'],
+			['SPX-D-0007', 'SPX-D-0000000007']
+		]);
+		expect(found(c, '(SPX-F-0132), SPX-F-0132; **SPX-F-0132**')).toHaveLength(3);
+		expect(found(c, 'SPX-F-0000000132 and SPX-F-12345')).toEqual([
+			['SPX-F-0000000132', 'SPX-F-0000000132'],
+			['SPX-F-12345', 'SPX-F-0000012345']
+		]);
+		expect(found(c, 'SPX-F-0132-002 is a variant')).toEqual([['SPX-F-0132-002', 'SPX-F-0000000132-002']]);
+	});
+
+	test('dates, quantities and near misses are not part numbers', () => {
+		for (const text of [
+			'Torque to 2026-11-17 spec',
+			'Use 4 bolts, 3-4 turns each',
+			'SPX-F-132 is shorter than the shown width',
+			'SPX-Q-0132 has no such tier',
+			'spx-f-0132 is not the prefix',
+			'XSPX-F-0132 runs on from a word',
+			'A-SPX-F-0132 runs on from a hyphen',
+			'SPX-F-0132A runs on into a word',
+			'SPX-F-0132-02 has a short variant code',
+			'SPX-F-0132-0021 has a long one',
+			'SPX-F-00000001320 is wider than any stored number'
+		]) {
+			expect(found(c, text)).toEqual([]);
+		}
+	});
+
+	test('the shown width is the floor, so a wider setting needs more digits', () => {
+		expect(found(numberCodec(6, scheme), 'SPX-F-0132')).toEqual([]);
+		expect(found(numberCodec(6, scheme), 'SPX-F-000132')).toEqual([['SPX-F-000132', 'SPX-F-0000000132']]);
+		expect(found(numberCodec(3, scheme), 'SPX-F-132')).toEqual([['SPX-F-132', 'SPX-F-0000000132']]);
+	});
+
+	test('a format without a prefix still needs the full width, so a short run is not a part', () => {
+		const tierLevel = numberCodec(4, { prefix: '', separator: '-', format: '{tier_level}{sep}{sequence}', tiers: scheme.tiers });
+		expect(found(tierLevel, '3-4 turns, 1-12 bolts')).toEqual([]);
+		expect(found(tierLevel, 'Fit 3-0004.')).toEqual([['3-0004', '3-0000000004']]);
+		const b = numberCodec(4, bare);
+		expect(found(b, 'Fit 001-1337-002 now')).toEqual([['001-1337-002', '001-0000001337-002']]);
+		expect(found(b, 'on 2001-1337-002')).toEqual([]);
+	});
+
+	test('a separator and joiner other than a dash', () => {
+		const d = numberCodec(4, { prefix: 'RV.1', separator: '.', format: '{prefix}{sep}{tier_code}{sep}{sequence}/{variant}', tiers: scheme.tiers });
+		expect(found(d, 'See RV.1.F.0042/002. Then RV.1.F.0043.')).toEqual([
+			['RV.1.F.0042/002', 'RV.1.F.0000000042/002'],
+			['RV.1.F.0043', 'RV.1.F.0000000043']
+		]);
+		expect(found(d, 'RV.1.F.0042.5 and RV.1.F.0042/02')).toEqual([]);
+	});
+});

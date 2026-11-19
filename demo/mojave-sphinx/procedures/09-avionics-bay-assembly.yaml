@@ -1,0 +1,396 @@
+# Avionics Bay Assembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 10: Avionics Bay Assembly (pp. 205-216).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: avionics-bay-assembly
+name: Avionics Bay Assembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 10: Avionics Bay Assembly'
+  pages: 205-216
+
+description: |
+  Assemble the printed avionics bay coupler on four threaded rods, mount two altimeters and their
+  batteries on the avionics bay sled, wire them, and close the sled into the coupler between two
+  bulkheads.
+
+  Tools: wrenches, small phillips screwdriver, drill, #16 drill bit, #50 drill bit, fine point pen or mechanical pencil, 3/16 in
+  wrench or pliers, wire stripper/cutter, permanent marker, cyanoacrylate (superglue) gel or other
+  suitable adhesive, electrical tape. If the avionics bay sled is not prefabricated: 1/4 in
+  plywood and a fine-toothed saw. Optional: masking tape.
+
+output:
+  part: avionics-bay-assembly
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 206).
+kit:
+  - part: AVBY-HF-3994
+    quantity: 2
+  - part: AVBY-SB-4160
+    quantity: 1
+  - part: '95505A601'
+    quantity: 20
+  - part: '92141A029'
+    quantity: 20
+  - part: '91102A750'
+    quantity: 16
+  - part: '90281A102'
+    quantity: 4
+  - part: '92580A328'
+    quantity: 2
+  - part: '3043T643'
+    quantity: 2
+  - part: AVBY-CR-4R
+    quantity: 2
+  - part: BKHD-REC-4X250C-2X170WE
+    quantity: 2
+  - part: AVBY-SLD-225X600-6XM4C
+    quantity: 1
+  - part: AVBY-MT-250R-M4C
+    quantity: 1
+  - part: AVBY-BH-2X9V-250R-M4C
+    quantity: 1
+  - part: '91280A044'
+    quantity: 6
+  - part: '98689A113'
+    quantity: 12
+  - part: '92148A160'
+    quantity: 6
+  - part: '90591A141'
+    quantity: 6
+  - part: '93505A211'
+    quantity: 4
+  - part: '90604A303'
+    quantity: 4
+  - part: '91755A200'
+    quantity: 8
+  - part: EGTMR-QRK
+    quantity: 2
+  - part: '7712K511'
+    quantity: 2
+  - part: '20GA-RBP'
+    quantity: 6
+    unit: ft
+  - part: '71295K64'
+    quantity: 2
+  - part: '9V-BATT'
+    quantity: 2
+
+operations:
+  - title: Avionics Bay Assembly
+    source: { section: 'Section V, OP 10', pages: 205-216 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-10/avionics-bay-assembly.png
+        caption: Avionics bay assembly.
+        source_page: 205
+    steps:
+      - title: Assemble the coupler on the rods
+        source: { step: 1, page: 207 }
+        instructions: |
+          Assemble QTY 2 AVBY-HF-3994 avionics bay coupler halves and QTY 1 AVBY-SB-4160 avionics
+          bay switch band as shown. Thread QTY 1 95505A601 hex nut with QTY 1 91102A750 split lock
+          washer and QTY 1 92141A029 flat washer onto one end of each of the QTY 4 90281A102
+          threaded rods, then insert the rods through the sleeves of the printed coupler
+          components. Secure each rod with an additional QTY 1 92141A029 flat washer, QTY 1
+          91102A750 split lock washer, and QTY 1 95505A601 hex nut.
+
+          Ensure equal thread protrusion such that the rods do not extend past the end of the
+          coupler. Tighten the nuts on all 4 rods only until the split lock washers are fully
+          compressed to flat.
+        callouts:
+          - caution: Excessive torque may damage the printed components.
+        images:
+          - file: photos/op-10/coupler-rods-section.jpg
+            caption: Coupler halves and switch band on the threaded rods, with nuts and washers at each end.
+            source_page: 207
+
+      - title: Cut the sled if needed
+        source: { step: 2, page: 208 }
+        instructions: |
+          If the AVBY-SLD-225X600-6XM4C avionics bay sled has not been prefabricated, cut a
+          2.25 in x 6 in rectangle from 1/4 in plywood.
+
+      - title: Drill the sled mounting holes
+        source: { step: 3, page: 208 }
+        instructions: |
+          Place the AVBY-MT-250R-M4C avionics bay sled mount and AVBY-BH-2X9V-250R-M4C battery
+          holder onto the avionics bay sled as shown, and mark the position of 6 holes using the
+          printed parts. Remove printed parts and drill holes using a #16 or similarly-sized drill
+          bit to create clearance holes suitable for M4 fasteners.
+
+          *It is recommended to insert QTY 2 92580A328 threaded rods through the sleeves to ensure
+          alignment prior to drilling mounting holes.*
+        images:
+          - file: photos/op-10/sled-mount-and-battery-holder-placed.jpg
+            caption: Sled mount and battery holder placed on the avionics bay sled.
+            source_page: 208
+
+      - title: Drill the altimeter holes
+        source: { step: 4, page: 209 }
+        instructions: |
+          Place QTY 2 Eggtimer Quark altimeters, assembled per the manufacturer's directions, on
+          the avionics bay sled as shown. The exact position is not critical, however the terminal
+          blocks should be approximately centered on the sled to ensure sufficient clearance to
+          the coupler reinforcing rods.
+
+          Mark the hole positions using a fine point pen or mechanical pencil, then remove the
+          altimeters and drill 4 holes with a #50 drill bit (2-56 tap drill size).
+        images:
+          - file: photos/op-10/altimeters-on-sled.jpg
+            caption: Two altimeters placed on the avionics bay sled, top view.
+            source_page: 209
+
+      - title: Install the hex standoffs
+        source: { step: 5, page: 209 }
+        instructions: |
+          Thread QTY 4 93505A211 hex standoffs into the holes in the avionics bay sled. Once fully
+          seated, back off the standoffs 2-4 turns, apply a small dab of cyanoacrylate (superglue)
+          gel or other suitable adhesive, then re-engage threads fully.
+
+          *It is not necessary to tap the holes; the standoffs will cut their own threads due to
+          the softness of the plywood.*
+
+          *The 90604A303 screws may be temporarily threaded into the standoffs to allow a phillips
+          screwdriver to be used for installation of the standoffs into the sled. Hold the
+          standoffs with a 3/16 in wrench or pliers while removing the screws.*
+        images:
+          - file: photos/op-10/standoffs-in-sled.jpg
+            caption: Four hex standoffs in the avionics bay sled.
+            source_page: 209
+
+      - title: Mount the sled mount and holder
+        source: { step: 6, page: 210 }
+        instructions: |
+          Mount the AVBY-MT-250R-M4C avionics bay sled mount and AVBY-BH-2X9V-250R-M4C battery
+          holder onto the avionics bay sled as shown, using QTY 6 91280A044 M4 hex head screws,
+          QTY 12 98689A113 M4 flat washers, QTY 6 92148A160 M4 split lock washers, and QTY 6
+          90591A141 M4 hex nuts.
+
+          Tighten all fasteners approximately 1/4 turn past full compression of the split lock
+          washer.
+        images:
+          - file: photos/op-10/sled-mount-and-battery-holder-fastened.jpg
+            caption: Sled mount and battery holder fastened to the avionics bay sled.
+            source_page: 210
+
+      - title: Mount the altimeters
+        source: { step: 7, page: 210 }
+        instructions: |
+          Mount the QTY 2 Eggtimer Quark altimeters onto the hex standoffs using QTY 4 90604A303
+          2-56 screws and QTY 8 91755A200 plastic washers as shown. Each hole on the altimeter
+          boards should have a plastic washer on each side to protect against the risk of
+          electrical shorts.
+
+          Tighten the screws only to snug using a small phillips screwdriver.
+        images:
+          - file: photos/op-10/altimeter-on-standoffs.jpg
+            caption: Altimeter board on the hex standoffs, with a plastic washer on each side.
+            source_page: 210
+
+      - title: Wire the altimeters
+        source: { step: 8, page: 212 }
+        instructions: |
+          Connect wiring to the QTY 2 Eggtimer Quark altimeters per the manufacturer's directions,
+          using 20GA-RBP 20 Gauge Stranded Wire, Red/Black Pair, Silicone Coated and QTY 2 7712K511
+          9V battery connectors or equivalents. Each altimeter should have two wires for the drogue
+          charge, two wires for the main charge, and two wires for connecting/disconnecting power
+          externally. Mark the wires to differentiate between main and drogue on each altimeter.
+
+          *Note that the Mojave Sphinx V1.2 avionics bay is designed for "twist and tape" style
+          power connection/disconnection, in which a pair of wires with stripped ends are twisted
+          together to supply power and wrapped with electrical tape to secure the connection. To
+          disconnect power from the altimeters, the electrical tape is removed and the wires are
+          separated and insulated. These wires should be long enough to be inserted through the 2
+          large holes in the avionics bay switch band prior to installing the avionics bay sled
+          (~10 in).*
+
+          *The wires will not be harmed by protruding 2-4 in out of the rocket during flight, so
+          long as they are securely twisted and wrapped in electrical tape.*
+        callouts:
+          - caution: >-
+              The "twist and tape" power wires should NOT be pushed inside the avionics bay, as
+              this will make them inaccessible should power need to be disconnected after an
+              aborted launch.
+        images:
+          - file: photos/op-10/wiring-diagram.png
+            caption: >-
+              Generic wiring diagram of the avionics bay: main and drogue ejection charges A and B,
+              9V batteries A and B, and twist ends to power on altimeters A and B.
+            source_page: 211
+
+      - title: Install and secure the batteries
+        source: { step: 9, page: 212 }
+        instructions: |
+          Install QTY 2 9V batteries into the battery holder as shown. Snap the 7712K511 battery
+          connectors onto the terminals of each battery (ensuring that power is disconnected from
+          the altimeter), then secure the batteries with QTY 2 zip ties routed through the
+          slots/notches on the battery holder and over the tops of both battery connectors.
+        images:
+          - file: photos/op-10/batteries-in-holder-side.jpg
+            caption: Batteries in the battery holder, secured by two zip ties, side view.
+            source_page: 212
+
+      - title: Fit the sled on the rods
+        source: { step: 10, page: 213 }
+        instructions: |
+          Insert QTY 2 92580A328 threaded rods through the sleeves of the avionics bay sled
+          assembly, with equal protrusion of the rods from each end. Place QTY 1 92141A029 flat
+          washer followed by QTY 1 95505A601 hex nut onto each end of each rod to secure the
+          avionics bay sled assembly in place on the rods as shown.
+
+          Tighten only to finger-tight, or lightly snug using a wrench.
+
+          *Note: Wiring is omitted from the reference image. It is recommended to strain relieve
+          wires using zip ties as shown in the reference photo below. Altimeters shown are the
+          StratologgerCF.*
+        callouts:
+          - caution: Excessive torque may damage the printed components.
+        images:
+          - file: photos/op-10/sled-on-threaded-rods.jpg
+            caption: Avionics bay sled assembly on the threaded rods, wiring omitted.
+            source_page: 213
+          - file: photos/op-10/sled-on-threaded-rods-wired.jpg
+            caption: Avionics bay sled assembly on the threaded rods, wired, with StratologgerCF altimeters.
+            source_page: 213
+
+      - title: Mount the U-bolt
+        source: { step: 11, page: 214 }
+        instructions: |
+          Remove the hex nuts and mounting plate included with the 3043T643 U-bolt, then thread the
+          included hex nuts all the way to the end of the thread, tightening until snug. Place QTY 2
+          91102A750 split lock washers and QTY 2 92141A029 flat washers onto the ends of the U-bolt,
+          then insert the U-bolt into the holes in the avionics bay bulkhead and centering ring.
+          Secure with the included mounting plate and QTY 2 95505A601 hex nuts. Tighten both hex
+          nuts approximately 1/4 turn past full compression of the split lock washers.
+        images:
+          - file: photos/op-10/bulkhead-in-centering-ring.jpg
+            caption: Avionics bay bulkhead in the centering ring, no hardware.
+            source_page: 214
+          - file: photos/op-10/u-bolt-mounting-plate.jpg
+            caption: U-bolt through the bulkhead, mounting plate and hex nuts underneath.
+            source_page: 214
+          - file: photos/op-10/u-bolt-on-bulkhead.jpg
+            caption: U-bolt on the bulkhead, top side.
+            source_page: 214
+
+      - title: Mount the aft bulkhead
+        source: { step: 12, page: 215 }
+        instructions: |
+          Thread QTY 1 95505A601 hex nut approximately 0.875 in onto the lower end of each of the
+          avionics bay sled threaded rods.
+
+          Then insert the rods on through the holes on the avionics bay bulkheads as shown.
+
+          Install QTY 1 92141A029 flat washer followed by QTY 1 91102A750 split lock washer and QTY
+          1 95505A601 hex nut onto each rod. Tighten the hex nuts on each rod against each other
+          until the split lock washers are fully compressed to secure the bulkhead in place on the
+          threaded rods. The rods should protrude approximately 0.25-0.30 in from the outer hex
+          nuts.
+
+          Mark this bulkhead with "AFT" using a permanent marker, and insert the 2 pairs of drogue
+          charge wires from the altimeters through the wire exit holes.
+        images:
+          - file: photos/op-10/aft-bulkhead-on-rods.jpg
+            caption: Bulkhead with U-bolt secured on the sled threaded rods, front view.
+            source_page: 215
+        data:
+          - name: rod_protrusion
+            label: Rod protrusion from the outer hex nuts
+            type: number
+            unit: in
+            required: true
+            spec: { kind: range, lower: '0.25', upper: '0.30' }
+
+      - title: Install the sled in the coupler
+        source: { step: 13, page: 216 }
+        instructions: |
+          Install the avionics bay sled with attached bulkhead into the avionics bay coupler in the
+          orientation shown. During (or prior to) installing the sled, feed each pair of the "twist
+          and tape" altimeter power switch wires through the large holes in the avionics bay switch
+          band from the inside.
+
+          *A piece of masking or electrical tape may be placed onto each pair of altimeter power
+          wires to prevent the ends of the wires from accidentally slipping back into the avionics
+          bay.*
+        images:
+          - file: photos/op-10/sled-in-coupler.jpg
+            caption: Avionics bay sled in the coupler, aft bulkhead at the bottom, coupler shown transparent.
+            source_page: 216
+
+      - title: Mount the second bulkhead
+        source: { step: 14, page: 216 }
+        instructions: |
+          Place the second avionics bay bulkhead over the protruding ends of the threaded rods and
+          secure with QTY 2 92141A029 flat washers, QTY 2 91102A750 split lock washers, and QTY 2
+          95505A601 hex nuts.
+
+          Tighten the hex nuts just until the split lock washers are fully compressed.
+        images:
+          - file: photos/op-10/second-bulkhead-side.jpg
+            caption: Bulkhead with U-bolt, rod ends and hex nuts, side view.
+            source_page: 216
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - >-
+    The tools line is compiled from the steps and from Required Tools (pp. 136-137). The adhesive
+    (step 5), electrical tape (step 8), masking tape (step 13) and 1/4 in plywood (step 2) have no
+    line in the parts list and are in the tools line.
+  - >-
+    Steps 1.1, 1.2, 1.6 and 1.7: the part number printed in the step is replaced by the number from
+    parts.yaml.
+  - >-
+    Kit: the bulkhead is BKHD-REC-4X250C-2X170WE, the screw 91280A044, the plastic washer 91755A200
+    and the wire 20GA-RBP. The parts list (p. 206) prints BKHD-PLY-399-250C-4X, 92180A044, 91755A152
+    and 16GA-RBP.
+  - 'Step 1.1: "and and" is written "and".'
+  - >-
+    The 91102A750 washers are called split lock washers throughout. Step 1 calls them lock washers,
+    and steps 11, 12 and 14 also call them lock washers. The 92148A160 washers are called split
+    lock washers throughout; step 6 also calls them the lock washer.
+  - >-
+    Steps 1.3, 1.5 and 1.6: "the plywood sled" is written "the avionics bay sled", the name steps
+    2, 4 and 13 use. The short form "the sled" is kept. Step 10's "avbay sled assembly" is written
+    "avionics bay sled assembly".
+  - '"4X", "6X" and "2X" are written as plain numbers where no part number follows.'
+  - >-
+    Units: step 2 "2.25” x 6”" and "1/4" plywood" are written "2.25 in x 6 in" and "1/4 in
+    plywood"; step 5 "3/16”" is written "3/16 in"; step 8 "~10”" and "2-4”" are written "~10 in"
+    and "2-4 in"; step 12 ".875”" and ".25-.30”" are written "0.875 in" and "0.25-0.30 in".
+  - 'Step 1.3: a period is added at the end of the italic note. Step 1.8: a period is added after "(~10 in)".'
+  - >-
+    Steps 1.1 and 1.10: "Excessive torque may damage the printed components" is set apart as a
+    caution.
+  - >-
+    Step 1.8: the sentence beginning "The “twist and tape” power wires should NOT be pushed inside"
+    is set apart as a caution, with its wording as printed. The rest of that italic paragraph stays
+    in the step.
+  - >-
+    Step 1.12: a data field records the rod protrusion from the outer hex nuts against the range
+    printed in the step, 0.25-0.30 in.
+  - >-
+    The sentence "Reference the image below for a generic wiring diagram of the avionics bay." (p.
+    211), which stands between steps 7 and 8 with no step number, is left out. Its diagram is
+    placed on step 1.8, which connects the wiring.
+  - >-
+    Step 1.4: the top view of the altimeters on the sled sits under step 5 on p. 209. It shows
+    step 4 and is placed there.
+  - >-
+    Step 1.6: the render of the sled mount and battery holder fastened to the sled sits under step
+    7 on p. 210. It shows step 6 and is placed there.
+  - >-
+    Step 1.13: the transparent render of the sled in the coupler sits under step 14 on p. 216. It
+    shows the sled with the aft bulkhead installed and no second bulkhead, the "orientation shown"
+    of step 13, and is placed there.
+  - Image captions are new.

@@ -556,7 +556,7 @@ describe('seeded demo database', () => {
 
 	test('buildDemoContent fills an empty database from the embedded seed', async () => {
 		const db = await openSchemaDb(':memory:');
-		buildDemoContent(db);
+		buildDemoContent(db, mkdtempSync(join(tmpdir(), 'opal-demo-')));
 		const raw = db.$client as unknown as Database;
 		const n = (t: string) => (raw.query(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
 		expect([n('part'), n('execution'), n('step_execution'), n('procedure'), n('project')]).toEqual([182, 4, 342, 6, 1]);

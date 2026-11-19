@@ -5,14 +5,21 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { isEditing, queryHref } from './listquery.js';
 
-	let { label = 'EDIT' }: { label?: string } = $props();
+	let {
+		label = 'EDIT',
+		variant = 'outline'
+	}: {
+		label?: string;
+		/** `default` when opening the editor is the move the record is waiting on. */
+		variant?: 'outline' | 'default';
+	} = $props();
 
 	const editing = $derived(isEditing(page.url));
 </script>
 
 <Button
 	size="sm"
-	variant="outline"
+	{variant}
 	aria-current={editing ? 'true' : undefined}
 	href={queryHref({ edit: editing ? null : '1' })}
 	data-sveltekit-noscroll

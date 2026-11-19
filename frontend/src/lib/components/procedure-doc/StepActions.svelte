@@ -8,7 +8,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { useDoc } from './controller.js';
 	import GateReason from './GateReason.svelte';
-	import { isRoutine, isTerminal, type DocOp, type DocStep } from './types.js';
+	import { isRoutine, isShort, isTerminal, type DocOp, type DocStep } from './types.js';
 
 	let { step, op }: { step: DocStep; op: DocOp } = $props();
 	const ctl = useDoc();
@@ -18,7 +18,10 @@
 	const workable = $derived(step.status === 'pending' || step.status === 'in_progress');
 	const slot = $derived(step.signoffs?.[0]);
 	const held = $derived(step.complete_blockers.filter((b) => b.kind === 'nc' && b.issue_id));
-	const completes = $derived(workable && !!a.sign && !!slot && isRoutine(step, op));
+	// A short step completes from the tick on its row, so its opened body has no COMPLETE.
+	const completes = $derived(
+		workable && !!a.sign && !!slot && isRoutine(step, op) && !isShort(step, op)
+	);
 	const canSkip = $derived(workable && !!a.skip && step.skip_blockers.length === 0);
 	const issueHref = $derived(isTerminal(step.status) ? undefined : a.issueHref?.(step));
 
@@ -53,7 +56,7 @@
 
 {#if on && (held.length || completes || canSkip || issueHref)}
 	<div
-		class="sticky bottom-6 z-[5] -mx-3 -mb-2 grid grid-cols-1 gap-2 border-t border-dotted bg-background px-3 py-1.5 lg:-bottom-4"
+		class="sticky bottom-0 z-[5] -mx-3 -mb-2 grid grid-cols-1 gap-2 border-t border-dotted bg-background px-3 py-1.5 lg:-bottom-4"
 		data-step-actions={step.order}
 	>
 		<div class="flex flex-wrap items-center gap-2">

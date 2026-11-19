@@ -1,0 +1,494 @@
+# Transmitter Setup and Firmware Configuration
+#
+# Adapted from HCR-5100 R01, Section 6.3, OP 8: Transmitter Setup & Firmware Configuration
+# (pp. 276-283).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: gse-transmitter-setup
+name: Transmitter Setup and Firmware Configuration
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: op
+source:
+  document: HCR-5100 R01
+  section: 'Section 6.3, OP 8: Transmitter Setup & Firmware Configuration'
+  pages: 276-283
+
+description: |
+  Fit switch covers to the transmitter, then set up its channels, switches, servo end points and
+  receiver failsafes, and check that the ground system and the rocket respond to it.
+
+  Also needed: the GSE System, and the rocket or a spare servo.
+
+  Tools: drill, 1/8 in drill bit, #37 (.104 in) drill bit, marker, screwdriver for the 92295A100
+  screws, pliers, means to label or engrave the switch covers, multimeter (or spark check).
+  Optional: screwdriver for removing the back half of the transmitter casing (recommended while
+  drilling), adhesive.
+
+# "Gather the following" in the guidebook (p. 276).
+kit:
+  - { part: DTUS_FSI6X_10CH, quantity: 1, usage: tooling }
+  - { part: AZ18080602-03, quantity: 4 }
+  - { part: '92295A100', quantity: 4 }
+
+operations:
+  - title: Install Toggle Switch Covers
+    source: { section: 'Section 6.3, OP 8', pages: 277 }
+    workcenter: BENCH
+    instructions: |
+      The DTUS_FSI6X_10CH transmitter's switches do not have sufficient thread length to permit
+      installing the switch covers under the jam nut; instead, they are attached using screws.
+      Adhesive may also be used to help bond on the switch covers, but is not recommended as
+      the sole attachment method. It is recommended to remove the back half of the transmitter
+      casing while drilling the switch cover mounting screw holes to verify that the hole
+      drilling does not damage the switches or wiring.
+    steps:
+      - title: Drill the switch covers
+        source: { step: 20, page: 277 }
+        instructions: |
+          Drill a 1/8 in hole in the lower right corner of the metal base of QTY 4 AZ18080602-03
+          switch covers as shown.
+
+      - title: Mark the screw holes
+        source: { step: 21, page: 277 }
+        instructions: |
+          Place the switch covers over the four toggle switches and mark the location of the holes
+          on the transmitter casing.
+
+      - title: Drill the transmitter casing
+        source: { step: 22, page: 277 }
+        instructions: |
+          Using a #37 (.104 in) drill bit, drill a hole in each of the marked locations adjacent to
+          the switches on the transmitter casing.
+        callouts:
+          - caution: Do not damage the switches or wires.
+
+      - title: Install the switch covers
+        source: { step: 23, page: 277 }
+        instructions: |
+          Install the switch covers onto the transmitter using QTY 4 92295A100 screws.
+
+          *Note: The corner of the switch cover on the right-most position may need to be bent
+          upwards slightly with pliers.*
+
+      - title: Label the switch covers
+        source: { step: 24, page: 277 }
+        instructions: |
+          Label (or engrave) the switch covers per the following:
+
+          - Switch A (Left-most): PRG (if purge functionality is included in the system)
+          - Switch B (Second from left): FILL
+          - Switch C (Third from left): IGN
+          - Switch D (Right-most): SRV
+
+          *Note: Only 3 covers (shown) are required if purge functionality is not included in the
+          system.*
+        images:
+          - file: photos/gse-op-08/switch-covers-on-transmitter.jpg
+            caption: Transmitter with three switch covers fitted.
+            source_page: 277
+
+  - title: Enable all 10 channels
+    source: { section: 'Section 6.3, OP 8', pages: 278 }
+    workcenter: BENCH
+    steps:
+      - title: Turn the transmitter on
+        source: { step: 1, page: 278 }
+        instructions: |
+          Turn the transmitter on; all switches must be in the UP position and the left (throttle)
+          stick all the way down for the transmitter to boot up. This is a safety feature intended
+          to prevent accidentally powering the motor of a model airplane.
+
+      - title: 'Hold OK -> MENU -> System Setup -> OK.'
+        source: { step: 2, page: 278 }
+
+      - title: 'Use the DOWN button to navigate to Aux Switches at the bottom of the list and press OK.'
+        source: { step: 3, page: 278 }
+
+      - title: 'Press OK until the arrow appears next to Ch: 6.'
+        source: { step: 4, page: 278 }
+
+      - title: 'Press the UP button until Ch: 10.'
+        source: { step: 5, page: 278 }
+
+      - title: Save the setting
+        source: { step: 6, page: 278 }
+        instructions: |
+          Hold CANCEL to save the setting. A higher-pitched beep will be emitted and the menu will
+          return to the previous level. Press OK again to return to the main MENU screen.
+
+  - title: Assign channels to switches
+    source: { section: 'Section 6.3, OP 8', pages: 278 }
+    workcenter: BENCH
+    steps:
+      - title: Open Functions Setup
+        source: { step: 1, page: 278 }
+        instructions: |
+          DOWN -> Functions Setup -> OK
+
+      - title: 'DOWN until Aux. Channels -> OK.'
+        source: { step: 2, page: 278 }
+
+      - title: 'Channel 5: press DOWN until Source reads SwB -> OK.'
+        source: { step: 3, page: 278 }
+
+      - title: 'Channel 6: press DOWN until Source reads SwD -> OK.'
+        source: { step: 4, page: 278 }
+
+      - title: 'Channel 7: press OK to skip.'
+        source: { step: 5, page: 278 }
+
+      - title: 'Channel 8: press DOWN until Source reads SwA.'
+        source: { step: 6, page: 278 }
+
+      - title: Save the settings
+        source: { step: 7, page: 278 }
+        instructions: |
+          Hold CANCEL to save the settings. A higher-pitched beep will be emitted and the menu will
+          return to the previous level.
+
+  - title: Assign igniter channel and set left stick lockout
+    source: { section: 'Section 6.3, OP 8', pages: 279 }
+    workcenter: BENCH
+    instructions: |
+      The relay module is connected to the throttle channel (Ch3), so that the left stick must
+      be up in order to energize the igniter circuit. This serves as a safety lockout secondary
+      to the switch cover. The relay module may also be connected to another auxiliary channel
+      (7, 9, or 10) assigned to Switch C; this is not recommended as it increases the risk of
+      accidental igniter activation, although it removes the risk of a failed ignition
+      resulting from the left stick being in an incorrect position.
+    steps:
+      - title: Open Assign Switches
+        source: { step: 1, page: 279 }
+        instructions: |
+          In FUNCTIONS menu, press DOWN until Assign Switches -> OK
+
+      - title: 'Fly mode None -> press OK to skip.'
+        source: { step: 2, page: 279 }
+
+      - title: 'Idle mode None -> press OK to skip.'
+        source: { step: 3, page: 279 }
+
+      - title: 'Thro. Hold -> DOWN until SwC.'
+        source: { step: 4, page: 279 }
+
+      - title: Save the setting
+        source: { step: 5, page: 279 }
+        instructions: |
+          Hold CANCEL to save the setting. A higher-pitched beep will be emitted and the menu will
+          return to the previous level.
+
+      - title: Set the throttle hold value
+        source: { step: 6, page: 279 }
+        instructions: |
+          Depending on the type of relay module used (i.e., two-channel vs single channel), there
+          may be a minimum PWM value to avoid having one channel energized. If this is the case
+          navigate to Throttle Hold in the FUNCTIONS menu. Press UP to set Hold to On -> OK -> UP
+          to set value so that both channels of the relay module (if using a dual-channel module) are off
+          when the left stick is all the way down.
+
+      - title: Save the setting
+        source: { step: 7, page: 279 }
+        instructions: |
+          Hold CANCEL to save the setting. A higher-pitched beep will be emitted and the menu will
+          return to the previous level.
+
+  - title: Adjust servo endpoints
+    source: { section: 'Section 6.3, OP 8', pages: 280-281 }
+    workcenter: BENCH
+    instructions: |
+      This step should be completed prior to initial assembly of the servo-actuated ball
+      valves, to ensure that the servo horn is installed in the correct orientation. Adjusting
+      the end points fine-tunes the position of the servo in the valve OPEN and valve CLOSED
+      positions.
+    steps:
+      - title: Set the switches down
+        source: { step: 1, page: 280 }
+        instructions: |
+          Ensure the transmitter is ON and all switches are in the DOWN position prior to bringing
+          up power to the GSE.
+
+      - title: Connect the fill valve servo
+        source: { step: 2, page: 280 }
+        instructions: |
+          Connect ONLY the FILL valve servo to Ch5 on the DTUS_FSI6X_10CH receiver. Disconnect any
+          other servos from the receiver at this time. Ensure no pressure source is connected to
+          the GSE fill or purge supply fittings.
+
+      - title: 'In FUNCTIONS menu, navigate to End Points using DOWN -> OK.'
+        source: { step: 3, page: 280 }
+
+      - title: Set the fill valve closed position
+        source: { step: 4, page: 280 }
+        instructions: |
+          In End Points, press OK until the arrow appears next to the value on the right side of
+          the row for Ch5. Adjust the end point UP or DOWN until the servo horn/valve handle are
+          exactly perpendicular to the servo body/valve body. This is the valve CLOSED position.
+
+          *Tip: If the servo is stalled against the valve actuator bracket, listen for an increase
+          or decrease in the intensity of the high-pitched whine emitted by the servo while
+          adjusting the endpoint values. Adjust in the direction that decreases the intensity of
+          the noise until the servo horn begins to move away from the bracket. If the servo
+          horn/valve handle is unable to reach the specified positions at the limits of the
+          endpoint adjustment range, the servo horn must be removed and re-installed onto the spur
+          gear in a different orientation.*
+        callouts:
+          - caution: >-
+              Stalling the servo for long periods of time may cause overheating or other damage.
+
+      - title: Set the fill valve open position
+        source: { step: 5, page: 280 }
+        instructions: |
+          Flip Switch B (second from the left) to the UP position to actuate the FILL valve to the
+          OPEN position. Adjust the end point value UP or DOWN until the servo horn/valve handle
+          are exactly parallel to the servo body/valve body. This is the valve OPEN position.
+
+      - title: Save the setting
+        source: { step: 6, page: 280 }
+        instructions: |
+          Hold CANCEL to save the setting. A higher-pitched beep will be emitted and the menu will
+          return to the previous level.
+
+      - title: Connect the vehicle valves
+        source: { step: 7, page: 281 }
+        instructions: |
+          Connect the vehicle valves to Ch6 on the DTUS_FSI6X_10CH receiver. If setting the initial
+          servo horn position, they may be connected individually. If fine-tuning the setting on
+          an integrated vehicle, both valves should be connected simultaneously via the servo
+          Y-harness, with the airframe removed to provide a clear view of the fuel valve.
+
+      - title: 'Navigate to End Points in the FUNCTIONS menu -> OK.'
+        source: { step: 8, page: 281 }
+
+      - title: Set the vehicle valves closed position
+        source: { step: 9, page: 281 }
+        instructions: |
+          In End Points, press OK until the arrow appears next to the value on the right side of
+          the row for Ch6. Adjust the end point UP or DOWN until the servo horns/valve handles are
+          exactly perpendicular to the servo bodies/valve bodies. This is the valve CLOSED
+          position.
+
+          *Note: A discrepancy of <5 degrees between the fuel and oxidizer valves is acceptable;
+          the valves will still seal effectively as long as the ball fully contacts the seat
+          without the port overlapping the seat's edge.*
+
+      - title: Set the vehicle valves open position
+        source: { step: 10, page: 281 }
+        instructions: |
+          Flip Switch D (farthest right) to the UP position to actuate the VEHICLE valves to the
+          OPEN position. Adjust the end point value UP or DOWN until the servo horn/valve handle
+          are exactly parallel to the servo body/valve body. This is the valve OPEN position.
+
+      - title: Save the setting
+        source: { step: 11, page: 281 }
+        instructions: |
+          Hold CANCEL to save the setting. A higher-pitched beep will be emitted and the menu will
+          return to the previous level.
+
+      - title: Adjust the purge valve, if used
+        source: { step: 12, page: 281 }
+        instructions: |
+          If a purge valve is used on the GSE, connect the PURGE valve servo to Ch8 on the
+          DTUS_FSI6X_10CH receiver. Follow the same procedure as for the fill valve to adjust the
+          end points. The purge channel (Ch8) is assigned to Switch A (first from the left).
+
+  - title: Verify channel mapping
+    source: { section: 'Section 6.3, OP 8', pages: 282 }
+    workcenter: BENCH
+    instructions: |
+      This will ensure that each part of the system is responding correctly to control inputs
+      from the transmitter.
+    steps:
+      - title: Verify the fill valve
+        source: { step: 1, page: 282 }
+        instructions: |
+          Verify that the FILL valve responds in the following manner:
+
+          - Switch B UP: FILL valve OPEN
+          - Switch B DOWN: FILL valve CLOSED
+
+      - title: Verify the vehicle valves
+        source: { step: 2, page: 282 }
+        instructions: |
+          Verify that the VEHICLE valves respond in the following manner:
+
+          - Switch D UP: VEHICLE valves OPEN
+          - Switch D DOWN: VEHICLE valves CLOSED
+
+      - title: Verify the purge valve, if included
+        source: { step: 3, page: 282 }
+        instructions: |
+          Verify that the PURGE valve (if included) responds in the following manner:
+
+          - Switch A UP: PURGE valve OPEN
+          - Switch B DOWN: PURGE valve CLOSED
+
+      - title: Verify the igniter circuit
+        source: { step: 4, page: 282 }
+        instructions: |
+          Verify that the IGNITER circuit responds in the following manner (via multimeter or
+          spark checks):
+
+          - Switch C and Left Stick both fully DOWN: IGNITER circuit DE-ENERGIZED
+          - Switch C and Left Stick both fully UP: IGNITER circuit ENERGIZED
+          - Switch C UP and Left Stick fully DOWN: IGNITER circuit DE-ENERGIZED
+          - Switch C DOWN and Left Stick fully UP: IGNITER circuit DE-ENERGIZED
+
+          *Note: Switch C is the only 3-position switch on the DTUS_FSI6X_10CH transmitter. The
+          middle position is effectively ignored; it should only be intentionally set to the fully
+          up and fully down positions.*
+
+  - title: Configure receiver failsafes
+    source: { section: 'Section 6.3, OP 8', pages: 283 }
+    workcenter: BENCH
+    instructions: |
+      The failsafe settings dictate how the receiver behaves if it loses connection with the
+      transmitter for any reason. They must be configured to put the rocket and ground system
+      in a safe state, with the fill and optional purge valves closed, the vehicle valves open
+      so that no pressure remains inside the rocket, and the igniter circuit de-energized.
+    steps:
+      - title: Open the Failsafe menu
+        source: { step: 1, page: 283 }
+        instructions: |
+          From home screen:
+
+          Hold OK -> System Setup -> OK -> DOWN until RX Setup -> DOWN until Failsafe -> OK
+
+      - title: Set the igniter failsafe
+        source: { step: 2, page: 283 }
+        instructions: |
+          Igniter failsafe: DOWN until arrow appears next to Channel 3 -> OK -> ensure left stick
+          and Switch C (third from the left) are both all the way down -> UP to change OFF to ON ->
+          Press OK
+
+      - title: Set the fill failsafe
+        source: { step: 3, page: 283 }
+        instructions: |
+          Fill failsafe: DOWN until arrow appears next to Channel 5 -> OK -> Switch B (second from
+          the left) is DOWN (FILL valve CLOSED position) -> UP to change OFF to ON -> Press OK
+
+      - title: Set the vehicle valves failsafe
+        source: { step: 4, page: 283 }
+        instructions: |
+          Vehicle Valves failsafe: DOWN until arrow appears next to Channel 6 -> OK -> Switch D
+          (farthest right) is UP (VEHICLE valves OPEN position) -> UP to change OFF to ON -> Press
+          OK
+
+      - title: Set the purge failsafe, if included
+        source: { step: 5, page: 283 }
+        instructions: |
+          Purge (if included) failsafe: DOWN until arrow appears next to Channel 8 -> OK -> Switch
+          A (first from the left) is DOWN (PURGE valve CLOSED position) -> UP to change OFF to ON
+          -> Press OK
+
+      - title: Save the failsafe settings
+        source: { step: 6, page: 283 }
+        instructions: |
+          Hold CANCEL to save the setting. A higher-pitched beep will be emitted and the menu will
+          return to the previous level.
+
+          ***IMPORTANT NOTE:** Failsafe settings are saved when holding CANCEL to exit the Failsafe
+          menu and return to the RX Setup Menu. They are NOT saved when pressing OK to return from
+          the individual channel failsafe setting screen to the Failsafes Menu. **ALWAYS** verify
+          failsafe settings are set and saved correctly.*
+
+      - title: Set switches for the failsafe check
+        source: { step: 7, page: 283 }
+        instructions: |
+          To verify failsafes, ensure the FILL, PURGE, and VEHICLE valve servos as well as the
+          relay module are connected to the DTUS_FSI6X_10CH receiver, no pressure supply is
+          connected, and the GSE is powered on. Set the switches in the following positions:
+
+          - Switch A: UP to OPEN the PURGE valve
+          - Switch B: UP to OPEN the FILL valve
+          - Switch C AND Left Stick: fully UP to ENERGIZE igniter circuit
+          - Switch D: DOWN to CLOSE the VEHICLE valves
+        callouts:
+          - caution: >-
+              While the igniter circuit is energized, the igniter leads must not be connected to
+              anything and must be insulated from each other.
+
+      - title: Verify the failsafe state
+        source: { step: 8, page: 283 }
+        instructions: |
+          Turn the transmitter POWER switch OFF. Verify the system enters the following state:
+
+          - PURGE valve CLOSED
+          - FILL valve CLOSED
+          - IGNITER circuit DE-ENERGIZED (verify by multimeter or spark check)
+          - VEHICLE valves OPEN
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - >-
+    Single short sentences with no note are the step's whole title, with a full stop added. The
+    menu paths in them are as printed.
+  - >-
+    The OP prints seven sub-sections, each with its own heading, and restarts the step numbers in
+    each. Each sub-section is an operation here, titled with its heading as printed, so its printed
+    step k is step n.k. The first sub-section is printed 20-24; its steps are 1.1 to 1.5 here, and
+    each step's source keeps the printed number. Each sub-section's opening paragraph is the
+    operation's instructions.
+  - >-
+    The operations have no dependencies: the guidebook does not say that the sub-sections must be
+    done in order.
+  - >-
+    The procedure's name is the title of the parts list page (p. 276), "Transmitter Setup &
+    Firmware Configuration", with "&" written "and". Pages 277-283 print "Transmitter Firmware
+    Configuration" in the header.
+  - The first sentence of the description is new.
+  - >-
+    The GSE System and the rocket or spare servo, listed with no part number (p. 276), are named in
+    the description, not the kit.
+  - >-
+    The transmitter is in the kit as tooling: this OP fits covers to it and configures it, and
+    makes no new part.
+  - >-
+    The tools line is compiled from the steps. Ground equipment has no Required Tools list. The
+    marker, pliers, screwdriver and multimeter are named for the marking, bending, screwing and
+    multimeter checks the steps ask for. The adhesive of operation 1's instructions is optional.
+  - >-
+    The part numbers printed in the steps are replaced by the keys of the parts file: FS-i6X and
+    FS-iA10B by DTUS_FSI6X_10CH, TGL-GRD-12MM by AZ18080602-03.
+  - >-
+    The TGL-GRD-12MM part is called the switch covers throughout, as in the steps. The parts list
+    calls it the toggle switch guard.
+  - >-
+    Step 1.3: "transmitter housing" is written "transmitter casing", as in the operation's
+    instructions and step 1.2.
+  - 'Step 1.1: "⅛”" is written "1/8 in". Step 1.3: "(.104”)" is written "(.104 in)".'
+  - >-
+    Step 1.3: "Take care not to damage the switches or wires" is set apart as a caution and
+    reworded as a prohibition.
+  - >-
+    Step 1.5: the note printed below the picture, "Only 3X covers (shown) are required", is in the
+    step, with "3X" written "3".
+  - 'Step 3.6: "Press DOWN" is written "press DOWN", as in steps 3.3 and 3.4.'
+  - >-
+    Step 5.2: "Connect ONLY the FILL valve to servo to Ch5" is written "Connect ONLY the FILL
+    valve servo to Ch5".
+  - 'Step 4.6: "Up to set value so that the both channels" is written "UP to set value so that both channels".'
+  - >-
+    Step 5.4: the "Tip" printed after step 5.6 (p. 280) is in step 5.4, the first step that
+    adjusts an end point, in italics. Its sentence "Avoid stalling the servo for long periods of
+    time, as this may cause overheating or other damage." is set apart as a caution and reworded as
+    a statement.
+  - 'Step 5.7: "Ch 6" is written "Ch6", as in step 5.9.'
+  - >-
+    Step 5.12 and operation 6's instructions: a full stop is added at the end of a sentence
+    printed without one. Step 6.4: a colon is added after "(via multimeter or spark checks)".
+  - >-
+    The LCATMC1569 relay module is called the relay module throughout, as in GSE System step 3.10.
+    Operation 4's instructions call it the igniter relay, step 4.6 also the relay, and step 7.7 the
+    igniter relay module.
+  - >-
+    Step 7.7: the caution printed inside item c, "(caution: ensure igniter leads are not connected
+    to anything and are insulated from each other)", is set apart as a caution and reworded as a
+    statement.
+  - 'Lettered sub-items (a, b, c, d) are written as bullet lists.'
+  - Image caption is new.
+  - The OP has no title-page drawing in the guidebook, so no operation has an operation image.

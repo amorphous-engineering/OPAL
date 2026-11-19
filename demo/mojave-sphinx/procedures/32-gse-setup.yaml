@@ -1,0 +1,212 @@
+# GSE Setup
+#
+# Adapted from HCR-5100 R01, Section VII: 7.2 GSE Setup (pp. 298-300).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: gse-setup
+name: GSE Setup
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: op
+source:
+  document: HCR-5100 R01
+  section: 'Section VII, 7.2'
+  pages: 298-300
+
+description: |
+  The ground support equipment set up at the launchpad, from the supply bottle to the fire extinguisher.
+
+  Mojave Sphinx's ground support equipment is very simple for a liquid rocket motor, and
+  accordingly takes little time to set up. This procedure may be performed concurrently with the
+  Launch Operations procedure, although it saves some time to have one team member set up the GSE
+  while others finish preparing the vehicle for launch. This is especially true for sites where
+  the launchpad(s) are located at a great distance from the preparation area and multiple trips
+  are required to transport all equipment.
+
+  If using the "minimum viable GSE" setup, some steps in this procedure will not be applicable;
+  make adjustments to the procedures as needed based on the features of the system being used. All
+  functionality will remain the same regardless of GSE version.
+
+  Tools and materials: nitrous oxide supply bottle, GSE box with its fill lines, cables and QD
+  clip, two 9/16 in wrenches, ratchet strap, GSE control transmitter, fire extinguisher.
+
+operations:
+  - title: Required Items
+    source: { section: '7.2.1', pages: 298 }
+    workcenter: PAD
+    steps:
+      - title: Gather the required items
+        source: { step: 1, page: 298 }
+        instructions: |
+          Gather the following and bring to the launchpad:
+
+          1. Nitrous oxide supply bottle with adapter to -04 AN flare installed
+          2. GSE box, also containing:
+             - Upstream fill line hose
+             - Downstream fill line tube with male QD fitting
+             - Servo cable
+             - Ignition cable
+             - QD clip with pre-attached Kevlar tether
+          3. Two 9/16 in wrenches
+
+             *Note: One or both may be substituted with adjustable wrenches*
+          4. Ratchet strap (if using bottle without siphon tube)
+
+             *Note: The 20 lbm capacity bottle from Gas Cylinder Source recommended in Section 6.2
+             does not have a siphon tube and requires a ratchet strap. A bottle stand or other
+             sturdy object to which the inverted bottle can be secured may also be required
+             depending on the launch site; bottles can easily be secured to the launch pads in use
+             at FAR.*
+          5. Transmitter for GSE control
+          6. Fire extinguisher (if the site does not already have one near the pads)
+
+  - title: Ground System Setup
+    depends_on: [1]
+    source: { section: '7.2.2', pages: 298-300 }
+    workcenter: PAD
+    steps:
+      - title: Choose the supply bottle location
+        source: { step: 2, pages: 298-299 }
+        instructions: |
+          Identify a suitable location to place the supply bottle adjacent to the launch rail. If
+          the bottle has a siphon tube, it can simply sit on any reasonably flat surface. Bottles
+          without a siphon tube must be inverted and secured to prevent tipping. The launch pad
+          itself can often be used for this purpose (this applies to all high-power launch pads at
+          FAR), so long as the bottle will not be directly exposed to the rocket's exhaust (i.e.,
+          behind the launch rail, and away from the direction of the blast deflector).
+
+      - title: Place the supply bottle
+        source: { step: 3, page: 299 }
+        instructions: |
+          Place the supply bottle down, and strap with ratchet strap until snug if inverted. Ensure
+          the outlet adapter can be accessed to attach the supply hose and is pointed towards the
+          GSE box, and that the handle can be reached to open and close the supply bottle's
+          isolation valve.
+
+          *Note: If securing an inverted bottle to the structure of the launch pad itself, the rail
+          may need to be lowered to load the rocket and raised back to vertical before the supply
+          bottle can be strapped in its final position. In this case, defer this step until after
+          the rocket has been loaded onto the rail and raised to vertical.*
+
+      - title: Choose the GSE box location
+        source: { step: 4, page: 299 }
+        instructions: |
+          Identify a suitable location to place the GSE box adjacent to the launch rail. Ideally,
+          this is a flat surface out of the way of the blast deflector, with as much of a clear
+          line of sight to the launch table or control bunker as possible. Ensure the fill valve
+          inlet is oriented such that the nitrous supply line can be easily routed from the bottle
+          to the GSE box.
+
+      - title: 'Retrieve the following items, as in steps 2.5 to 2.9 (storing/transporting inside the GSE box is recommended).'
+        source: { step: 5, page: 299 }
+
+      - title: 'Upstream fill line hose'
+        source: { step: 6, page: 299 }
+
+      - title: 'Downstream fill line tube with male QD fitting'
+        source: { step: 7, page: 299 }
+
+      - title: 'Servo cable'
+        source: { step: 8, page: 299 }
+
+      - title: 'Ignition cable'
+        source: { step: 9, page: 299 }
+
+      - title: 'QD clip with pre-attached Kevlar tether'
+        source: { step: 10, page: 299 }
+
+      - title: Connect the upstream fill line hose
+        source: { step: 11, page: 299 }
+        instructions: |
+          Thread the upstream fill line hose onto the oxidizer fill valve inlet on the GSE box, and
+          onto the supply bottle outlet. Adjust their positions as necessary if the fill line does
+          not easily reach.
+
+      - title: 'Using an appropriate wrench, firmly tighten each B-nut on the upstream fill line hose while using a second wrench to back up the male flared fittings.'
+        source: { step: 12, page: 299 }
+
+      - title: 'Plug the servo cable into the outlet marked with "SRV" on the GSE box.'
+        source: { step: 13, page: 299 }
+
+      - title: Plug in the ignition cable
+        source: { step: 14, page: 299 }
+        instructions: |
+          Plug the ignition cable into the outlet marked with "IGN" on the GSE box.
+
+          *Note: Be sure that the cables are plugged into the correct outlets. It is recommended to
+          obtain second-party verification that the cables are correctly configured before
+          proceeding.*
+        callouts:
+          - caution: Do NOT swap outlets; doing so will damage the servos in the vehicle's valve assemblies.
+
+      - title: Connect the downstream fill line tube
+        source: { step: 15, page: 299 }
+        instructions: |
+          Insert the downstream fill line tube into the fluid outlet fitting on the GSE box. Push
+          firmly to ensure that the push-to-connect fitting fully engages, and tug on the tubing to
+          verify that it is properly retained by the internal teeth.
+
+      - title: 'Place the end of the downstream fill line (with the male end of the quick disconnect) down in a safe spot so that it will not be accidentally damaged or exposed to dirt/debris before being connected to the vehicle.'
+        source: { step: 16, page: 299 }
+
+      - title: 'Place the QD clip down in a safe spot so that it will not be stepped on or damaged.'
+        source: { step: 17, page: 299 }
+
+      - title: Optional initial checkouts
+        source: { step: 18, page: 299 }
+        instructions: |
+          Optional: The transmitter and GSE may now be turned on to perform initial functionality
+          checkouts of the fill valve and ignition leads. These checkouts are also part of GSE
+          Startup and Checkouts in the Launch Operations procedure.
+
+      - title: Place the fire extinguisher
+        source: { step: 19, page: 300 }
+        instructions: |
+          Place the fire extinguisher about 20 feet away from the launchpad (if the site does not
+          already have fire extinguishers on hand).
+
+          *Note: Fires not involving a nitrous oxide tank, such as dry grass or other plant matter
+          adjacent to the launchpad, should be responded to as usual per the launch site's fire
+          response procedures.*
+        callouts:
+          - warning: >-
+              NEVER approach a nitrous oxide tank which is on fire. This includes both the supply
+              bottle and vehicle propellant tank. Whenever possible, launch pad fires should be
+              allowed to burn themselves out with personnel at a safe distance, unless the fire is
+              very small and able to be safely extinguished.
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - >-
+    7.2 is one procedure here. Its two numbered subsections are the two operations, 7.2.1 Required
+    Items and 7.2.2 Ground System Setup. The guidebook numbers its steps 1 to 19 across both
+    subsections; here step 1 is 1.1, and steps 2 to 19 are 2.1 to 2.18.
+  - >-
+    A guidebook step of one short line is a step whose title is that line, with nothing under it.
+    A longer step has a new, short title above the guidebook's text.
+  - The first sentence of the description is new. The next two paragraphs are the opening of 7.2.
+  - >-
+    The tools and materials line is new, compiled from step 1. Everything there is equipment that
+    is set up and taken home again, so the procedure has no kit.
+  - >-
+    The opening of 7.2: "Section 7.3 (Launchpad Operations)" is written as "the Launch
+    Operations procedure", and "this section" as "this procedure".
+  - >-
+    Step 5 is printed "Retrieve the following items (...):", a heading for steps 6 to 10. Here it
+    points at them by their numbers in this file, 2.5 to 2.9.
+  - >-
+    Step 18: "section 7.3 below" is written as "GSE Startup and Checkouts in the Launch Operations
+    procedure", the operation that holds those checkouts.
+  - >-
+    Step 14: "Do NOT swap outlets; doing so will damage the servos..." is lifted from the note into
+    a caution. The rest of the note stays in the step.
+  - >-
+    Step 19: the first three sentences of the note ("NEVER approach a nitrous oxide tank...") warn of
+    injury and are a warning. The last sentence, on other fires, stays in the step as a note.
+  - 'Step 1: the lettered and roman-numbered sub-items are a numbered list with a nested list.'
+  - 'Units: 9/16" is written as 9/16 in. A closing period is added to step 19.'
+  - 'Spelling: "Pug the servo cable" is "Plug the servo cable"; "in use as FAR" is "in use at FAR".'
+  - 'There are no pictures on pp. 298-300.'

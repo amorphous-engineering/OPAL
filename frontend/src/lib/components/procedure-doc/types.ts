@@ -4,7 +4,15 @@
  * gates), the template editor will fill only the authoring fields and leave the
  * rest at their empty defaults.
  */
-import type { Spec } from '@opal/shared';
+import {
+	isShortStep,
+	type ComponentRemoval,
+	type DocUnitSlot,
+	type ExecUnit,
+	type RoleMark,
+	type Spec,
+	type UnitSlot
+} from '@opal/shared';
 
 /**
  * execute: operator controls. readonly: facts only. author: the template editor; every
@@ -54,7 +62,7 @@ export interface DocImage {
 	caption: string | null;
 }
 
-export type Callout = { kind: 'caution' | 'info'; text: string };
+export type Callout = { kind: 'warning' | 'caution' | 'info'; text: string };
 
 export interface DocStepKitItem {
 	/** StepKit id; present when authoring. */
@@ -67,6 +75,10 @@ export interface DocStepKitItem {
 	uom?: string | null;
 	usage_type: 'consume' | 'tooling' | string;
 	notes: string | null;
+	/** The released redline that replaced this line. Execution only. */
+	struck_by?: string | null;
+	/** The unit slot key this line installs into. */
+	into?: string | null;
 }
 
 export interface DocBlocker {
@@ -128,7 +140,11 @@ export interface DocSignoff {
 	role: string | null;
 	signed_by: { id: number; name: string; avatar_url?: string | null } | null;
 	signed_at: string | null;
+	/** Set aside by the one person there, with a reason: a written line, never a signature. */
+	waived: { by: { id: number; name: string } | null; at: string; reason: string } | null;
 	can_sign: boolean;
+	/** The viewer signed an earlier slot and could otherwise sign this one. */
+	can_waive: boolean;
 	blockers: DocBlocker[];
 }
 
@@ -178,7 +194,10 @@ export interface DocStep {
 	status: StepStatus | string;
 	instructions: string | null;
 	callouts: Callout[];
+	/** The role of the first sign-off slot. */
 	role: string | null;
+	/** The role that does the step, as its mark. Gates nothing. */
+	performer?: RoleMark | null;
 	requires_signoff: boolean;
 	is_contingency: boolean;
 	estimated_duration_minutes?: number | null;
@@ -188,6 +207,10 @@ export interface DocStep {
 	workcenter_id?: number | null;
 	images: DocImage[];
 	step_kit: DocStepKitItem[];
+	/** OPs, authoring: the unit slots the OP declares, with their part named. */
+	units?: (UnitSlot & { partNumber?: string; partName?: string })[];
+	/** OPs, execute: the declared slots and what fills them; any step: removals recorded on it. */
+	unit_record?: { slots: DocUnitSlot[]; extras: ExecUnit[]; removals: ComponentRemoval[] };
 	data_schema: DocSchema | null;
 	data_captured: Record<string, unknown> | null;
 	skip_reason: string | null;
@@ -233,6 +256,22 @@ export interface DocOp {
 		issue_number: string | null;
 		title: string | null;
 		host_order: number | null;
+		disposition_type: string | null;
+		/** Null while a draft: pencil, which the floor cannot work. */
+		released_at: string | null;
+		released_by: string | null;
+		/** Planned kit lines it replaces. */
+		strikes: {
+			step_order: number | null;
+			step_number: string | null;
+			part_id: number;
+			part_number: string;
+			part_name: string;
+			quantity: number;
+			uom: string;
+		}[];
+		can_release: boolean;
+		can_edit: boolean;
 	} | null;
 	waiting_on_ops: string[];
 	/** OP ids this OP waits on (authoring; `waiting_on_ops` carries their numbers). */
@@ -283,6 +322,25 @@ export function isRoutine(step: DocStep, op: DocOp): boolean {
 	const leaf = step.order !== op.order || op.steps.length === 0;
 	const slots = step.signoffs ?? [];
 	return leaf && slots.length === 1 && !slots[0].role;
+}
+
+/**
+ * A short step: a sub-step with a title and nothing else (the rule is `isShortStep` in shared, which
+ * the printed traveler asks too). It is one row with a tick; notes, file, SKIP and + ISSUE open
+ * behind the row. An OP's own row is never short, and neither is a leaf OP.
+ */
+export function isShort(step: DocStep, op: DocOp): boolean {
+	return (
+		step.order !== op.order &&
+		isShortStep({
+			instructions: step.instructions,
+			callouts: step.callouts,
+			images: step.images,
+			fieldCount: step.data_schema?.fields?.length ?? 0,
+			kitCount: step.step_kit.length,
+			signoffs: step.signoffs
+		})
+	);
 }
 
 /** Can the operator work this step right now? */

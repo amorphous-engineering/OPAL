@@ -6,7 +6,8 @@ import {
 	type zProcedure,
 	conflict,
 	notFound,
-	parseQty
+	parseQty,
+	type CalloutKind
 } from '@opal/shared';
 import { and, eq, inArray, like, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -30,6 +31,7 @@ import { type ProcedureRow, draftRow, presentDraft, procedureRow, stepRows } fro
 import { buildSnapshot, snapshotsEquivalent } from './snapshot.ts';
 import { checkWorkcenter, copyAttachment, copyStepContent, invalid, normalizeCallouts, removeStepDeep } from './steps.ts';
 import { writeSignoffs } from './signoffs.ts';
+import { canonicalRoleName, checkRoleScope } from '../org/roles.ts';
 
 export type ProcedureOut = z.output<typeof zProcedure>;
 
@@ -223,6 +225,10 @@ export function updateProcedure(
 	const patch: Partial<typeof procedure.$inferInsert> = {};
 	if (input.projectId !== undefined && input.projectId !== row.projectId) {
 		requireOpenProject(ctx.db, input.projectId);
+		// The steps' roles must be ones the new project offers.
+		for (const st of stepRows(ctx.db, row.id)) {
+			for (const name of [st.performer, ...(st.signoffs ?? []).map((x) => x.role)]) checkRoleScope(ctx.db, name, input.projectId);
+		}
 		patch.projectId = input.projectId;
 	}
 	if (input.name !== undefined) patch.name = input.name;
@@ -299,10 +305,12 @@ export function clone(
 			instructions: s.instructions,
 			dataSchema: s.dataSchema ? structuredClone(s.dataSchema) : null,
 			signoffs: s.signoffs ? structuredClone(s.signoffs) : null,
+			performer: s.performer,
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			callouts: structuredClone(s.callouts ?? []),
 			strictSequence: s.strictSequence,
-			workcenterId: s.workcenterId
+			workcenterId: s.workcenterId,
+			units: s.units ? structuredClone(s.units) : null
 		});
 		map.set(s.id, dup.id);
 		if (input.copyKit) {
@@ -350,7 +358,8 @@ interface BuildInput {
 		requiredRole?: string | null;
 		requiresSignoff?: boolean;
 		signoffs?: { label?: string; role?: string | null }[] | null;
-		callouts?: { kind: 'caution' | 'info'; text: string }[] | null;
+		performer?: string | null;
+		callouts?: { kind: CalloutKind; text: string }[] | null;
 		strictSequence?: boolean;
 		estimatedDurationMinutes?: number | null;
 		workcenterId?: number | null;
@@ -396,7 +405,8 @@ export function build(ctx: Ctx, input: BuildInput) {
 			position,
 			title: s.title,
 			instructions: s.instructions ?? null,
-			signoffs: writeSignoffs(ctx.db, null, false, s) ?? null,
+			signoffs: writeSignoffs(ctx.db, null, false, s, input.projectId) ?? null,
+			performer: canonicalRoleName(ctx.db, s.performer, input.projectId),
 			estimatedDurationMinutes: s.estimatedDurationMinutes ?? null,
 			callouts: normalizeCallouts(s.callouts),
 			strictSequence: s.strictSequence ?? false,

@@ -1,12 +1,14 @@
 /** Derived issue state: one definition each, as a function on a row and as its SQL twin. */
-import type { DispState, TicketState } from '@opal/shared';
+import { takesDisposition, type DispState, type TicketState } from '@opal/shared';
 import { and, eq, isNotNull, isNull, ne, not, or, type SQL } from 'drizzle-orm';
 import { issue } from '../../db/schema/index.ts';
 
 export type IssueRow = typeof issue.$inferSelect;
 
-/** Disposition state exists only above advisory containment. */
+/** Holds work: containment above advisory. Disposition state (`dispState`) exists only here. */
 export const containmentBearing = (r: Pick<IssueRow, 'containment'>) => r.containment !== 'advisory';
+
+export { takesDisposition };
 
 /** Type and signature both set. */
 export const isDispositioned = (r: Pick<IssueRow, 'dispositionType' | 'dispositionedAt'>) =>
@@ -23,11 +25,16 @@ export function dispState(r: IssueRow): DispState {
 	return isDispositioned(r) ? 'dispositioned' : 'undispositioned';
 }
 
-/** pending | in_work | in_review | done, independent of the hold. */
+/**
+ * pending | in_work | in_review | done, independent of the hold. An issue that takes a
+ * disposition enters work when it is signed. An advisory issue someone started before
+ * non-conformances took a disposition stays in work; it still needs one to close.
+ */
 export function ticketState(r: IssueRow): TicketState {
 	if (r.status !== 'open') return 'done';
 	if (r.reviewRequestedAt !== null) return 'in_review';
-	const started = containmentBearing(r) ? isDispositioned(r) : r.workStartedAt !== null;
+	const started =
+		(!containmentBearing(r) && r.workStartedAt !== null) || (takesDisposition(r) && isDispositioned(r));
 	return started ? 'in_work' : 'pending';
 }
 
@@ -39,6 +46,8 @@ export const selfDispositioned = (r: IssueRow) =>
 
 export const signedSql = and(isNotNull(issue.dispositionType), isNotNull(issue.dispositionedAt))!;
 const bearingSql = ne(issue.containment, 'advisory');
+/** SQL twin of takesDisposition. */
+const takesDispositionSql = or(bearingSql, eq(issue.issueType, 'non_conformance'))!;
 const openSql = eq(issue.status, 'open');
 /** SQL twin of isBlocking. */
 export const blockingSql: SQL = and(openSql, bearingSql, not(signedSql))!;
@@ -47,7 +56,7 @@ export function ticketStateSql(state: TicketState): SQL {
 	const quiet = and(openSql, isNull(issue.reviewRequestedAt))!;
 	const started = or(
 		and(eq(issue.containment, 'advisory'), isNotNull(issue.workStartedAt)),
-		and(bearingSql, signedSql)
+		and(takesDispositionSql, signedSql)
 	)!;
 	switch (state) {
 		case 'done':

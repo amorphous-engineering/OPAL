@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { now } from '@opal/shared';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { Database } from 'bun:sqlite';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { createApp } from '../../src/app.ts';
 import { KEY_FILE } from '../../src/auth/sealed.ts';
 import type { Actor } from '../../src/context.ts';
@@ -135,6 +136,52 @@ describe('demo database', () => {
 		await t.settled();
 		const r = await t.call('DELETE', '/settings/demo');
 		expect(r.body.demoFileExists).toBe(false);
+	});
+
+	// Every file the demo makes is under demo.opal.db*: the real folder gets nothing new.
+	const tree = (root: string): string[] => readdirSync(root, { recursive: true, withFileTypes: true })
+		.filter((e) => e.isFile())
+		.map((e) => relative(root, join(e.parentPath, e.name)))
+		.sort();
+	const madeOutsideTheDemo = (before: string[]) => tree(dir).filter((p) => !before.includes(p) && !p.startsWith('demo.opal.db'));
+
+	test('entering the demo writes nothing into the real data folder', async () => {
+		const t = await boot();
+		const before = tree(dir);
+		await t.call('POST', '/settings/demo/enter');
+		await t.settled();
+		expect(madeOutsideTheDemo(before)).toEqual([]);
+	});
+
+	test('a seed that names files never copies the real folder\'s files', async () => {
+		// A 1.x folder upgraded in place keeps its files in attachments/. A seed row naming one of
+		// them must not copy the real file, into the real blobs folder or into the demo.
+		const seedDb = Database.deserialize(readFileSync(join(import.meta.dir, '../../assets/demo-seed.db')));
+		seedDb.run("UPDATE user SET avatar_filename = 'face.png', avatar_mime = 'image/png', avatar_source = 'upload' WHERE username = 'build'");
+		seedDb.run(`INSERT INTO attachment (id, original_filename, stored_filename, mime_type, size_bytes, procedure_id, created_at, updated_at)
+			VALUES (9001, 'real.pdf', 'real.pdf', 'application/pdf', 13, (SELECT MIN(id) FROM master_procedure), '2026-01-01 00:00:00', '2026-01-01 00:00:00')`);
+		const seedFile = join(dir, '..', `${basename(dir)}-seed.db`);
+		writeFileSync(seedFile, seedDb.serialize());
+		seedDb.close();
+		const savedSeed = process.env.OPAL_DEMO_SEED;
+		process.env.OPAL_DEMO_SEED = seedFile;
+		try {
+			mkdirSync(join(dir, 'attachments', 'avatars'), { recursive: true });
+			writeFileSync(join(dir, 'attachments', 'real.pdf'), 'REAL-CONTENT1');
+			writeFileSync(join(dir, 'attachments', 'avatars', 'face.png'), 'REAL-AVATAR');
+			const t = await boot();
+			const before = tree(dir);
+			await t.call('POST', '/settings/demo/enter');
+			await t.settled();
+			expect(madeOutsideTheDemo(before)).toEqual([]);
+			const demoFolder = join(dir, 'demo.opal.db-attachments');
+			const copied = tree(demoFolder).filter((p) => ['REAL-CONTENT1', 'REAL-AVATAR'].includes(readFileSync(join(demoFolder, p), 'utf8')));
+			expect(copied).toEqual([]);
+		} finally {
+			if (savedSeed === undefined) delete process.env.OPAL_DEMO_SEED;
+			else process.env.OPAL_DEMO_SEED = savedSeed;
+			rmSync(seedFile, { force: true });
+		}
 	});
 
 	test('only admins may switch to the demo', async () => {

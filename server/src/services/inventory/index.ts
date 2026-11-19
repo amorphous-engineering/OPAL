@@ -15,6 +15,7 @@ export * from './ledger.ts';
 export * from './records.ts';
 export * from './moves.ts';
 export * from './genealogy.ts';
+export * from './uses.ts';
 export * from './tests.ts';
 export * from './calibration.ts';
 export * from './detail.ts';

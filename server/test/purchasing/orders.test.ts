@@ -173,7 +173,7 @@ describe('receiving', () => {
 		expect(r.body.lines[0].qtyReceived).toBe('3');
 		const recs = (await s.call('GET', `/purchases/${po.id}/inventory`)).body;
 		expect(recs).toHaveLength(1);
-		expect(recs[0]).toMatchObject({ location: 'Dock', lotNumber: po.reference, purchaseLineId: lineId, quantity: '3' });
+		expect(recs[0]).toMatchObject({ location: 'Dock', lotNumber: null, purchaseLineId: lineId, quantity: '3' });
 		expect(recs[0].opalNumber).toMatch(/^OPAL-/);
 		const move = s.db.select().from(stockMove).where(eq(stockMove.purchaseLineId, lineId)).get();
 		expect(move?.kind).toBe('receive');
@@ -223,17 +223,51 @@ describe('receiving', () => {
 		expect((await s.call('GET', `/purchases/${po.id}`)).body.status).toBe('ordered');
 	});
 
-	test('every receipt takes the order number as its lot, also where the tier requires a lot', async () => {
+	test("a receipt records the supplier's lot, and a tier that requires one refuses a receipt without it", async () => {
 		const s = await setup();
 		setProject(s.db, [{ level: 2, name: 'Lot', code: 'L', requireLot: true, autoSerial: false }]);
 		const p = makePart(s.db, { tier: 2 });
 		const po = await orderedPo(s, p.id, '2');
 		const lineId = po.lines[0].id;
-		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'A' }])).status).toBe(200);
-		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'B' }])).status).toBe(200);
+		expect(po.lines[0].lotRequired).toBe(true);
+		const refused = await recv(s, po.id, [{ lineId, quantity: '1', location: 'A' }]);
+		expect(refused.status).toBe(422);
+		expect(refused.body.fields.lotNumber).toContain("supplier's lot");
+		expect(s.db.select().from(stockMove).all()).toHaveLength(0);
+		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'A', lotNumber: 'H-4471' }])).status).toBe(200);
+		expect((await recv(s, po.id, [{ lineId, quantity: '1', location: 'B', lotNumber: 'H-4502' }])).status).toBe(200);
 		const lots = (await s.call('GET', `/purchases/${po.id}/inventory`)).body.map((r: { lotNumber: string }) => r.lotNumber);
-		expect(po.reference).toMatch(/^PO-\d{4}$/);
-		expect(lots).toEqual([po.reference, po.reference]);
+		expect(lots).toEqual(['H-4471', 'H-4502']);
+	});
+
+	test("a part's own lot rule overrides its tier's", async () => {
+		const s = await setup();
+		setProject(s.db, [
+			{ level: 1, name: 'Critical', code: 'C', requireLot: true, autoSerial: false },
+			{ level: 2, name: 'Standard', code: 'S', requireLot: false, autoSerial: false }
+		]);
+		// A part made to print in a lot-tracked tier has no supplier lot.
+		const printed = makePart(s.db, { tier: 1 });
+		expect((await s.call('PATCH', `/parts/${printed.id}`, { lotRule: 'none' })).status).toBe(200);
+		const a = await orderedPo(s, printed.id, '1');
+		expect(a.lines[0].lotRequired).toBe(false);
+		expect((await recv(s, a.id, [{ lineId: a.lines[0].id, quantity: '1', location: 'A' }])).status).toBe(200);
+		// An O-ring in a tier that tracks no lots still needs its cure-date lot.
+		const oring = makePart(s.db, { tier: 2 });
+		expect((await s.call('PATCH', `/parts/${oring.id}`, { lotRule: 'required' })).body.lotRule).toBe('required');
+		const b = await orderedPo(s, oring.id, '1');
+		expect(b.lines[0].lotRequired).toBe(true);
+		expect((await recv(s, b.id, [{ lineId: b.lines[0].id, quantity: '1', location: 'A' }])).status).toBe(422);
+	});
+
+	test('a serialized part needs no lot, whatever its rule says', async () => {
+		const s = await setup();
+		setProject(s.db, [{ level: 1, name: 'Critical', code: 'C', requireLot: true, autoSerial: true }]);
+		const p = makePart(s.db, { tier: 1, tracking: 'serialized' });
+		await s.call('PATCH', `/parts/${p.id}`, { lotRule: 'required' });
+		const po = await orderedPo(s, p.id, '1');
+		expect(po.lines[0].lotRequired).toBe(false);
+		expect((await recv(s, po.id, [{ lineId: po.lines[0].id, quantity: '1', location: 'A' }])).status).toBe(200);
 	});
 
 	test('a serial number is refused for bulk stock and for more than one unit', async () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
+	import { invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api, opal } from '#lib/api.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -45,7 +45,8 @@
 		type Attachment,
 		type DispositionType,
 		type IssuePriority,
-		type IssueType
+		type IssueType,
+		takesDisposition
 	} from '@opal/shared';
 	import { session } from '#lib/session.svelte.js';
 	import ProjectRow from '#lib/components/projects/ProjectRow.svelte'; // added by projects
@@ -58,6 +59,8 @@
 	let { data }: PageProps = $props();
 	const issue = $derived(data.issue);
 	const bearing = $derived(issue.containment !== 'advisory');
+	/** Settled by a signed disposition: it holds work, or it is a non-conformance. */
+	const disposable = $derived(takesDisposition(issue));
 	const closed = $derived(issue.status === 'closed');
 	const voided = $derived(issue.status === 'void');
 	const type = $derived(issue.issueType);
@@ -93,11 +96,20 @@
 	const editing = $derived(editable && isEditing(page.url));
 	const editObservation = $derived(editing && pending);
 	const editResolution = $derived(editing && inWork);
-	// Work starts at the signed disposition for containment-bearing issues.
-	const startedAt = $derived(bearing ? issue.dispositionedAt : issue.workStartedAt);
-	const startedBy = $derived(bearing ? issue.dispositionedBy?.name : issue.workStartedBy?.name);
+	// Work starts at the signed disposition for an issue that takes one. One started before
+	// non-conformances took a disposition keeps its start stamp.
+	const startedAt = $derived(
+		disposable ? (issue.dispositionedAt ?? issue.workStartedAt) : issue.workStartedAt
+	);
+	const startedBy = $derived(
+		disposable && issue.dispositionedAt ? issue.dispositionedBy?.name : issue.workStartedBy?.name
+	);
+	/** Waiting on a disposition before the issue can go further. */
+	const awaitingDisposition = $derived(
+		disposable && !voided && !closed && !issue.dispositioned && (pending || inWork)
+	);
 	const holdsWork = $derived(issue.dispState === 'undispositioned');
-	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(' · ');
+	const holdNames = (h: { label: string }[]) => h.map((x) => x.label).join(', ');
 
 	const transition = (step: 'start' | 'review' | 'signOff') =>
 		act(async () => {
@@ -252,7 +264,6 @@
 			onselect: () => narrowTo(c),
 			when: holdsWork && issue.canDisposition
 		})),
-		{ label: 'RETURN', onselect: returnToWork, when: ticket === 'in_review' },
 		{ label: 'REOPEN', onselect: reopen, when: ticket === 'done' && issue.canApprove },
 		{ label: 'VOID', onselect: voidIssue, strike: true, when: canVoid }
 	]);
@@ -288,36 +299,40 @@
 		await act(() => patch(changes));
 	}
 
+	/** Rework with no redline asks once, inline, before the usual confirmation is skipped. */
+	let askNoRedline = $state(false);
 	async function sign() {
 		if (!dispType || !dispRationale.trim()) return;
+		if (reworks(dispType) && redlineHref && !issue.redlineOps.length && !askNoRedline) {
+			askNoRedline = true;
+			return;
+		}
 		dispBusy = true;
 		try {
-			const holds = await opal.issues.holding({ id: issue.id });
-			const ok = await confirm({
-				title: `Sign disposition of ${issue.issueNumber}`,
-				body: `${stateLabel(dispType)} signed by ${session.user?.name ?? 'you'}. ${
-					holds.length ? `Releases ${holds.map((h) => h.label).join(' · ')}.` : 'Nothing is held.'
-				} A signed disposition cannot be edited.`,
-				action: 'SIGN'
-			});
-			if (!ok) return;
+			if (!askNoRedline) {
+				const holds = await opal.issues.holding({ id: issue.id });
+				const drafts = issue.redlineOps.filter((r) => !r.released).map((r) => r.label);
+				const ok = await confirm({
+					title: `Sign disposition of ${issue.issueNumber}`,
+					body: `${stateLabel(dispType)} signed by ${session.user?.name ?? 'you'}. ${
+						holds.length ? `Releases ${holds.map((h) => h.label).join(', ')}.` : 'Nothing is held.'
+					}${drafts.length ? ` Releases redline ${drafts.join(', ')} to the floor.` : ''} A signed disposition cannot be edited.`,
+					action: 'SIGN'
+				});
+				if (!ok) return;
+			}
 			await opal.issues.signDisposition({
 				id: issue.id,
 				dispositionType: dispType,
 				dispositionRationale: dispRationale.trim()
 			});
+			askNoRedline = false;
 			await refresh();
 		} catch (e) {
 			toastError(e);
 		} finally {
 			dispBusy = false;
 		}
-	}
-
-	/** The primary action of a holding issue: sign a drafted disposition, else go and draft one. */
-	async function disposition() {
-		if (dispType && dispRationale.trim()) return sign();
-		await goto('?edit=1#disposition');
 	}
 
 	// ---- Links ----
@@ -408,7 +423,7 @@
 	const partLinks = $derived(issue.links.filter((l) => l.kind === 'part')); // added by risks
 	const typeFields = $derived({
 		nc: type === 'non_conformance',
-		bug: type === 'bug',
+		anomaly: type === 'anomaly',
 		improvement: type === 'improvement'
 	});
 	const redlineHref = $derived(
@@ -416,11 +431,38 @@
 			? `/executions/${issue.executionId}?op=${issue.raisedOpOrder}&redline_issue=${issue.id}`
 			: null
 	);
-	const hasRedlineAction = $derived(
-		issue.dispositioned &&
-			['rework', 'repair'].includes(issue.dispositionType ?? '') &&
-			!!redlineHref
+	/** Rework and repair are written as redlines on the work order. */
+	const reworks = (t: string | null | undefined) => t === 'rework' || t === 'repair';
+	const showCorrection = $derived(
+		!!redlineHref &&
+			(issue.redlineOps.length > 0 ||
+				reworks(
+					issue.dispositioned ? issue.dispositionType : editing ? dispType : issue.dispositionType
+				))
 	);
+	const canWriteRedline = $derived(!!redlineHref && issue.status === 'open');
+	/** Redlines still a draft or not finished: review waits on them. */
+	const openRedlines = $derived(
+		issue.redlineOps.filter((r) => !r.released || !['completed', 'skipped'].includes(r.status))
+	);
+	const waitingRevision = $derived(
+		issue.correctiveRevision !== null && !issue.correctiveRevision.released
+	);
+
+	// ---- Corrective revision ----
+	let procedures = $state<{ id: number; templateNumber: string; name: string }[]>([]);
+	$effect(() => {
+		if (!editResolution || procedures.length) return;
+		opal.procedures
+			.list({ projectId: issue.projectId, limit: 100, sort: 'updatedAt', dir: 'desc' })
+			.then((r) => {
+				const own = issue.execution?.procedureId;
+				procedures = r.items
+					.filter((x) => x.status !== 'obsolete')
+					.sort((a, b) => Number(b.id === own) - Number(a.id === own));
+			})
+			.catch(() => {});
+	});
 
 	// Gate flags come from the server per viewer.
 	const cannotApprove = $derived(!issue.canApprove);
@@ -444,10 +486,53 @@
 
 {#snippet stamp(by: string | null, at: string | null)}
 	{#if at}
-		{by ?? '—'} · <Timestamp value={at} />
+		<span class="inline-flex flex-wrap gap-x-3"
+			><span>{by ?? '—'}</span><Timestamp value={at} /></span
+		>
 	{:else}
 		<span class="text-quiet">—</span>
 	{/if}
+{/snippet}
+
+{#snippet correction()}
+	<!-- The rework itself: the redlines written for this issue on its work order. -->
+	<DetailRow label="Correction">
+		{#if issue.redlineOps.length}
+			<ul class="grid grid-cols-1 gap-1">
+				{#each issue.redlineOps as r (r.stepNumber)}
+					{@const done = r.status === 'completed' || r.status === 'skipped'}
+					<li class="flex flex-wrap items-baseline gap-x-3">
+						<a
+							href={`/executions/${issue.executionId}?op=${r.stepNumber}`}
+							class="font-mono text-info hover:underline">OP {r.label}</a
+						>
+						<span>{r.title}</span>
+						<State
+							value={!r.released ? 'draft' : done ? 'done' : 'released'}
+							tone={!r.released ? 'draft' : done ? 'ok' : 'default'}
+							label={!r.released ? 'DRAFT' : done ? 'DONE' : 'RELEASED'}
+						/>
+						{#if r.doneAt}
+							<span class="basis-full text-xs text-muted-foreground"
+								>{@render stamp(r.doneBy, r.doneAt)}</span
+							>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<span class="block h-7 border border-dashed border-foreground"></span>
+		{/if}
+		{#if canWriteRedline && redlineHref && editing}
+			<div class="mt-1.5">
+				<Button
+					size="sm"
+					variant={issue.redlineOps.length ? 'outline' : 'default'}
+					href={redlineHref}>{issue.redlineOps.length ? '+ REDLINE' : 'WRITE REDLINE'}</Button
+				>
+			</div>
+		{/if}
+	</DetailRow>
 {/snippet}
 
 {#snippet textRow(
@@ -496,42 +581,46 @@
 	{/snippet}
 	{#snippet actions()}
 		{#if !voided}
-			{#if pending && bearing}
-				<Button
-					size="sm"
-					disabled={dispBusy || !issue.canDisposition}
-					title={issue.canDisposition ? undefined : issue.gateReasons.disposition}
-					onclick={disposition}>DISPOSITION</Button
-				>
-				{#if !issue.canDisposition}
-					<span class="font-mono text-xs text-muted-foreground" data-gate-reason="disposition"
-						>{issue.gateReasons.disposition ?? 'Requires disposition role'}</span
-					>
-				{/if}
+			{#if pending && disposable}
+				<!-- The disposition is filled in and signed under EDIT, so EDIT is the move. -->
+				<EditToggle variant={editing ? 'outline' : 'default'} />
 			{:else if pending}
 				<Button size="sm" onclick={() => transition('start')}>START WORK</Button>
 			{:else if inWork}
-				<Button size="sm" onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button>
+				<Button
+					size="sm"
+					disabled={awaitingDisposition || openRedlines.length > 0}
+					title={awaitingDisposition
+						? 'A signed disposition is required'
+						: openRedlines.length
+							? `Waits on redline ${openRedlines.map((r) => r.label).join(', ')}`
+							: undefined}
+					onclick={() => transition('review')}>SUBMIT FOR REVIEW</Button
+				>
+				{#if awaitingDisposition}
+					<span class="font-mono text-xs text-muted-foreground">Disposition is required</span>
+				{/if}
 			{:else if ticket === 'in_review'}
 				<Button
 					size="sm"
-					disabled={needsCorrective || cannotApprove}
+					disabled={needsCorrective || cannotApprove || waitingRevision}
 					title={cannotApprove
 						? issue.gateReasons.approve
 						: needsCorrective
 							? 'Corrective action is required to sign off'
-							: undefined}
+							: waitingRevision
+								? `Waits on the release of ${issue.correctiveRevision?.templateNumber} v${issue.correctiveRevision?.versionNumber}`
+								: undefined}
 					onclick={() => transition('signOff')}>SIGN OFF</Button
 				>
 				{#if cannotApprove}
 					<span class="font-mono text-xs text-muted-foreground" data-gate-reason="approve"
 						>{issue.gateReasons.approve ?? 'Requires approval role'}</span
 					>
-				{:else if needsCorrective}
-					<span class="font-mono text-xs text-muted-foreground">Corrective action is required</span>
 				{/if}
+				<Button size="sm" variant="outline" onclick={returnToWork}>RETURN</Button>
 			{/if}
-			{#if editable}<EditToggle />{/if}
+			{#if editable && !(pending && disposable)}<EditToggle />{/if}
 			<MoreMenu items={moreItems} />
 		{/if}
 	{/snippet}
@@ -558,25 +647,68 @@
 					{@render textRow('Should be', 'shouldBe')}
 					{@render textRow('Is', 'actual')}
 				{/if}
-				{#if typeFields.bug || issue.stepsToReproduce || issue.expectedBehavior || issue.actualBehavior}
+				{#if typeFields.anomaly || issue.stepsToReproduce || issue.expectedBehavior || issue.actualBehavior}
 					{@render textRow('Steps to reproduce', 'stepsToReproduce')}
 					{@render textRow('Expected behavior', 'expectedBehavior')}
-					{@render textRow('Actual behavior', 'actualBehavior')}
+					{@render textRow('Observed behavior', 'actualBehavior')}
 				{/if}
 				{#if typeFields.improvement || issue.expectedBenefit}
 					{@render textRow('Expected benefit', 'expectedBenefit')}
 				{/if}
-				{#if typeFields.nc || typeFields.bug || issue.rootCause || issue.correctiveAction}
+				{#if typeFields.nc || typeFields.anomaly || issue.rootCause || issue.correctiveAction}
 					{@render textRow('Root cause', 'rootCause', { resolution: true })}
 					{@render textRow('Corrective action', 'correctiveAction', {
 						resolution: true,
-						hint: typeFields.nc && !closed && editResolution ? 'required for sign-off' : undefined
+						hint: needsCorrective && !closed && !voided ? 'Required to sign off' : undefined
 					})}
+				{/if}
+				{#if issue.correctiveRevision || (editResolution && typeFields.nc)}
+					<DetailRow label="Revision">
+						{#if issue.correctiveRevision}
+							{@const rev = issue.correctiveRevision}
+							<div class="flex flex-wrap items-baseline gap-x-3">
+								<a
+									href={`/procedures/${rev.procedureId}`}
+									class="font-mono text-info hover:underline"
+									>{rev.templateNumber} v{rev.versionNumber}</a
+								>
+								<span>{rev.name}</span>
+								<State
+									value={rev.released ? 'released' : 'draft'}
+									tone={rev.released ? 'ok' : 'draft'}
+									label={rev.released ? 'RELEASED' : 'DRAFT'}
+								/>
+								{#if editResolution}
+									<button
+										type="button"
+										class="ml-auto font-mono text-xs tracking-wider text-info uppercase hover:underline"
+										onclick={() => act(() => patch({ correctiveProcedureId: null }))}>REMOVE</button
+									>
+								{/if}
+							</div>
+						{:else}
+							<NativeSelect
+								aria-label="Procedure revision"
+								value=""
+								onchange={(e) =>
+									e.currentTarget.value &&
+									act(() => patch({ correctiveProcedureId: Number(e.currentTarget.value) }))}
+								class="max-w-full"
+							>
+								<NativeSelectOption value="">—</NativeSelectOption>
+								{#each procedures as p (p.id)}
+									<NativeSelectOption value={String(p.id)}
+										>{p.templateNumber} {p.name}</NativeSelectOption
+									>
+								{/each}
+							</NativeSelect>
+						{/if}
+					</DetailRow>
 				{/if}
 			</DetailTable>
 		</Section>
 
-		{#if issue.dispositioned || (bearing && !closed && !voided)}
+		{#if issue.dispositioned || (disposable && !closed && !voided)}
 			<Section id="disposition" title="Disposition">
 				{#snippet actions()}
 					{#if issue.selfDispositioned}
@@ -590,16 +722,11 @@
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 							<div class="prose-opal">{@html markdown(issue.dispositionRationale)}</div>
 						</DetailRow>
+						{#if showCorrection}{@render correction()}{/if}
 						<DetailRow label="Signed by">
-							{issue.dispositionedBy?.name ?? '—'} ·
-							<Timestamp value={issue.dispositionedAt} />
+							{@render stamp(issue.dispositionedBy?.name ?? null, issue.dispositionedAt)}
 						</DetailRow>
-						{#if hasRedlineAction && redlineHref}
-							<DetailRow label="Redline">
-								<Button size="sm" variant="outline" href={redlineHref}>SPAWN REDLINE OP</Button>
-							</DetailRow>
-						{/if}
-					{:else if editObservation}
+					{:else if editing}
 						<DetailRow label="Type">
 							<NativeSelect
 								aria-label="Disposition type"
@@ -623,17 +750,37 @@
 								<MarkdownField bind:value={dispRationale} ariaLabel="Rationale" minRows={3} />
 							</div>
 						</DetailRow>
+						{#if showCorrection}{@render correction()}{/if}
 						<DetailRow label="Signature">
-							<Button
-								size="sm"
-								disabled={dispBusy || cannotDisposition || !dispType || !dispRationale.trim()}
-								title={cannotDisposition
-									? issue.gateReasons.disposition
-									: !dispType || !dispRationale.trim()
-										? `missing: ${[!dispType && 'type', !dispRationale.trim() && 'rationale'].filter(Boolean).join(', ')}`
-										: undefined}
-								onclick={sign}>SIGN DISPOSITION</Button
-							>
+							{#if askNoRedline}
+								<div class="grid grid-cols-1 gap-2 border border-border p-2">
+									<span class="text-sm text-error"
+										>Signing without a redline releases the hold{data.holding.length
+											? ` on ${holdNames(data.holding)}`
+											: ''} immediately and implies no rework is necessary for this WO. Are you sure?</span
+									>
+									<div class="flex flex-wrap gap-2">
+										<Button size="sm" variant="outline" disabled={dispBusy} onclick={sign}
+											>SIGN WITHOUT REDLINE</Button
+										>
+										<Button size="sm" variant="ghost" onclick={() => (askNoRedline = false)}
+											>CANCEL</Button
+										>
+									</div>
+								</div>
+							{:else}
+								<Button
+									size="sm"
+									variant={showCorrection && !issue.redlineOps.length ? 'outline' : 'default'}
+									disabled={dispBusy || cannotDisposition || !dispType || !dispRationale.trim()}
+									title={cannotDisposition
+										? issue.gateReasons.disposition
+										: !dispType || !dispRationale.trim()
+											? `missing: ${[!dispType && 'type', !dispRationale.trim() && 'rationale'].filter(Boolean).join(', ')}`
+											: undefined}
+									onclick={sign}>SIGN DISPOSITION</Button
+								>
+							{/if}
 							{#if cannotDisposition}
 								<span
 									class="ml-2 font-mono text-xs text-muted-foreground"
@@ -654,6 +801,7 @@
 								<div class="prose-opal">{@html markdown(issue.dispositionRationale)}</div>
 							{:else}<span class="text-quiet">—</span>{/if}
 						</DetailRow>
+						{#if showCorrection}{@render correction()}{/if}
 					{/if}
 				</DetailTable>
 			</Section>
@@ -808,7 +956,12 @@
 									>{CONTAINMENT_OPTION[c]}</NativeSelectOption
 								>{/each}
 						</NativeSelect>
-					{:else}<span class="font-mono">{CONTAINMENT_OPTION[issue.containment]}</span>{/if}
+					{:else}<span class="font-mono"
+							>{CONTAINMENT_OPTION[issue.containment]}{issue.containment === 'step' &&
+							(issue.containmentStepLabel ?? issue.raisedStepLabel)
+								? ` ${issue.containmentStepLabel ?? issue.raisedStepLabel}`
+								: ''}</span
+						>{/if}
 				</DetailRow>
 				<DetailRow label="Assigned to">
 					{#if editing}
@@ -901,13 +1054,15 @@
 						>
 					{:else}<span class="text-quiet">—</span>{/if}
 				</DetailRow>
-				<DetailRow label="Execution">
+				<DetailRow label="Work order">
 					<div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
 						{#if issue.execution}
 							<a
-								href={`/executions/${issue.execution.id}`}
+								href={`/executions/${issue.execution.id}${issue.raisedOpOrder !== null ? `?op=${issue.raisedOpOrder}` : ''}`}
 								class="font-mono text-info hover:underline"
-								>{issue.execution.label ?? 'Work order'}</a
+								>{issue.execution.label ?? 'Work order'}{issue.raisedStepLabel
+									? ` OP ${issue.raisedStepLabel}`
+									: ''}</a
 							>
 							{#if editObservation}
 								<button
@@ -919,8 +1074,8 @@
 						{:else}<span class="text-quiet">—</span>{/if}
 					</div>
 				</DetailRow>
-				<DetailRow label="Boundary">
-					{#if editObservation && issue.execution && data.steps.length && (!boundaryHolds || issue.canDisposition)}
+				{#if editObservation && issue.execution && data.steps.length && (!boundaryHolds || issue.canDisposition)}
+					<DetailRow label="Boundary">
 						<NativeSelect
 							aria-label="Containment boundary step"
 							value={issue.containmentStepId === null ? '' : String(issue.containmentStepId)}
@@ -934,32 +1089,6 @@
 								>
 							{/each}
 						</NativeSelect>
-					{:else if issue.containmentStepLabel}
-						<span class="font-mono">{issue.containmentStepLabel}</span>
-					{:else}<span class="text-quiet">—</span>{/if}
-				</DetailRow>
-				<DetailRow label="Raised at" mono>
-					{#if issue.raisedStepLabel && issue.execution}
-						<a
-							href={`/executions/${issue.execution.id}?op=${issue.raisedOpOrder ?? ''}`}
-							class="text-info hover:underline">{issue.raisedStepLabel}</a
-						>
-					{:else}<span class="text-quiet">—</span>{/if}
-				</DetailRow>
-				{#if issue.redlineOps.length}
-					<DetailRow label="Redline ops">
-						<ul class="grid grid-cols-1 gap-0.5">
-							{#each issue.redlineOps as op (op.stepNumber)}
-								<li class="flex gap-2 font-mono text-xs">
-									<a
-										href={`/executions/${issue.executionId}?op=${op.stepNumber}`}
-										class="text-info hover:underline">{op.label}</a
-									>
-									<span class="truncate font-sans text-sm">{op.title}</span>
-									<State value={op.status} class="ml-auto" />
-								</li>
-							{/each}
-						</ul>
 					</DetailRow>
 				{/if}
 			</DetailTable>

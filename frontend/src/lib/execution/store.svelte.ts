@@ -18,6 +18,7 @@ import { api, opal } from '#lib/api.js';
 import { toast, toastError } from '#lib/components/opal/index.js';
 import {
 	isActionable,
+	isShort,
 	isTerminal,
 	visibleRows,
 	type ConsumeItem,
@@ -55,7 +56,8 @@ function write(key: string, value: unknown) {
 
 /** The one form open on the page. It sits inline: nothing here covers the document. */
 export type OpenPanel =
-	{ kind: 'redline'; op: DocOp; issueId?: number } | { kind: 'closeShort' } | null;
+	/** `op` is the host OP; `draft` the draft redline being rewritten, when editing one. */
+	{ kind: 'redline'; op: DocOp; issueId?: number; draft?: DocOp } | { kind: 'closeShort' } | null;
 
 type WorkRow = { op: DocOp; step: DocStep };
 
@@ -295,7 +297,9 @@ export class ExecutionStore implements DocController {
 	openOrder = $derived.by(() => {
 		const doc = this.doc;
 		if (!doc?.instance.active) return null;
-		const ready = (r: WorkRow) => isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign);
+		// A waiver is the one move left for the person alone on a step they signed.
+		const ready = (r: WorkRow) =>
+			isActionable(r.step) || r.step.signoffs.some((s) => s.can_sign || s.can_waive);
 		const pick = (rows: WorkRow[]) =>
 			rows.find(ready) ?? rows.find((r) => !isTerminal(r.step.status));
 		const claimed = this.workRows(this.allOps.filter((o) => o.order === this.claimedOrder));
@@ -380,6 +384,7 @@ export class ExecutionStore implements DocController {
 				x.holds.map((h) => `${h.issue_number}:${h.disposition_state}:${h.kind}`),
 				x.attachments,
 				x.consumed,
+				x.units,
 				x.notes
 			]),
 			s.holds.map((h) => `${h.issue_number}:${h.disposition_state}`),
@@ -419,7 +424,9 @@ export class ExecutionStore implements DocController {
 	private defaultOpen(key: string): boolean {
 		const order = this.openOrder;
 		const hit = order === null ? undefined : this.findStep(order);
-		if (hit && (key === `step:${order}` || key === `op:${hit.op.order}`)) return true;
+		if (hit && key === `op:${hit.op.order}`) return true;
+		// A short step is one row with a tick, so the current one does not open its notes and actions.
+		if (hit && key === `step:${order}` && !isShort(hit.step, hit.op)) return true;
 		// Values typed into a step never close under the operator.
 		const [kind, id] = key.split(':');
 		if (kind === 'step') return !!this.drafts[Number(id)] || !!this.noteBodies[Number(id)];
@@ -656,6 +663,25 @@ export class ExecutionStore implements DocController {
 				await this.refresh();
 			}
 		},
+		waive: async (step, slot, reason) => {
+			// A note typed into the box goes on the record with the step, as with a signature.
+			if (!(await this.noteDraft.save(step))) return false;
+			try {
+				await opal.execution.waive({ id: this.id, stepId: step.order, slot, reason });
+				await this.changed();
+				const now = this.findStep(step.order)?.step;
+				if (now && isTerminal(now.status)) {
+					if (this.claimedOrder === step.order)
+						await opal.execution.release({ id: this.id }).catch(() => {});
+					this.advanceFrom(step.order);
+				}
+				return true;
+			} catch (e) {
+				toastError(e, 'Waiver not recorded');
+				await this.refresh();
+				return false;
+			}
+		},
 		skip: async (step, reason) => {
 			if (!(await this.noteDraft.save(step))) return false;
 			try {
@@ -677,6 +703,19 @@ export class ExecutionStore implements DocController {
 				await this.changed();
 			} catch (e) {
 				toastError(e, 'Failed to delete redline');
+			}
+		},
+		editRedline: (op) => {
+			const host = this.allOps.find((o) => o.order === op.redline?.host_order);
+			if (host)
+				this.panel = { kind: 'redline', op: host, issueId: op.redline!.issue_id, draft: op };
+		},
+		releaseRedline: async (op) => {
+			try {
+				await opal.execution.releaseRedline({ id: this.id, redlineId: op.step.execution_id! });
+				await this.changed();
+			} catch (e) {
+				toastError(e, 'Redline not released');
 			}
 		},
 		addNote: async (step, body, files = []) => {
@@ -706,7 +745,8 @@ export class ExecutionStore implements DocController {
 					items: items.map((i) => ({
 						stockId: i.inventory_record_id,
 						quantity: String(i.quantity),
-						usage: i.usage_type === 'tooling' ? ('tooling' as const) : ('consume' as const)
+						usage: i.usage_type === 'tooling' ? ('tooling' as const) : ('consume' as const),
+						...(i.into ? { into: i.into } : {})
 					}))
 				});
 				this.stock = {};
@@ -716,6 +756,55 @@ export class ExecutionStore implements DocController {
 				toastError(e, 'Failed to consume parts');
 				return false;
 			}
+		},
+		units: {
+			bind: async (step, body) => {
+				try {
+					await opal.execution.bindUnit({ id: this.id, stepId: step.order, ...body });
+					await this.changed();
+					return true;
+				} catch (e) {
+					toastError(e, 'Unit not named');
+					return false;
+				}
+			},
+			unbind: async (unitId) => {
+				try {
+					await opal.execution.unbindUnit({ id: this.id, unitId });
+					await this.changed();
+					return true;
+				} catch (e) {
+					toastError(e, 'Unit not taken back');
+					return false;
+				}
+			},
+			candidates: async (partId) => {
+				const r = await opal.inventory.list({
+					partId,
+					sort: 'createdAt',
+					order: 'asc',
+					limit: 200
+				});
+				return r.items.map((x) => ({
+					id: x.id,
+					opal_number: x.opalNumber,
+					serial_number: x.serialNumber,
+					location: x.location,
+					balance: x.balance
+				}));
+			},
+			installed: (unitId) => opal.execution.installed({ id: this.id, unitId }),
+			remove: async (step, body) => {
+				try {
+					await opal.execution.removeComponent({ id: this.id, stepId: step.order, ...body });
+					await this.changed();
+					return true;
+				} catch (e) {
+					toastError(e, 'Removal not recorded');
+					return false;
+				}
+			},
+			named: () => this.doc?.units ?? []
 		},
 		loadStock: async (partId) => {
 			if (this.stock[partId]) return this.stock[partId];
@@ -783,12 +872,22 @@ export class ExecutionStore implements DocController {
 		return `/issues/new?execution=${this.id}&executionLabel=${label}&projectId=${inst?.project.id ?? ''}${at}`;
 	}
 
-	async createRedline(body: {
+	/** Write a draft redline, or rewrite one (`redlineId`). */
+	async saveRedline(body: {
+		redlineId?: number;
 		issueId: number;
 		title: string;
-		steps: { title: string; instructions: string | null; requiresSignoff: boolean }[];
+		steps: {
+			title: string;
+			instructions: string | null;
+			requiresSignoff: boolean;
+			kit: { partId: number; quantity: string }[];
+		}[];
+		strikes: { stepId: number | null; partId: number }[];
 	}) {
-		await opal.execution.createRedline({ id: this.id, ...body });
+		const { redlineId, issueId, ...rest } = body;
+		if (redlineId) await opal.execution.updateRedline({ id: this.id, redlineId, ...rest });
+		else await opal.execution.createRedline({ id: this.id, issueId, ...rest });
 		await this.changed();
 	}
 

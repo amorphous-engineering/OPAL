@@ -41,6 +41,12 @@
 			mono
 			value={part.reorderPoint === null ? null : qty(part.reorderPoint)}
 		/>
+		{#if part.trackingType === 'bulk'}
+			<DetailRow
+				label="Supplier lot"
+				value={part.lotRule === 'tier' ? 'AS TIER' : part.lotRule.toUpperCase()}
+			/>
+		{/if}
 		<DetailRow label="Tooling" value={part.isTooling ? 'YES' : null} />
 		<DetailRow
 			label="Calibration"

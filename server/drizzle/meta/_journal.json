@@ -92,6 +92,55 @@
       "when": 1794052941851,
       "tag": "0012_far_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1794946917890,
+      "tag": "0013_issue_anomaly_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1794953636287,
+      "tag": "0014_redline_release",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1794999264307,
+      "tag": "0015_signoff_waiver",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1795001836380,
+      "tag": "0016_execution_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1795042024517,
+      "tag": "0017_role_marks",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1795043302933,
+      "tag": "0018_project_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795052421341,
+      "tag": "0019_part_lot_rule",
+      "breakpoints": true
     }
   ]
 }

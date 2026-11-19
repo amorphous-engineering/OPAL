@@ -35,6 +35,7 @@ import { diffPartLists, diffProcedure, diffSteps } from './diff.ts';
 import { presentProcedure } from './index.ts';
 import { draftRow, procedureRow, stepRows } from './draft.ts';
 import { buildSnapshot } from './snapshot.ts';
+import { checkSnapshotUnits } from './units.ts';
 import { removeStepDeep, invalid } from './steps.ts';
 import { layoutAll } from './tree.ts';
 import { parseQty } from '@opal/shared';
@@ -69,7 +70,8 @@ export function snapshotPartIds(s: ProcedureSnapshot): number[] {
 		...new Set([
 			...s.kit.map((k) => k.partId),
 			...s.outputs.map((o) => o.partId),
-			...s.steps.flatMap((x) => x.kit.map((k) => k.partId))
+			...s.steps.flatMap((x) => x.kit.map((k) => k.partId)),
+			...s.steps.flatMap((x) => (x.units ?? []).map((u) => u.partId))
 		])
 	].sort((a, b) => a - b);
 }
@@ -83,6 +85,7 @@ export function publish(ctx: Ctx, procedureId: number, changeNote?: string | nul
 		throw conflict('empty_procedure', 'Cannot publish a procedure with no steps');
 	}
 	const snapshot = buildSnapshot(ctx, procedureId);
+	checkSnapshotUnits(snapshot);
 	// Publishing is the commitment: the kit and outputs must not hold draft parts.
 	ensurePartsActive(ctx, snapshotPartIds(snapshot), `publish of procedure ${proc.templateNumber}`);
 	const last = ctx.db
@@ -250,10 +253,12 @@ export function restoreVersion(ctx: Ctx, procedureId: number, versionId: number)
 			instructions: s.instructions,
 			dataSchema: s.dataSchema,
 			signoffs: s.signoffs.map((x) => ({ role: x.role })),
+			performer: s.performer?.name ?? null,
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			callouts: s.callouts.map((c) => ({ ...c })),
 			strictSequence: s.strictSequence,
-			workcenterId: s.workcenterId !== null && wcs.has(s.workcenterId) ? s.workcenterId : null
+			workcenterId: s.workcenterId !== null && wcs.has(s.workcenterId) ? s.workcenterId : null,
+			units: s.units?.length ? s.units.map((u) => ({ ...u })) : null
 		});
 		s.images.forEach((img, position) => {
 			if (!getBlob(ctx.db, img.sha256)) return;
@@ -269,7 +274,14 @@ export function restoreVersion(ctx: Ctx, procedureId: number, versionId: number)
 			insert(ctx, stepImage, { stepId: s.id, attachmentId: att.id, caption: img.caption, position });
 		});
 		for (const k of s.kit) {
-			insert(ctx, kitItem, { stepId: s.id, partId: k.partId, quantity: parseQty(k.quantity), usage: k.usage, notes: k.notes });
+			insert(ctx, kitItem, {
+				stepId: s.id,
+				partId: k.partId,
+				quantity: parseQty(k.quantity),
+				usage: k.usage,
+				notes: k.notes,
+				intoSlot: k.into ?? null
+			});
 		}
 	}
 	for (const s of snap.steps) {

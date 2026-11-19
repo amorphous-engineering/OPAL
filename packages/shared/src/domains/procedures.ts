@@ -17,6 +17,7 @@ import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
+import { zRoleMark } from '../role-marks.ts';
 
 export const PROCEDURE_STATUSES = ['draft', 'released', 'obsolete'] as const;
 export type ProcedureStatus = (typeof PROCEDURE_STATUSES)[number];
@@ -26,7 +27,12 @@ export type ProcedureType = (typeof PROCEDURE_TYPES)[number];
 /** consume: stock is used up. tooling: used and returned. */
 export const KIT_USAGES = ['consume', 'tooling'] as const;
 export type KitUsage = (typeof KIT_USAGES)[number];
-export const CALLOUT_KINDS = ['caution', 'info'] as const;
+/**
+ * Callout kinds, most serious first, which is the order a step shows them in.
+ * warning: a person can be hurt. caution: hardware or the work can be damaged. info: no hazard.
+ */
+export const CALLOUT_KINDS = ['warning', 'caution', 'info'] as const;
+export type CalloutKind = (typeof CALLOUT_KINDS)[number];
 /** `boolean` is answered TRUE or FALSE (shown as a choice). Older data says `checkbox`. */
 export const DATA_FIELD_TYPES = ['text', 'number', 'boolean', 'select', 'textarea', 'photo'] as const;
 export const PROCEDURE_SORT_KEYS = [
@@ -114,6 +120,24 @@ export const zProcedureStepImage = z.object({
 });
 export type ProcedureStepImage = z.infer<typeof zProcedureStepImage>;
 
+/**
+ * A unit an operation acts on: an existing serialized unit of `partId`, named at run time on the
+ * OP that declares the slot. `key` is unique in the procedure; a kit line installs into a slot by
+ * its key. A build makes its unit and declares no slots.
+ */
+export const zUnitSlot = z.object({
+	key: z
+		.string()
+		.trim()
+		.min(1)
+		.max(100)
+		.regex(/^[a-z0-9_]+$/, 'Lower case letters, digits and underscores'),
+	label: z.string().trim().min(1).max(MAX_SHORT),
+	partId: z.number().int(),
+	required: z.boolean().default(false)
+});
+export type UnitSlot = z.infer<typeof zUnitSlot>;
+
 /** One part line: a kit item of the procedure (stepId null) or of one step. */
 export const zProcedureKitItem = z.object({
 	id: z.number().int(),
@@ -128,6 +152,8 @@ export const zProcedureKitItem = z.object({
 	quantity: zQty,
 	usage: z.enum(KIT_USAGES),
 	notes: z.string().nullable(),
+	/** The unit slot this line installs into, by key. Consume lines only. */
+	into: z.string().nullable(),
 	/** Stock on hand across all records of the part. */
 	onHand: zQty
 });
@@ -154,7 +180,7 @@ export const zProcedureStep = z.object({
 	procedureId: z.number().int(),
 	/** 1..n in document order: normal OPs first, then contingency OPs, each followed by its steps. */
 	order: z.number().int(),
-	/** `1`, `1.2`, `C1`, `C1.2`. */
+	/** `1`, `1.2`, `C901`, `C901.2`. A version published before the 900 series keeps `C1`. */
 	number: z.string(),
 	/** 0 = OP, 1 = sub-step. */
 	level: z.number().int(),
@@ -169,6 +195,8 @@ export const zProcedureStep = z.object({
 	/** Derived from `signoffs`: the role of the first slot. */
 	requiredRole: z.string().nullable(),
 	signoffs: z.array(zProcedureSignoff),
+	/** The role that does the step, as its mark. A label for the people at work: it gates nothing. */
+	performer: zRoleMark.nullable(),
 	estimatedDurationMinutes: z.number().int().nullable(),
 	callouts: z.array(zProcedureCallout),
 	strictSequence: z.boolean(),
@@ -176,7 +204,9 @@ export const zProcedureStep = z.object({
 	/** Ids of the OPs this OP waits on. */
 	dependsOn: z.array(z.number().int()),
 	images: z.array(zProcedureStepImage),
-	kit: z.array(zProcedureKitItem)
+	kit: z.array(zProcedureKitItem),
+	/** OPs only: the existing units this operation names when it runs, with their part named. */
+	units: z.array(zUnitSlot.extend({ partNumber: z.string(), partName: z.string() }))
 });
 export type ProcedureStep = z.infer<typeof zProcedureStep>;
 
@@ -223,7 +253,9 @@ export const zSnapshotKitLine = z.object({
 	partId: z.number().int(),
 	quantity: zQty,
 	usage: z.enum(KIT_USAGES),
-	notes: z.string().nullable()
+	notes: z.string().nullable(),
+	/** Absent in versions published before unit slots, and on lines that install nothing. */
+	into: z.string().optional()
 });
 
 export const zSnapshotStep = z.object({
@@ -244,11 +276,18 @@ export const zSnapshotStep = z.object({
 	workcenterId: z.number().int().nullable(),
 	/** Effective slots in order. A leaf has at least one. An OP with sub-steps may have none. */
 	signoffs: z.array(zProcedureSignoff),
+	/**
+	 * The role that does the step, frozen with its code and colour at publish so a later change to
+	 * the role leaves the version as it was. Absent when none is set.
+	 */
+	performer: zRoleMark.optional(),
 	callouts: z.array(zProcedureCallout),
 	/** Ids of the OPs this OP waits on. Only OPs (level 0) have any. */
 	dependsOn: z.array(z.number().int()),
 	images: z.array(zSnapshotImage),
-	kit: z.array(zSnapshotKitLine)
+	kit: z.array(zSnapshotKitLine),
+	/** Unit slots. Absent in versions published before them, and on steps with none. */
+	units: z.array(zUnitSlot).optional()
 });
 export type SnapshotStep = z.infer<typeof zSnapshotStep>;
 
@@ -358,11 +397,15 @@ const stepFields = {
 	signoffs: z.array(zProcedureSignoffInput).nullable().optional(),
 	/** Sets the role of the first slot. `signoffs` wins when both are sent. */
 	requiredRole: z.string().max(50).nullable().optional(),
+	/** The role that does the step, by name: shown as the role's mark. It gates nothing. */
+	performer: z.string().max(50).nullable().optional(),
 	/** On: a leaf gets a second slot, an OP with sub-steps a first. Off: drops the slots after the first. */
 	requiresSignoff: z.boolean().optional(),
 	callouts: z.array(zProcedureCallout).nullable().optional(),
 	strictSequence: z.boolean().optional(),
-	workcenterId: z.number().int().nullable().optional()
+	workcenterId: z.number().int().nullable().optional(),
+	/** OPs only. Replace the unit slots; null or [] clears them. */
+	units: z.array(zUnitSlot).nullable().optional()
 };
 
 export const zStepAdd = z.object({
@@ -392,6 +435,7 @@ const zBuildStep = z.object({
 	title: z.string().trim().min(1).max(255),
 	instructions: z.string().max(MAX_MARKDOWN).nullable().optional(),
 	requiredRole: z.string().max(50).nullable().optional(),
+	performer: z.string().max(50).nullable().optional(),
 	requiresSignoff: z.boolean().optional(),
 	signoffs: z.array(zProcedureSignoffInput).nullable().optional(),
 	callouts: z.array(zProcedureCallout).nullable().optional(),
@@ -413,11 +457,15 @@ const zBuildStep = z.object({
 const zProcedureId = z.object({ id: zId });
 const zStepRef = z.object({ id: zId, stepId: zId });
 
+const zKitInto = z.string().trim().min(1).max(100).nullable().optional();
+
 const zKitAdd = z.object({
 	partId: zId,
 	quantity: zQty,
 	usage: z.enum(KIT_USAGES).default('consume'),
-	notes: z.string().max(MAX_TEXT).nullable().optional()
+	notes: z.string().max(MAX_TEXT).nullable().optional(),
+	/** A unit slot key: consuming this line installs the part into the unit bound there. */
+	into: zKitInto
 });
 
 // ---------------------------------------------------------------- contracts
@@ -428,7 +476,7 @@ const steps = {
 		method: 'POST',
 		path: '/procedures/:id/steps',
 		summary:
-			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C1, C2; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) and an optional spec.',
+			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C901, C902; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) and an optional spec.',
 		input: zStepAdd,
 		output: zProcedureStep,
 		access: 'signed-in',
@@ -563,7 +611,7 @@ const steps = {
 			name: 'procedures.steps.kit.add',
 			method: 'POST',
 			path: '/procedures/:id/steps/:stepId/kit',
-			summary: 'Add a part to a step. A part appears once per step.',
+			summary: 'Add a part to a step. A part appears once per step. into: a unit slot key of the procedure; consuming the line installs the part into the unit bound there.',
 			input: z.object({ id: zId, stepId: zId }).extend(zKitAdd.shape),
 			output: zProcedureKitItem,
 			access: 'signed-in',
@@ -580,7 +628,8 @@ const steps = {
 				kitId: zId,
 				quantity: zQty.optional(),
 				usage: z.enum(KIT_USAGES).optional(),
-				notes: z.string().max(MAX_TEXT).nullable().optional()
+				notes: z.string().max(MAX_TEXT).nullable().optional(),
+				into: zKitInto
 			}),
 			output: zProcedureKitItem,
 			access: 'signed-in',
@@ -615,7 +664,7 @@ const kit = {
 		method: 'POST',
 		path: '/procedures/:id/kit',
 		summary: 'Add a part to the procedure kit. A part appears once.',
-		input: z.object({ id: zId }).extend(zKitAdd.shape),
+		input: z.object({ id: zId }).extend(zKitAdd.omit({ into: true }).shape),
 		output: zProcedureKitItem,
 		access: 'signed-in',
 		mcp: true

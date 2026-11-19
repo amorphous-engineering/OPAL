@@ -122,7 +122,7 @@ Routing is not the record. Assignee and priority may change while a record is op
 7. Routine work is implicit. Completing a step needs no signature and no dialog. The system stamps who and when, and the step row shows them with the title struck through.
 8. A sign-off means something: a person attests to a stated act. Authors declare sign-offs on the steps that need them, and there are few. The default step has none. Two slots mean two different people.
 9. No modals during work. Confirm only what is hard to reverse, and inline where possible. Raising an issue opens the issue form in a new tab, carries the run, step and person with it, and asks only for a title. The rest can come later.
-10. Warnings stay short and sit with the step they govern, in the order warning, caution, note. They hold no action steps. Compact by default, because overuse trains people to skip them. Compact means no box, never smaller than the step's own text.
+10. Warnings stay short and sit with the step they govern, in the order warning, caution, note. A warning is for a person who can be hurt, a caution for hardware or work that can be damaged, a note for neither. They hold no action steps. Compact by default, because overuse trains people to skip them. Compact means no box, never smaller than the step's own text.
 11. Every quantity shows its unit. A picker that can outgrow a screen is searchable, with a sensible default (oldest stock first).
 12. Work does not abort. An operation exits through a contingency op or its own exit criteria. A work order nobody has started can be voided. A started one that truly cannot finish is closed short: gated, with a reason and a linked issue, and it stays legible.
 

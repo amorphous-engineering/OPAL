@@ -51,6 +51,7 @@ export function toPart(r: Row, names: TierNames): Part {
 		category: r.category,
 		unitOfMeasure: r.unitOfMeasure,
 		trackingType: r.trackingType,
+		lotRule: r.lotRule,
 		procurement: r.procurement,
 		tier: r.tier,
 		tierName: names.get(r.tier) ?? null,
@@ -154,6 +155,35 @@ export function list(ctx: Ctx, input: ListInput) {
 
 export function get(ctx: Ctx, id: number): Part {
 	return present(ctx, getRow(ctx, id));
+}
+
+/** A part by its number as a person writes it: `SPX-F-132`, `SPX-F-0132` and the stored form are one part. */
+export function byNumber(ctx: Ctx, internalPn: string): Part {
+	const pn = numbersFor(ctx.db).canonical(internalPn);
+	const row = ctx.db.select().from(part).where(eq(part.internalPn, pn)).get();
+	if (!row) throw notFound('Part');
+	return present(ctx, row);
+}
+
+/**
+ * For each text, the part numbers written in it that name a part, as written and each once. The
+ * organization's numbering settings decide what reads as a number; a number that names no part is
+ * left out, so a reader is never sent to a page that does not exist.
+ */
+export function numbersIn(ctx: Ctx, texts: string[]): string[][] {
+	const hits = texts.map((t) => numbersFor(ctx.db).find(t));
+	const wanted = [...new Set(hits.flat().map((h) => h.stored))];
+	const known = new Set<string>();
+	// Chunked to stay under SQLite's limit on bound values.
+	for (let i = 0; i < wanted.length; i += 500) {
+		const rows = ctx.db
+			.select({ pn: part.internalPn })
+			.from(part)
+			.where(inArray(part.internalPn, wanted.slice(i, i + 500)))
+			.all();
+		for (const r of rows) known.add(r.pn);
+	}
+	return hits.map((h) => [...new Set(h.filter((x) => known.has(x.stored)).map((x) => x.text))]);
 }
 
 export function detail(ctx: Ctx, id: number): PartDetail {
@@ -261,6 +291,7 @@ export function createRow(ctx: Ctx, input: PartCreateInput): Row {
 		category: blank(input.category) ?? null,
 		unitOfMeasure: input.unitOfMeasure,
 		trackingType: input.trackingType ?? defaultTracking(ctx.db, input.tier),
+		lotRule: input.lotRule ?? 'tier',
 		procurement: input.procurement ?? (externalPn ? 'buy' : 'make'),
 		tier: input.tier,
 		reorderPoint,
@@ -335,6 +366,7 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 	if (input.category !== undefined) patch.category = blank(input.category);
 	if (input.reorderPoint !== undefined) patch.reorderPoint = reorderQty(input.reorderPoint);
 	if (input.isTooling !== undefined) patch.isTooling = input.isTooling;
+	if (input.lotRule !== undefined) patch.lotRule = input.lotRule;
 	if (input.calibrationIntervalDays !== undefined) patch.calibrationIntervalDays = input.calibrationIntervalDays;
 	if (input.metadata !== undefined) {
 		patch.metadata = input.metadata === null ? null : validateMetadata(ctx.db, input.metadata, { requireAll: true });
@@ -415,6 +447,7 @@ export function revise(ctx: Ctx, input: { id: number; reason: string }): Part {
 		category: src.category,
 		unitOfMeasure: src.unitOfMeasure,
 		trackingType: src.trackingType,
+		lotRule: src.lotRule,
 		procurement: src.procurement,
 		tier: src.tier,
 		reorderPoint: src.reorderPoint,
@@ -460,6 +493,7 @@ export function createVariant(ctx: Ctx, input: z.output<typeof zVariantCreate>):
 		category: keep(blank(input.category), src.category),
 		unitOfMeasure: input.unitOfMeasure ?? src.unitOfMeasure,
 		trackingType: input.trackingType ?? src.trackingType,
+		lotRule: input.lotRule ?? src.lotRule,
 		procurement: input.procurement ?? src.procurement,
 		tier: src.tier,
 		reorderPoint: keep(reorderQty(input.reorderPoint), src.reorderPoint),

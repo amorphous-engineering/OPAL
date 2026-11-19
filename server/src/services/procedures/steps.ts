@@ -5,7 +5,8 @@ import {
 	type zStepUpdate,
 	isUnitCode,
 	notFound,
-	OpalError
+	OpalError,
+	type CalloutKind
 } from '@opal/shared';
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -42,6 +43,8 @@ import {
 	type TreeNode
 } from './tree.ts';
 import { writeSignoffs } from './signoffs.ts';
+import { canonicalRoleName } from '../org/roles.ts';
+import { checkUnits } from './units.ts';
 
 export const invalid = (code: string, message: string, fields?: Record<string, string>) =>
 	new OpalError(422, code, message, fields);
@@ -50,7 +53,7 @@ type AddInput = z.output<typeof zStepAdd>;
 type UpdateInput = z.output<typeof zStepUpdate>;
 
 /** Callouts the server keeps: trimmed text, empty boxes dropped. Order is kept. */
-export function normalizeCallouts(value: { kind: 'caution' | 'info'; text: string }[] | null | undefined) {
+export function normalizeCallouts(value: { kind: CalloutKind; text: string }[] | null | undefined) {
 	return (value ?? [])
 		.map((c) => ({ kind: c.kind, text: c.text.trim() }))
 		.filter((c) => c.text);
@@ -113,7 +116,7 @@ function renormalize(ctx: Ctx, procedureId: number) {
 // ------------------------------------------------------------------- add
 
 export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
-	draftRow(ctx.db, input.id);
+	const proc = draftRow(ctx.db, input.id);
 	const rows = stepRows(ctx.db, input.id);
 	const byId = new Map(rows.map((r) => [r.id, r]));
 
@@ -160,8 +163,9 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 		isContingency
 	);
 	const mine = patches.find((p) => p.id === NEW)!;
-	const signoffs = writeSignoffs(ctx.db, null, false, input) ?? null;
+	const signoffs = writeSignoffs(ctx.db, null, false, input, proc.projectId) ?? null;
 	checkDataFields(input.dataSchema, null);
+	const units = input.units?.length ? checkUnits(ctx.db, input.id, { id: NEW, parentStepId: mine.parentStepId }, input.units) : null;
 	const row = insert(ctx, procedureStep, {
 		procedureId: input.id,
 		parentStepId: mine.parentStepId,
@@ -171,10 +175,12 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 		instructions: input.instructions ?? null,
 		dataSchema: normalizeSchema(input.dataSchema),
 		signoffs,
+		performer: canonicalRoleName(ctx.db, input.performer, proc.projectId),
 		estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
 		callouts: normalizeCallouts(input.callouts),
 		strictSequence: parentId === null ? (input.strictSequence ?? false) : false,
-		workcenterId: input.workcenterId ?? null
+		workcenterId: input.workcenterId ?? null,
+		units
 	});
 	applyPlacements(ctx, patches, NEW);
 	return presentStep(ctx, input.id, row.id);
@@ -183,7 +189,7 @@ export function addStep(ctx: Ctx, input: AddInput): ProcedureStep {
 // ------------------------------------------------------------------- update
 
 export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
-	draftRow(ctx.db, input.id);
+	const proc = draftRow(ctx.db, input.id);
 	const step = stepRow(ctx.db, input.id, input.stepId);
 	const rows = stepRows(ctx.db, input.id);
 	const hasChildren = rows.some((r) => r.parentStepId === step.id);
@@ -194,13 +200,15 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	if (input.dataSchema) checkDataFields(input.dataSchema, step.dataSchema);
 	if (input.dataSchema !== undefined) patch.dataSchema = normalizeSchema(input.dataSchema);
 	if (input.estimatedDurationMinutes !== undefined) patch.estimatedDurationMinutes = input.estimatedDurationMinutes;
+	if (input.performer !== undefined) patch.performer = canonicalRoleName(ctx.db, input.performer, proc.projectId);
 	if (input.workcenterId !== undefined) {
 		checkWorkcenter(ctx.db, input.workcenterId);
 		patch.workcenterId = input.workcenterId;
 	}
 	if (input.callouts !== undefined) patch.callouts = normalizeCallouts(input.callouts);
 	if (input.strictSequence !== undefined) patch.strictSequence = input.strictSequence;
-	const signoffs = writeSignoffs(ctx.db, step.signoffs, hasChildren, input);
+	if (input.units !== undefined) patch.units = checkUnits(ctx.db, input.id, step, input.units ?? []);
+	const signoffs = writeSignoffs(ctx.db, step.signoffs, hasChildren, input, proc.projectId);
 	if (signoffs !== undefined) patch.signoffs = signoffs;
 
 	let regroup = false;
@@ -217,7 +225,7 @@ export function updateStep(ctx: Ctx, input: UpdateInput): ProcedureStep {
 	}
 	if (Object.keys(patch).length) update(ctx, procedureStep, step.id, patch);
 	if (regroup) {
-		// Toggling contingency moves the OP to the end of the other numbering group (1, 2 / C1, C2).
+		// Toggling contingency moves the OP to the end of the other numbering group (1, 2 / C901, C902).
 		applyPlacements(ctx, place(asNodes(stepRows(ctx.db, input.id)), step.id, null, Number.MAX_SAFE_INTEGER, input.isContingency));
 	}
 	return presentStep(ctx, input.id, step.id);
@@ -274,7 +282,8 @@ export function copyStepContent(ctx: Ctx, from: number, to: number) {
 			partId: k.partId,
 			quantity: k.quantity,
 			usage: k.usage,
-			notes: k.notes
+			notes: k.notes,
+			intoSlot: k.intoSlot
 		});
 	}
 	for (const img of ctx.db.select().from(stepImage).where(eq(stepImage.stepId, from)).orderBy(stepImage.position, stepImage.id).all()) {
@@ -315,6 +324,7 @@ export function duplicateStep(ctx: Ctx, procedureId: number, stepId: number): Pr
 			instructions: src.instructions,
 			dataSchema: src.dataSchema ? structuredClone(src.dataSchema) : null,
 			signoffs: src.signoffs ? structuredClone(src.signoffs) : null,
+			performer: src.performer,
 			estimatedDurationMinutes: src.estimatedDurationMinutes,
 			callouts: structuredClone(src.callouts ?? []),
 			strictSequence: src.strictSequence,

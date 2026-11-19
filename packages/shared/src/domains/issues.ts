@@ -4,7 +4,7 @@ import { op, zEmpty, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zTimestamp } from '../time.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT } from '../limits.ts';
 
-export const ISSUE_TYPES = ['non_conformance', 'bug', 'task', 'improvement'] as const;
+export const ISSUE_TYPES = ['non_conformance', 'anomaly', 'task', 'improvement'] as const;
 /** `void` is the terminal state of an issue raised by mistake (it replaces legacy delete). */
 export const ISSUE_STATUSES = ['open', 'closed', 'void'] as const;
 export const ISSUE_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
@@ -30,6 +30,15 @@ export const CONTAINMENT_RANK: Record<(typeof CONTAINMENTS)[number], number> = {
 	op: 2,
 	wo: 3
 };
+/**
+ * Whether an issue is settled by a signed disposition. An issue that holds work needs one to
+ * release it, and a non-conformance needs one whether or not it holds anything. Holding work is a
+ * separate question: an advisory non-conformance takes a disposition but holds nothing.
+ */
+export const takesDisposition = (r: {
+	containment: (typeof CONTAINMENTS)[number];
+	issueType: (typeof ISSUE_TYPES)[number];
+}) => r.containment !== 'advisory' || r.issueType === 'non_conformance';
 /** Derived ticket progress. */
 export const TICKET_STATES = ['pending', 'in_work', 'in_review', 'done'] as const;
 /** Derived disposition state: advisory issues show plain open | closed. */
@@ -89,7 +98,12 @@ export const zRedlineOp = z.object({
 	stepNumber: z.number().int(),
 	label: z.string(),
 	title: z.string(),
-	status: z.string()
+	status: z.string(),
+	/** False while the redline is a draft. */
+	released: z.boolean(),
+	/** Who finished it and when, once it is done. */
+	doneBy: z.string().nullable(),
+	doneAt: zTimestamp.nullable()
 });
 export type RedlineOp = z.infer<typeof zRedlineOp>;
 
@@ -127,6 +141,19 @@ export const zIssue = z.object({
 	expectedBenefit: z.string().nullable(),
 	rootCause: z.string().nullable(),
 	correctiveAction: z.string().nullable(),
+	/**
+	 * A procedure revision that is part of the corrective action: the next version of the procedure
+	 * after the one current when it was linked. The issue cannot close until that version is released.
+	 */
+	correctiveRevision: z
+		.object({
+			procedureId: z.number().int(),
+			templateNumber: z.string(),
+			name: z.string(),
+			versionNumber: z.number().int(),
+			released: z.boolean()
+		})
+		.nullable(),
 	dispositionType: z.enum(RECORDED_DISPOSITION_TYPES).nullable(),
 	dispositionRationale: z.string().nullable(),
 	dispositionedAt: zTimestamp.nullable(),
@@ -215,6 +242,8 @@ export const zIssueUpdate = z.object({
 	expectedBenefit: text,
 	rootCause: text,
 	correctiveAction: text,
+	/** Link the next revision of this procedure as part of the corrective action. null removes the link. */
+	correctiveProcedureId: zId.nullable().optional(),
 	/** Draft only. The signature is `issues.signDisposition`. null clears the draft. */
 	dispositionType: z.enum(DISPOSITION_TYPES).nullable().optional(),
 	dispositionRationale: text,
@@ -295,7 +324,8 @@ export const issues = {
 		name: 'issues.start',
 		method: 'POST',
 		path: '/issues/:id/start',
-		summary: 'Advisory issue: pending to in work. Containment issues enter work by disposition.',
+		summary:
+			'Pending to in work, for an anomaly, task or improvement that holds no work. A non-conformance, or an issue that holds work, enters work when its disposition is signed.',
 		input: z.object({ id: zId }),
 		output: zIssue,
 		access: 'signed-in',
@@ -305,7 +335,7 @@ export const issues = {
 		name: 'issues.review',
 		method: 'POST',
 		path: '/issues/:id/review',
-		summary: 'In work to in review.',
+		summary: 'In work to in review. An issue that takes a disposition needs a signed one first.',
 		input: z.object({ id: zId }),
 		output: zIssue,
 		access: 'signed-in',
@@ -348,7 +378,8 @@ export const issues = {
 		name: 'issues.signDisposition',
 		method: 'POST',
 		path: '/issues/:id/disposition',
-		summary: 'Sign the disposition. Releases every containment the issue holds.',
+		summary:
+			'Sign the disposition of a non-conformance or of an issue that holds work. Starts the work and releases every containment the issue holds.',
 		input: z.object({
 			id: zId,
 			dispositionType: z.enum(DISPOSITION_TYPES),

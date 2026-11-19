@@ -30,6 +30,7 @@
 	import { dispositionTone } from '#lib/components/risks/types.js';
 	import { stateLabel } from '#lib/format.js';
 	import PluginPanels from '#lib/components/plugins/PluginPanels.svelte';
+	import RolesSettings from '#lib/components/settings/RolesSettings.svelte';
 	import ExternalLinks from '#lib/components/plugins/ExternalLinks.svelte';
 	import type { PageProps } from './$types';
 
@@ -359,6 +360,12 @@
 			</DataTable>
 		</Section>
 	</div>
+
+	{#if data.roles}
+		<div id="roles">
+			<RolesSettings roles={data.roles} people={data.people} {isAdmin} projectId={project.id} />
+		</div>
+	{/if}
 
 	<PluginPanels slot="project.side" recordId={project.id} number={project.code} />
 	<ExternalLinks entityType="project" entityId={project.id} />

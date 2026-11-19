@@ -1,0 +1,132 @@
+# The organization that runs this OPAL instance, and the project it is building.
+#
+# The team and its people are fictional. The team name is a placeholder.
+
+# When the team set up OPAL. Parts, draft procedures and draft requirements are entered then.
+founded: '2026-06-27T17:00:00Z'
+
+organization:
+  name: Sphinx Build Team
+  description: >-
+    A team building a Mojave Sphinx from Half Cat Rocketry's guidebook, HCR-5100. Demo content,
+    adapted under the GPL. Not a real team.
+  tiers:
+    - level: 1
+      name: FLIGHT
+      code: F
+      description: Flight hardware. Pressure-bearing and recovery-critical parts, traced by serial.
+      default_tracking: serialized
+      require_lot: false
+      auto_serial: true
+    - level: 2
+      name: GROUND
+      code: G
+      description: Ground support equipment. Fill system, ignition, controls.
+      default_tracking: serialized
+      require_lot: false
+      auto_serial: false
+    - level: 3
+      name: DEV
+      code: D
+      description: Raw stock, commodity hardware, consumables, tooling, templates and jigs.
+      default_tracking: bulk
+      require_lot: false
+      auto_serial: false
+  part_numbering:
+    prefix: SPX
+    separator: '-'
+    sequence_digits: 4
+  categories:
+    - Propulsion
+    - Fluid System
+    - Valves
+    - Igniter
+    - Airframe
+    - Recovery
+    - Avionics
+    - Consumables
+    - GSE
+
+project:
+  code: SPX
+  name: Mojave Sphinx
+  description: >-
+    One Mojave Sphinx: a high-power amateur rocket with a nitrous oxide liquid bipropellant motor,
+    built to HCR-5100 R01.
+
+# A role with `project: true` belongs to the project, not the organization: a crew position,
+# offered only in the project's procedures. It passes no gate.
+roles:
+  - name: Engineer
+    description: Dispositions issues and verifies requirements.
+  - name: Technician
+    description: Performs build and assembly steps.
+  - name: Quality
+    description: Approves issue resolutions and buys off inspection steps.
+  - name: Launch Director
+    description: Directs the fill and launch. Calls the fill time and the count (HCR-5100 Section 7.4).
+    project: true
+    code: LD
+    color: purple
+  - name: Launch Operator
+    description: Holds the transmitter and works the switches (HCR-5100 Section 7.4).
+    project: true
+    code: LO
+    color: teal
+
+# Which roles pass each gate. The administrator passes every gate.
+gates:
+  issue.disposition: [Engineer]
+  issue.approve: [Quality]
+  execution.skipRequired: [Engineer]
+  execution.closeShort: [Engineer]
+
+# The first person is created by first-run setup and is the administrator.
+people:
+  - key: build
+    username: build
+    name: Build Lead
+    email: build@sphinx.local
+    roles: [Engineer, Technician, Launch Director]
+  - key: test
+    username: test
+    name: Test Engineer
+    email: test@sphinx.local
+    roles: [Engineer, Launch Operator]
+  - key: qa
+    username: qa
+    name: QA Inspector
+    email: qa@sphinx.local
+    roles: [Quality]
+
+workcenters:
+  - code: SHOP
+    name: Machine Shop
+  - code: BENCH
+    name: Assembly Bench
+  - code: STORE
+    name: Stockroom
+  - code: PAD
+    name: Launch Site
+
+suppliers:
+  - key: mcmaster
+    name: McMaster-Carr
+    website: https://www.mcmaster.com
+  - key: amazon
+    name: Amazon
+    website: https://www.amazon.com
+  - key: sendcutsend
+    name: SendCutSend
+    website: https://sendcutsend.com
+  - key: csrocketry
+    name: Chris' Rocket Supplies
+    website: https://www.csrocketry.com
+  - key: eggtimerrocketry
+    name: Eggtimer Rocketry
+    website: https://eggtimerrocketry.com
+  - key: harborfreight
+    name: Harbor Freight
+    website: https://www.harborfreight.com
+  - key: retail-store
+    name: Retail store

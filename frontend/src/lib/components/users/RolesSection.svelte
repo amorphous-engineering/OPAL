@@ -68,6 +68,9 @@
 									aria-label={r.name}
 								/>{/key}
 							<span class="font-medium">{r.name}</span>
+							{#if r.projectCode}<span class="font-mono text-xs text-muted-foreground"
+									>{r.projectCode}</span
+								>{/if}
 							{#if r.description}<span class="text-muted-foreground">{r.description}</span>{/if}
 						</label>
 					</li>

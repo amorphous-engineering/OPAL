@@ -2,18 +2,18 @@
  * Step execution: sign (complete), skip, notes, and the completion rules that follow a
  * commitment. All gating is in gates.ts and holds.ts.
  */
-import { OpalError, type SignResult, forbidden, now } from '@opal/shared';
+import { OpalError, type PersonRef, type SignResult, type SignoffWaiver, forbidden, now } from '@opal/shared';
 import { and, eq } from 'drizzle-orm';
 import { actorUserId, type Ctx } from '../../context.ts';
-import { execution, issue, signoff, stepNote, stepExecution } from '../../db/schema/index.ts';
+import { execution, issue, signoff, signoffWaiver, stepNote, stepExecution } from '../../db/schema/index.ts';
 import { insert, update } from '../../write.ts';
 import { gateRefusal, holdsGate } from '../org/gates.ts';
 import { holdsSlotRole, roleNamesOf } from '../org/roles.ts';
 import { attachmentsFor, detach, publish } from '../platform/index.ts';
-import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate } from './gates.ts';
+import { type Blocker, completeBlockers, describeBlockers, skipBlockers, slotGate, unitBlockers, waiveGate } from './gates.ts';
 import { holdState, rowHeld } from './holds.ts';
 import { type Model, type Row, getRow, isActive, isRoutine, isTerminal, loadModel } from './model.ts';
-import { personRefs, signedSlots, stepState } from './present.ts';
+import { personRefs, signedSlots, stepState, waivedSlots } from './present.ts';
 
 const refuse = (message: string, status = 409) => new OpalError(status, 'step_blocked', message);
 
@@ -85,6 +85,8 @@ export function checkCompletion(ctx: Ctx, executionId: number): boolean {
 		const kids = m.children.get(op.id) ?? [];
 		if (!kids.every((k) => isTerminal(k.se.status))) continue;
 		if (rowHeld(st, op) || kids.some((k) => rowHeld(st, k))) continue;
+		// An OP that names units waits for its required ones, then completes when they are named.
+		if (unitBlockers(m, op).length) continue;
 		const last = kids
 			.filter((k) => k.se.completedAt)
 			.sort((a, b) => (a.se.completedAt! < b.se.completedAt! ? 1 : -1))[0];
@@ -134,7 +136,9 @@ export function signStep(
 	if (input.slot < 0 || input.slot >= defs.length) throw new OpalError(404, 'not_found', `No sign-off ${input.slot} on this step`);
 
 	const signed = signedSlots(ctx.db, row.id);
+	const waived = waivedSlots(ctx.db, row.id);
 	const status = row.se.status;
+	if (waived.has(input.slot)) throw refuse(`${defs[input.slot]!.label} was waived`);
 	if (signed.has(input.slot)) {
 		if (input.slot === 0 && status === 'awaiting_signoff') throw refuse('Step is complete and awaiting sign-off');
 		if (input.slot === 0) throw refuse('Step already completed');
@@ -151,7 +155,17 @@ export function signStep(
 		input.slot === 0 && status === 'pending'
 			? completeBlockers(m, st, row, { data: input.dataCaptured ?? row.se.dataCaptured, ...explanationOf(ctx, row, input.notes) })
 			: undefined;
-	const gate = slotGate(m, st, row, input.slot, new Map([...signed].map(([n, s]) => [n, s.signedById])), complete, true, userId);
+	const gate = slotGate(
+		m,
+		st,
+		row,
+		input.slot,
+		new Map([...signed].map(([n, s]) => [n, s.signedById])),
+		complete,
+		true,
+		userId,
+		new Set(waived.keys())
+	);
 	if (!gate.canSign) {
 		throw refuse(describeBlockers(input.slot === 0 ? 'complete' : 'sign off', gate.blockers));
 	}
@@ -173,7 +187,7 @@ export function signStep(
 		signedById: userId,
 		signedAt: at
 	});
-	const last = signed.size + 1 >= defs.length;
+	const last = signed.size + waived.size + 1 >= defs.length;
 	const patch: Partial<typeof stepExecution.$inferInsert> = { status: last ? 'completed' : 'awaiting_signoff' };
 	if (input.slot === 0) {
 		if (status === 'pending') {
@@ -207,7 +221,13 @@ function dropUnusedCaptures(ctx: Ctx, stepId: number, data: Record<string, unkno
 function signResult(ctx: Ctx, m: Model, stepId: number, slot: number, stepCompleted: boolean, started: boolean, completed: boolean): SignResult {
 	const row = getRow(m, stepId);
 	const signed = signedSlots(ctx.db, stepId);
-	const people = personRefs(ctx.db, [...signed.values()].map((s) => s.signedById).filter((x): x is number => x !== null));
+	const waived = waivedSlots(ctx.db, stepId);
+	const people = personRefs(
+		ctx.db,
+		[...[...signed.values()].map((s) => s.signedById), ...[...waived.values()].map((w) => w.waivedById)].filter(
+			(x): x is number => x !== null
+		)
+	);
 	return {
 		step: stepState(ctx.db, row),
 		slot,
@@ -216,12 +236,14 @@ function signResult(ctx: Ctx, m: Model, stepId: number, slot: number, stepComple
 		executionCompleted: completed,
 		signoffs: row.signoffs.map((d, n) => {
 			const rec = signed.get(n);
+			const w = waived.get(n);
 			return {
 				slot: n,
-				label: rec?.label ?? d.label,
-				role: rec ? rec.role : d.role,
+				label: rec?.label ?? w?.label ?? d.label,
+				role: rec ? rec.role : w ? w.role : d.role,
 				signedBy: rec?.signedById != null ? (people.get(rec.signedById) ?? null) : null,
-				signedAt: rec?.signedAt ?? null
+				signedAt: rec?.signedAt ?? null,
+				waived: w ? waiverOf(w, people) : null
 			};
 		})
 	};
@@ -237,15 +259,86 @@ export function signNext(ctx: Ctx, input: { id: number; stepId: number }): SignR
 		throw refuse(row.level === 0 ? 'Step has sub-steps that are not yet complete' : 'Step must be completed before it can be signed off');
 	}
 	const signed = signedSlots(ctx.db, row.id);
+	const waived = waivedSlots(ctx.db, row.id);
 	let next: number | null = null;
 	for (let n = signed.has(0) ? 1 : 0; n < row.signoffs.length; n++) {
-		if (!signed.has(n)) {
+		if (!signed.has(n) && !waived.has(n)) {
 			next = n;
 			break;
 		}
 	}
 	if (next === null) throw refuse(`Cannot sign off step in ${status} status`);
 	return signStep(ctx, { id: input.id, stepId: input.stepId, slot: next });
+}
+
+// ---------------------------------------------------------------- waive
+
+export function waiverOf(w: typeof signoffWaiver.$inferSelect, people: ReadonlyMap<number, PersonRef>): SignoffWaiver {
+	return { by: w.waivedById != null ? (people.get(w.waivedById) ?? null) : null, at: w.waivedAt, reason: w.reason };
+}
+
+/**
+ * Waive a later slot: the one person there signed an earlier slot and cannot sign this one too.
+ * A recorded act with a reason, never a second signature. The gate is the slot's own with only the
+ * same-person rule set aside (`waiveGate`). There is no way to change or remove it afterwards: a
+ * mistake is corrected by a note on the step, the way a line written on paper is.
+ */
+export function waiveSlot(ctx: Ctx, input: { id: number; stepId: number; slot: number; reason: string }): SignResult {
+	if (ctx.actor.kind === 'token') throw forbidden('This action needs a signed-in person, not an API token');
+	const userId = actorUserId(ctx.actor);
+	const reason = input.reason.trim();
+	if (!reason) throw new OpalError(422, 'invalid_input', 'A waiver needs a reason', { reason: 'A waiver needs a reason' });
+	let m = loadModel(ctx.db, input.id);
+	requireActive(m);
+	const row = getRow(m, input.stepId);
+	const defs = row.signoffs;
+	if (input.slot >= defs.length) throw new OpalError(404, 'not_found', `No sign-off ${input.slot} on this step`);
+	if (input.slot === 0) throw refuse('The first sign-off is the work itself and cannot be waived');
+	const label = defs[input.slot]!.label;
+	const signed = signedSlots(ctx.db, row.id);
+	const waived = waivedSlots(ctx.db, row.id);
+	if (waived.has(input.slot)) throw refuse(`${label} already waived`);
+	if (signed.has(input.slot)) throw refuse(`${label} already signed`);
+	if (row.se.status === 'skipped') throw refuse('Cannot waive a sign-off on a skipped step');
+	if (row.se.status === 'completed') throw refuse('Step already signed off');
+	if (!signed.has(0)) throw refuse(`Cannot waive: Waiting on ${defs[0]!.label}`);
+
+	const role = defs[input.slot]!.role;
+	const holder = userId === null ? new Set<string>(['admin']) : roleNamesOf(ctx.db, userId);
+	const st = holdState(ctx.db, m);
+	const gate = waiveGate(
+		m,
+		st,
+		row,
+		input.slot,
+		new Map([...signed].map(([n, s]) => [n, s.signedById])),
+		undefined,
+		!role || holdsSlotRole(holder, role),
+		userId,
+		new Set(waived.keys())
+	);
+	if (!gate.canWaive) {
+		if (role && !holdsSlotRole(holder, role)) throw forbidden(`Requires role ${role}`);
+		if (gate.blockers.length) throw refuse(describeBlockers('waive', gate.blockers));
+		throw refuse(`${label} is yours to sign; a waiver is for the person who signed an earlier slot`);
+	}
+
+	const at = now();
+	insert(ctx, signoffWaiver, {
+		stepExecutionId: row.id,
+		slot: input.slot,
+		label,
+		role,
+		reason,
+		waivedById: userId,
+		waivedAt: at
+	});
+	const last = signed.size + waived.size + 1 >= defs.length;
+	if (last) update(ctx, stepExecution, row.id, { status: 'completed' });
+	const completed = checkCompletion(ctx, input.id);
+	m = loadModel(ctx.db, input.id);
+	publish({ type: 'step_completed', data: { executionId: input.id, stepId: row.id } });
+	return signResult(ctx, m, row.id, input.slot, last, false, completed);
 }
 
 // ---------------------------------------------------------------- skip
@@ -257,7 +350,7 @@ export function signNext(ctx: Ctx, input: { id: number; stepId: number }): SignR
 export function skipRefusal(ctx: Ctx, row: Row): string | null {
 	// A routine leaf's one unnamed slot is the implicit COMPLETE, not a declared sign-off.
 	const declared = row.signoffs.length > 0 && !isRoutine(row);
-	const required = !!row.dataSchema?.fields.some((f) => f.required);
+	const required = !!row.dataSchema?.fields.some((f) => f.required) || row.units.some((u) => u.required);
 	if ((!required && !declared) || holdsGate(ctx.db, ctx.actor, 'execution.skipRequired')) return null;
 	// A holder of every role the slots name may skip without the gate: that is authority over the
 	// step, which holds even though the same person cannot sign two of its slots. An unnamed slot
@@ -307,6 +400,7 @@ export function addNote(ctx: Ctx, input: { id: number; stepId: number; body: str
 		throw refuse(`This work order is ${m.exec.status.replace('_', ' ')}: add a comment instead`);
 	}
 	const row = getRow(m, input.stepId);
+	if (row.draft) throw refuse(`${row.number} is part of a draft redline; notes go on released work`);
 	const n = insert(ctx, stepNote, { stepExecutionId: row.id, authorId: actorUserId(ctx.actor), body: text });
 	const author = n.authorId === null ? null : (personRefs(ctx.db, [n.authorId]).get(n.authorId) ?? null);
 	return { id: n.id, stepId: row.id, author, createdAt: n.createdAt, body: n.body };

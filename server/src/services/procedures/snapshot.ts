@@ -7,7 +7,8 @@ import {
 	type ProcedureSnapshot,
 	type Qty,
 	type SnapshotStep,
-	formatQty
+	formatQty,
+	type CalloutKind
 } from '@opal/shared';
 import { eq, inArray } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
@@ -68,10 +69,19 @@ export function buildSnapshot(ctx: Pick<Ctx, 'db'>, procedureId: number): Proced
 			estimatedDurationMinutes: s.estimatedDurationMinutes,
 			workcenterId: s.workcenterId,
 			signoffs: s.signoffs,
+			...(s.performer ? { performer: { ...s.performer } } : {}),
 			callouts: s.callouts.map((c) => ({ ...c })),
 			dependsOn: s.dependsOn,
 			images: images.get(s.id) ?? [],
-			kit: s.kit.map((k) => ({ partId: k.partId, quantity: k.quantity, usage: k.usage, notes: k.notes }))
+			kit: s.kit.map((k) => ({
+				partId: k.partId,
+				quantity: k.quantity,
+				usage: k.usage,
+				notes: k.notes,
+				...(k.into === null ? {} : { into: k.into })
+			})),
+			// Only when declared, so a version published before slots reads the same as its draft.
+			...(s.units.length ? { units: s.units.map((u) => ({ key: u.key, label: u.label, partId: u.partId, required: u.required })) } : {})
 		})),
 		kit: procedureKitRows(ctx.db, procedureId).map((k) => ({ partId: k.partId, quantity: formatQty(k.quantity as Qty) })),
 		outputs: ctx.db
@@ -103,10 +113,13 @@ export function normalized(s: ProcedureSnapshot) {
 			estimatedDurationMinutes: x.estimatedDurationMinutes,
 			workcenterId: x.workcenterId,
 			signoffs: relabel(x.signoffs),
+			// The name only: a role recoloured after publish is not a change to the procedure.
+			performer: x.performer?.name,
 			callouts: x.callouts,
 			dependsOn: x.dependsOn.map((d) => numberOf.get(d) ?? null).sort(),
 			images: x.images.map((i) => [i.sha256, i.caption]),
-			kit: [...x.kit].sort((a, b) => a.partId - b.partId)
+			kit: [...x.kit].sort((a, b) => a.partId - b.partId),
+			units: x.units?.length ? x.units : undefined
 		})),
 		kit: [...s.kit].sort((a, b) => a.partId - b.partId),
 		outputs: [...s.outputs].sort((a, b) => a.partId - b.partId)
@@ -134,7 +147,7 @@ interface LegacyStep {
 	signoffs?: { label?: string; role?: string | null }[] | null;
 	estimated_duration_minutes?: number | null;
 	required_role?: string | null;
-	callouts?: { kind: 'caution' | 'info'; text: string }[] | null;
+	callouts?: { kind: CalloutKind; text: string }[] | null;
 	caution?: string | null;
 	strict_sequence?: boolean;
 	workcenter_id?: number | null;

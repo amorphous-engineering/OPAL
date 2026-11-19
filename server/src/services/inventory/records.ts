@@ -353,12 +353,17 @@ export interface ReceivingRules {
 	tierName: string | null;
 }
 
-/** What the part's tier asks of a receipt. A tier missing from the config gets the level rules. */
+/**
+ * What a receipt of the part asks for. A tier missing from the config gets the level rules. The
+ * part's own lot rule overrides its tier's; a serialized part never needs a lot.
+ */
 export function receivingRulesFor(ctx: DbCtx, p: PartRow): ReceivingRules {
 	const tier = getTier(getProjectConfig(ctx.db), p.tier);
 	const rules = tier ?? levelDefaults(p.tier);
 	return {
-		requireLot: rules.requireLot && p.trackingType === 'bulk',
+		requireLot:
+			p.trackingType === 'bulk' &&
+			(p.lotRule === 'required' || (p.lotRule === 'tier' && rules.requireLot)),
 		autoSerial: rules.autoSerial && p.trackingType === 'serialized',
 		tierName: tier?.name ?? null
 	};
@@ -432,7 +437,7 @@ export function receiveStock(ctx: Ctx, input: ReceiveInput): StockRecord[] {
 	if (rules.requireLot && !lot) {
 		throw invalid(
 			'lotNumber',
-			`Tier ${p.tier} lot-tracked part '${p.name}' requires a lot number when receiving`
+			`${p.name} needs the supplier's lot number when it is received`
 		);
 	}
 	const sourceType = input.sourceType ?? 'manual';

@@ -16,8 +16,9 @@ import { op, zId, zOk, zPage, zPageInput } from '../op.ts';
 import { zQty } from '../qty.ts';
 import { zTimestamp } from '../time.ts';
 import { zPersonRef } from './org.ts';
-import { zProcedureDataSchema } from './procedures.ts';
+import { CALLOUT_KINDS, zProcedureDataSchema } from './procedures.ts';
 import { MAX_MARKDOWN, MAX_SHORT, MAX_TEXT, MAX_TIMESTAMP, MAX_TOKEN, zJsonObject } from '../limits.ts';
+import { zRoleMark } from '../role-marks.ts';
 
 /**
  * Status follows from the work done. `void` and `closed_short` are the two strikes: a work order
@@ -46,7 +47,8 @@ export const EXEC_BLOCKER_KINDS = [
 	'signoff',
 	'role',
 	'out_of_spec',
-	'same_person'
+	'same_person',
+	'units'
 ] as const;
 export const PRODUCTION_STATUSES = ['planned', 'wip', 'completed'] as const;
 export const EXEC_USAGES = ['consume', 'tooling'] as const;
@@ -223,13 +225,42 @@ export type CutPreview = z.infer<typeof zCutPreview>;
 
 // ---------------------------------------------------------------- the document
 
+/**
+ * A later slot that the person who could sign it set aside, because the only signature it waited
+ * on was their own second one. A record of its own, never a signature: it reads as a line written
+ * on the slot. It stands as written; a correction is a note on the step.
+ */
+export const zSignoffWaiver = z.object({
+	by: zPersonRef.nullable(),
+	at: zTimestamp,
+	reason: z.string()
+});
+export type SignoffWaiver = z.infer<typeof zSignoffWaiver>;
+
+/**
+ * How a waiver reads wherever the slot is shown or printed, like a line written on the form:
+ * `Secondary buyoff waived: no second tech on shift, Ada Lane, 2026-11-17 14:02`. The caller
+ * formats the time its own way. `waivedText` is the same line after the label, for a row that
+ * already names the slot.
+ */
+export function waivedText(w: { by: string | null; at: string; reason: string }): string {
+	return `waived: ${w.reason.trim()}, ${w.by ?? 'unknown'}, ${w.at}`;
+}
+
+export function waiverLine(label: string, w: { by: string | null; at: string; reason: string }): string {
+	return `${label} ${waivedText(w)}`;
+}
+
 export const zDocSignoff = z.object({
 	slot: z.number().int(),
 	label: z.string(),
 	role: z.string().nullable(),
 	signedBy: zPersonRef.nullable(),
 	signedAt: zTimestamp.nullable(),
+	waived: zSignoffWaiver.nullable(),
 	canSign: z.boolean(),
+	/** The viewer could sign this slot but for having signed an earlier one: they may waive it. */
+	canWaive: z.boolean(),
 	blockers: z.array(zExecBlocker)
 });
 
@@ -285,8 +316,89 @@ export const zDocStepKit = z.object({
 	quantity: zQty,
 	uom: z.string(),
 	usage: z.enum(EXEC_USAGES),
-	notes: z.string().nullable()
+	notes: z.string().nullable(),
+	/** The released redline that replaced this line, by number. */
+	struckBy: z.string().nullable(),
+	/** The unit slot this line installs into, by key. */
+	into: z.string().nullable()
 });
+
+/**
+ * A unit the work order acts on: an existing serialized stock record, or borrowed gear OPAL does
+ * not hold (text only). Recorded on an OP; pencil while that step is workable, pen after.
+ */
+export const zExecUnit = z.object({
+	id: z.number().int(),
+	/** The step execution it was recorded on. */
+	stepId: z.number().int(),
+	stepNumber: z.string(),
+	/** The declared slot's key, or null for hardware the procedure did not list. */
+	slot: z.string().nullable(),
+	slotLabel: z.string().nullable(),
+	stockId: z.number().int().nullable(),
+	opalNumber: z.string().nullable(),
+	partId: z.number().int().nullable(),
+	partNumber: z.string().nullable(),
+	partName: z.string().nullable(),
+	serialNumber: z.string().nullable(),
+	borrowed: z.object({ name: z.string(), serial: z.string().nullable(), lentBy: z.string().nullable() }).nullable(),
+	recordedBy: z.string().nullable(),
+	recordedAt: zTimestamp,
+	/** It can still be changed: its step is workable and the work order open. */
+	pencil: z.boolean()
+});
+export type ExecUnit = z.infer<typeof zExecUnit>;
+
+/** A component taken out of a unit the work order acts on. */
+export const zComponentRemoval = z.object({
+	id: z.number().int(),
+	stepId: z.number().int(),
+	stepNumber: z.string(),
+	assemblyStockId: z.number().int(),
+	assemblyOpal: z.string(),
+	stockId: z.number().int(),
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	serialNumber: z.string().nullable(),
+	quantity: zQty,
+	uom: z.string(),
+	/** scrap: gone. stock: back on the shelf at `location`, same OPAL number (serialized units only). */
+	disposition: z.enum(['scrap', 'stock']),
+	location: z.string().nullable(),
+	notes: z.string().nullable(),
+	removedBy: z.string().nullable(),
+	at: zTimestamp
+});
+export type ComponentRemoval = z.infer<typeof zComponentRemoval>;
+
+/** A component installed in a unit now: consumed into it, less what was removed. */
+export const zInstalledComponent = z.object({
+	stockId: z.number().int(),
+	opalNumber: z.string(),
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	serialNumber: z.string().nullable(),
+	serialized: z.boolean(),
+	quantity: zQty,
+	uom: z.string(),
+	installedAt: zTimestamp
+});
+export type InstalledComponent = z.infer<typeof zInstalledComponent>;
+
+/** A declared slot on an OP, with what fills it. */
+export const zDocUnitSlot = z.object({
+	key: z.string(),
+	label: z.string(),
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	required: z.boolean(),
+	unit: zExecUnit.nullable()
+});
+export type DocUnitSlot = z.infer<typeof zDocUnitSlot>;
 
 export const zDocImage = z.object({ sha256: z.string(), filename: z.string(), caption: z.string().nullable() });
 
@@ -302,8 +414,11 @@ export const zDocStep = z.object({
 	parentId: z.number().int().nullable(),
 	status: z.enum(EXEC_STEP_STATUSES),
 	instructions: z.string().nullable(),
-	callouts: z.array(z.object({ kind: z.enum(['caution', 'info']), text: z.string() })),
+	callouts: z.array(z.object({ kind: z.enum(CALLOUT_KINDS), text: z.string() })),
+	/** The role of the first sign-off slot. */
 	role: z.string().nullable(),
+	/** The role that does the step, as its mark. Gates nothing. */
+	performer: zRoleMark.nullable(),
 	requiresSignoff: z.boolean(),
 	isContingency: z.boolean(),
 	estimatedDurationMinutes: z.number().int().nullable(),
@@ -334,6 +449,11 @@ export const zDocStep = z.object({
 	signoffs: z.array(zDocSignoff),
 	attachments: z.array(zDocAttachment),
 	consumptions: z.array(zDocConsumption),
+	/** OPs only: the declared unit slots, with what fills each. */
+	unitSlots: z.array(zDocUnitSlot),
+	/** Units recorded on this step that fill no declared slot. */
+	extraUnits: z.array(zExecUnit),
+	removals: z.array(zComponentRemoval),
 	/** "WAITING ON OP 2" / "WAITING ON 1.1 +1" */
 	waiting: z.string().nullable()
 });
@@ -345,8 +465,9 @@ export const zDocOp = z.object({
 	title: z.string(),
 	status: z.enum(EXEC_STEP_STATUSES),
 	instructions: z.string().nullable(),
-	callouts: z.array(z.object({ kind: z.enum(['caution', 'info']), text: z.string() })),
+	callouts: z.array(z.object({ kind: z.enum(CALLOUT_KINDS), text: z.string() })),
 	role: z.string().nullable(),
+	performer: zRoleMark.nullable(),
 	signoffs: z.array(zDocSignoff),
 	strictSequence: z.boolean(),
 	isContingency: z.boolean(),
@@ -356,7 +477,27 @@ export const zDocOp = z.object({
 			issueId: z.number().int(),
 			issueNumber: z.string().nullable(),
 			title: z.string().nullable(),
-			hostId: z.number().int().nullable()
+			hostId: z.number().int().nullable(),
+			dispositionType: z.string().nullable(),
+			/** Null while the redline is a draft. */
+			releasedAt: zTimestamp.nullable(),
+			releasedBy: z.string().nullable(),
+			/** Kit lines it replaces, struck once released. */
+			strikes: z.array(
+				z.object({
+					stepId: z.number().int().nullable(),
+					stepNumber: z.string().nullable(),
+					partId: z.number().int(),
+					partNumber: z.string(),
+					partName: z.string(),
+					quantity: zQty,
+					uom: z.string()
+				})
+			),
+			/** The viewer may release this draft now: its disposition is signed and the gate is theirs. */
+			canRelease: z.boolean(),
+			/** The viewer may edit or delete this draft. */
+			canEdit: z.boolean()
 		})
 		.nullable(),
 	waitingOnOps: z.array(z.string()),
@@ -382,6 +523,21 @@ export const zDocIssue = z.object({
 	dispositionType: z.string().nullable(),
 	isBlocking: z.boolean(),
 	raisedStepNumber: z.string().nullable(),
+	/**
+	 * Where its hold lands: the step or OP it must be dispositioned by, or the work order. `now`
+	 * when nothing earlier is left to do, so the hold is what stops the work. Null: it holds nothing.
+	 */
+	holdsAt: z
+		.object({
+			kind: z.enum(['step', 'op', 'wo']),
+			stepNumber: z.string().nullable(),
+			opId: z.number().int().nullable(),
+			opNumber: z.string().nullable(),
+			/** Document order of the step or OP, for sorting. */
+			seq: z.number().int(),
+			now: z.boolean()
+		})
+		.nullable(),
 	createdAt: zTimestamp
 });
 
@@ -401,7 +557,21 @@ export const zKitRow = z.object({
 	uom: z.string(),
 	qtyRequired: zQty,
 	qtyConsumed: zQty,
-	variance: zQty
+	variance: zQty,
+	/** The released redline whose steps call for this part, by number. Null: the procedure's own kit. */
+	addedBy: z.string().nullable()
+});
+/** A planned kit line a released redline replaced. Consumption at its step before that stays here. */
+export const zStruckKitRow = z.object({
+	partId: z.number().int(),
+	partNumber: z.string(),
+	partName: z.string(),
+	uom: z.string(),
+	quantity: zQty,
+	qtyConsumed: zQty,
+	stepNumber: z.string().nullable(),
+	redline: z.string(),
+	redlineStepId: z.number().int()
 });
 export const zUnplannedRow = z.object({
 	partId: z.number().int(),
@@ -490,8 +660,10 @@ export const zExecutionDocument = z.object({
 	holds: z.array(zDocHoldSummary),
 	roster: z.array(zExecRosterEntry),
 	myCursorId: z.number().int().nullable(),
-	kit: z.object({ items: z.array(zKitRow), unplanned: z.array(zUnplannedRow) }),
+	kit: z.object({ items: z.array(zKitRow), struck: z.array(zStruckKitRow), unplanned: z.array(zUnplannedRow) }),
 	consumptions: z.array(zDocConsumption),
+	/** Every unit the work order acts on, in the order recorded. */
+	units: z.array(zExecUnit),
 	outputs: z.array(zOutputRow),
 	productions: z.array(zProductionRow),
 	kitRelevant: z.boolean(),
@@ -522,7 +694,9 @@ export const zExecutionState = z.object({
 			holds: z.array(zExecHold),
 			attachments: z.number().int(),
 			consumed: z.number().int(),
-			notes: z.number().int()
+			notes: z.number().int(),
+			/** Changes whenever a unit is named or taken back, or a component removed, at this step. */
+			units: z.string()
 		})
 	),
 	roster: z.array(zExecRosterEntry),
@@ -566,7 +740,8 @@ export const zSignResult = z.object({
 			label: z.string(),
 			role: z.string().nullable(),
 			signedBy: zPersonRef.nullable(),
-			signedAt: zTimestamp.nullable()
+			signedAt: zTimestamp.nullable(),
+			waived: zSignoffWaiver.nullable()
 		})
 	)
 });
@@ -592,7 +767,9 @@ export type ExecutionComment = z.infer<typeof zExecutionComment>;
 export const zConsumeLine = z.object({
 	stockId: zId,
 	quantity: zQty,
-	usage: z.enum(EXEC_USAGES).default('consume')
+	usage: z.enum(EXEC_USAGES).default('consume'),
+	/** A unit slot key: the material goes into the unit this work order bound there. */
+	into: z.string().trim().min(1).max(100).nullish()
 });
 
 export const zConsumptionRow = z.object({
@@ -632,15 +809,27 @@ export const zKitAvailability = z.object({
 
 export const zBomReconciliation = z.object({
 	kitItems: z.array(zKitRow),
+	struck: z.array(zStruckKitRow),
 	unplanned: z.array(zUnplannedRow),
 	outputs: z.array(zProductionRow)
 });
+
+/** A part a redline step consumes. */
+export const zRedlineKitLine = z.object({ partId: zId, quantity: zQty });
+export type RedlineKitLine = z.infer<typeof zRedlineKitLine>;
+/**
+ * A planned kit line a redline replaces: the part on one step's kit (`stepId`, a step id of this
+ * execution) or on the procedure kit (`stepId` null). Struck once the redline is released.
+ */
+export const zRedlineStrike = z.object({ stepId: z.number().int().nullable(), partId: z.number().int() });
+export type RedlineStrike = z.infer<typeof zRedlineStrike>;
 
 export const zRedlineStepInput = z.object({
 	title: z.string().trim().min(1).max(255),
 	instructions: z.string().max(MAX_MARKDOWN).nullish(),
 	dataSchema: zProcedureDataSchema.nullish(),
-	requiresSignoff: z.boolean().default(false)
+	requiresSignoff: z.boolean().default(false),
+	kit: z.array(zRedlineKitLine).max(50).default([])
 });
 
 export const zRedline = z.object({
@@ -654,6 +843,9 @@ export const zRedline = z.object({
 	title: z.string(),
 	status: z.enum(EXEC_STEP_STATUSES),
 	createdAt: zTimestamp,
+	/** Null while the redline is a draft. */
+	releasedAt: zTimestamp.nullable(),
+	strikes: z.array(zRedlineStrike),
 	steps: z.array(zExecStepState)
 });
 export type Redline = z.infer<typeof zRedline>;
@@ -682,6 +874,9 @@ export const zExecutionReport = z.object({
 		closure: zExecClosure.nullable()
 	}),
 	generatedAt: zTimestamp,
+	/** The existing units the work order acted on, and components taken out of them. */
+	units: z.array(zExecUnit),
+	removals: z.array(zComponentRemoval),
 	endItems: z.array(
 		z.object({
 			partId: z.number().int(),
@@ -708,7 +903,8 @@ export const zExecutionReport = z.object({
 					label: z.string(),
 					role: z.string().nullable(),
 					signedBy: z.string().nullable(),
-					signedAt: zTimestamp.nullable()
+					signedAt: zTimestamp.nullable(),
+					waived: z.object({ by: z.string().nullable(), at: zTimestamp, reason: z.string() }).nullable()
 				})
 			)
 		})
@@ -986,11 +1182,27 @@ export const execution = {
 		method: 'POST',
 		path: '/executions/:id/steps/:stepId/signoffs/:slot',
 		summary:
-			'Sign one slot of a step sign-off list. A step is complete when its last slot is signed. Two slots need two different people. Data capture rides with slot 0.',
+			'Sign one slot of a step sign-off list. A step is complete when its last slot is signed or waived. Two slots need two different people. Data capture rides with slot 0.',
 		input: z.object({
 			...zStepPath,
 			slot: z.coerce.number().int().min(0),
 			dataCaptured: zJsonObject().nullish()
+		}),
+		output: zSignResult,
+		access: 'signed-in',
+		mcp: true,
+		humanOnly: true
+	}),
+	waive: op({
+		name: 'execution.waive',
+		method: 'POST',
+		path: '/executions/:id/steps/:stepId/signoffs/:slot/waive',
+		summary:
+			'Waive a later sign-off slot when no second person is there to sign it. A reason is required. Only someone who could sign the slot but for having signed an earlier one may waive it: the first slot must be signed, holds and the slot role still apply. The waiver is recorded with who, when and why, and cannot be changed or removed. A step is complete when every slot is signed or waived.',
+		input: z.object({
+			...zStepPath,
+			slot: z.coerce.number().int().min(1),
+			reason: z.string().trim().min(1).max(2000)
 		}),
 		output: zSignResult,
 		access: 'signed-in',
@@ -1194,21 +1406,120 @@ export const execution = {
 		access: 'signed-in',
 		mcp: true
 	}),
+	units: op({
+		name: 'execution.units',
+		method: 'GET',
+		path: '/executions/:id/units',
+		summary: 'The existing units the work order acts on, and the components taken out of them.',
+		input: z.object({ id: zId }),
+		output: z.object({ units: z.array(zExecUnit), removals: z.array(zComponentRemoval) }),
+		access: 'signed-in',
+		mcp: true
+	}),
+	bindUnit: op({
+		name: 'execution.bindUnit',
+		method: 'POST',
+		path: '/executions/:id/steps/:stepId/units',
+		summary:
+			'Name a unit this work order acts on, on an OP that is still workable: a serialized stock record (stockId), or borrowed gear OPAL does not hold (borrowed). slot: a declared slot key; omit for hardware the procedure does not list. Completing the OP freezes it.',
+		input: z.object({
+			...zStepPath,
+			slot: z.string().trim().min(1).max(100).nullish(),
+			stockId: zId.optional(),
+			borrowed: z
+				.object({
+					name: z.string().trim().min(1).max(MAX_SHORT),
+					serial: z.string().trim().max(100).nullish(),
+					lentBy: z.string().trim().max(MAX_SHORT).nullish()
+				})
+				.optional()
+		}),
+		output: zExecUnit,
+		access: 'signed-in',
+		mcp: true
+	}),
+	unbindUnit: op({
+		name: 'execution.unbindUnit',
+		method: 'DELETE',
+		path: '/executions/:id/units/:unitId',
+		summary: 'Take back a unit named on an OP that is still workable.',
+		input: z.object({ id: zId, unitId: zId }),
+		output: zOk,
+		access: 'signed-in',
+		mcp: true
+	}),
+	installed: op({
+		name: 'execution.installed',
+		method: 'GET',
+		path: '/executions/:id/units/:unitId/components',
+		summary: 'Components installed in a unit the work order acts on now, net of removals.',
+		input: z.object({ id: zId, unitId: zId }),
+		output: z.array(zInstalledComponent),
+		access: 'signed-in',
+		mcp: true
+	}),
+	removeComponent: op({
+		name: 'execution.removeComponent',
+		method: 'POST',
+		path: '/executions/:id/steps/:stepId/removals',
+		summary:
+			'Take a component out of a unit this work order acts on, at a workable step. A serialized component may go back to stock at a location (it keeps its OPAL number); anything else is scrapped.',
+		input: z.object({
+			...zStepPath,
+			unitId: zId,
+			stockId: zId,
+			quantity: zQty,
+			location: z.string().trim().min(1).max(255).nullish(),
+			notes: z.string().max(MAX_TEXT).nullish()
+		}),
+		output: zComponentRemoval,
+		access: 'signed-in',
+		mcp: true
+	}),
 	createRedline: op({
 		name: 'execution.createRedline',
 		method: 'POST',
 		path: '/executions/:id/redlines',
 		summary:
-			'Insert a redline (ad-hoc) OP into a running execution for an open non-conformance raised at a step. It gates the host OP.',
+			'Draft a redline OP in a running execution for an open non-conformance raised at a step. It gates the host OP. The floor cannot work a draft: signing the issue\'s disposition releases it, or releaseRedline once the disposition is signed.',
 		input: z.object({
 			id: zId,
 			issueId: zId,
 			title: z.string().trim().min(1).max(255),
-			steps: z.array(zRedlineStepInput).min(1)
+			steps: z.array(zRedlineStepInput).min(1),
+			strikes: z.array(zRedlineStrike).max(50).default([])
 		}),
 		output: zRedline,
 		access: 'signed-in',
 		mcp: true
+	}),
+	updateRedline: op({
+		name: 'execution.updateRedline',
+		method: 'PUT',
+		path: '/executions/:id/redlines/:redlineId',
+		summary: 'Rewrite a draft redline: its title, its steps and the kit lines it replaces. A released redline is pen.',
+		input: z.object({
+			id: zId,
+			redlineId: zId,
+			title: z.string().trim().min(1).max(255),
+			steps: z.array(zRedlineStepInput).min(1),
+			strikes: z.array(zRedlineStrike).max(50).default([])
+		}),
+		output: zRedline,
+		access: 'signed-in',
+		mcp: true
+	}),
+	releaseRedline: op({
+		name: 'execution.releaseRedline',
+		method: 'POST',
+		path: '/executions/:id/redlines/:redlineId/release',
+		summary:
+			'Release a draft redline written after its issue\'s disposition was signed. Drafts written before are released by the disposition signature.',
+		input: z.object({ id: zId, redlineId: zId }),
+		output: zRedline,
+		access: 'issue.disposition',
+		mcp: true,
+		humanOnly: true
 	}),
 	listRedlines: op({
 		name: 'execution.listRedlines',

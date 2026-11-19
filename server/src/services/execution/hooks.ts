@@ -17,6 +17,7 @@ import {
 	procedure,
 	procedureVersion,
 	signoff,
+	signoffWaiver,
 	stepExecution,
 	stepNote,
 	stockRecord
@@ -31,6 +32,8 @@ import { setExecutionCounter } from '../procedures/index.ts';
 import { registerOverviewSection } from '../reports/overview.ts';
 import { registerExecutionReport } from '../reports/exports.ts';
 import { checkCompletion } from './steps.ts';
+import { openRedlines, releaseDrafts } from './redlines.ts';
+import { userNames } from './present.ts';
 import { PRIORITY_RANK } from './executions.ts';
 import { isActive, isTerminal, loadModel, opRowOf, progress } from './model.ts';
 import { evidenceFrozen, registerOwnerGuard } from '../platform/attachments.ts';
@@ -70,6 +73,7 @@ registerEntity(execution, { label: 'Execution', ref: (r) => ({ label: r.woNumber
 registerEntity(stepExecution, { label: 'Execution step', parent: { table: execution, fk: 'executionId' } });
 registerEntity(adhocStep, { label: 'Redline step', parent: { table: execution, fk: 'executionId' } });
 registerEntity(signoff, { label: 'Sign-off', parent: { table: stepExecution, fk: 'stepExecutionId' } });
+registerEntity(signoffWaiver, { label: 'Sign-off waiver', parent: { table: stepExecution, fk: 'stepExecutionId' } });
 registerEntity(stepNote, { label: 'Step note', parent: { table: stepExecution, fk: 'stepExecutionId' } });
 registerEntity(executionParticipant, { label: 'Execution participant', parent: { table: execution, fk: 'executionId' } });
 registerEntity(executionOutput, { label: 'Execution output', parent: { table: execution, fk: 'executionId' } });
@@ -330,11 +334,25 @@ issueHooks.detailExtras = (ctx, i) => {
 	if (i.executionId === null) return { raisedOpOrder: null, risks: [], redlineOps: [] };
 	const m = loadModel(ctx.db, i.executionId);
 	const raised = i.raisedStepId === null ? undefined : m.byId.get(i.raisedStepId);
-	const redlineOps: RedlineOp[] = m.rows
-		.filter((r) => r.level === 0 && r.redline?.issueId === i.id)
-		.map((r) => ({ stepNumber: r.id, label: r.number, title: r.title, status: r.se.status }));
+	const ops = m.rows.filter((r) => r.level === 0 && r.redline?.issueId === i.id);
+	const names = userNames(ctx.db, ops.map((r) => r.se.completedById));
+	const redlineOps: RedlineOp[] = ops.map((r) => {
+		const done = isTerminal(r.se.status);
+		return {
+			stepNumber: r.id,
+			label: r.number,
+			title: r.title,
+			status: r.se.status,
+			released: !r.draft,
+			doneBy: done && r.se.completedById !== null ? (names.get(r.se.completedById) ?? null) : null,
+			doneAt: done ? r.se.completedAt : null
+		};
+	});
 	return { raisedOpOrder: raised ? opRowOf(m, raised).id : null, risks: [], redlineOps };
 };
+
+issueHooks.releaseRedlines = (ctx, issueId) => releaseDrafts(ctx, issueId);
+issueHooks.openRedlines = (ctx, issueId) => openRedlines(ctx.db, issueId);
 
 /** Everyone who worked the execution: who cut it and who completed or signed any step. */
 export function operators(db: Db, executionId: number): number[] {

@@ -4,8 +4,49 @@ All notable user-visible changes to OPAL. Dates are release dates.
 
 ## Unreleased
 
+### Added
+- **Work orders name the units they act on.** An OP declares unit slots (a test names the unit under test and its fixture). At run time each slot names a serialized stock record, or borrowed gear as text. The names can be taken back while the OP is workable and are on record once it completes, and a required slot stops its OP. A kit line can install INTO a slot, and a removal takes a component out of a named unit: a serialized one can go back to stock under its own OPAL number. A unit's page lists the work orders that named it and counts the completed ones per procedure. + OTHER HARDWARE names gear no slot asked for.
+- **A second sign-off can be waived when one person is there.** Two slots still mean two people: the same person never signs both. The waiver is its own record with a reason, who and when, and the step stamp reads "BL WAIVED 20:00". The slot's role and any hold still apply.
+- **A warning callout**, for a person who can be hurt, above caution (hardware or work) and note. 1.x warnings import as warnings.
+- **Part numbers in step text link to the part**, in instructions, issue and risk text and notes. Numbers OPAL does not know stay plain text.
+- **Role marks on steps.** A step can name the role that does it, shown as the role's letters in its colour beside the step number, on screen and on the traveler. It gates nothing. A role's letters and colour are set on the role, and a published version keeps the mark it was published with.
+- **Roles can belong to a project**: crew positions that only that project's procedures offer, managed on the project page. They pass no gate. Settings keeps the organization's roles, which do.
+- **Each bulk part says whether its receipts need the supplier's lot**: as its tier says, always (O-rings, adhesives) or never (parts made to print). A serialized part never needs a lot.
+- **A new demo dataset, Mojave Sphinx**, adapted from Half Cat Rocketry's HCR-5100 guidebook under the GPL, in `demo/mojave-sphinx/`. `server/scripts/load-demo.ts` loads it into a new data folder through OPAL's own operations: 173 parts, 21 procedures, 35 work orders, purchase orders, issues, risks, requirements and datasets. LOAD DEMO in the app still loads the 1.x seed.
+
+### Changed
+- **A purchase receipt records the supplier's lot** again, typed on the receive row of a bulk part. A serialized part takes its serial in its own field.
+- **A short step is one row with a tick.** A step with a title and nothing else (no instructions, pictures, fields, callouts or declared sign-off) completes from its row, and the traveler prints a run of them as tick rows. Routine steps print a blank for initials instead of "Primary buyoff".
+- **Contingency operations are numbered from C901**, so one is never read as a normal OP. Versions published before keep C1, C2, and the version diff treats C1 and C901 as the same step.
+- **AFTER OP is said once** on an operation whose steps all wait on the same earlier OP.
+- **Every non-conformance takes a disposition**, whether or not it holds a work order. Use as is, rework, repair, scrap, return to supplier or no defect is filled in and signed under EDIT, and signing it starts the work. A non-conformance can no longer close without one. One already started without a disposition stays in work and needs a signed disposition before review.
+- **An issue's type can change only until work starts** or a disposition is signed, since the type decides which steps the issue goes through.
+- **RETURN sits beside SIGN OFF** on an issue in review, no longer under MORE.
+- **The bug issue type is now called anomaly**: something behaved in a way nobody expected, and the cause is still being found. Existing bugs, and bugs imported from 1.x, become anomalies. "Actual behavior" reads "Observed behavior".
+- **A record's state sits at the right end of the breadcrumb bar**, in the same place on every record page, no longer after the title.
+- **Redlines are written as drafts and released by the disposition signature.** A draft sits dashed above the OP it gates, where it is written, and the floor cannot work it. Signing the issue's rework or repair disposition releases its drafts, so the hold passes straight to the redline gate and the OP never runs free in between. A draft written after the disposition is released on the work order. A released redline is no longer deleted.
+- **A redline can use parts and replace lines of the planned kit.** The replaced line reads struck on its step and in the Material tab, with the new part under it. The published procedure version does not change.
+- **The issue page shows the rework as a Correction row**, listing each redline with its state and who finished it. WRITE REDLINE replaces SPAWN REDLINE OP. Signing rework or repair without a redline asks once, inline. Review waits until every redline is finished.
+- **Corrective action can link a procedure revision.** The issue cannot close until the next version of that procedure is released.
+- **Issues beside the work are grouped by when their hold is due**, one line each: blocking now, due by the end of each OP, due by the end of the work order, other open, and closed folded away. The red HELD BY band across the work order is gone.
+- **The issue page names the step**: Containment reads STEP 5.4, and Work order reads WO-0002 OP 5.2.
+- **The stock list opens on its records**, one row per OPAL number. BY PART is a click away, and a link to low stock still opens by part.
+- **A work order's issues show all of them by default.** The toggle narrows them to the OP in focus.
+- **Plugin panels and external links moved to the work order's Details tab.**
+- **Scroll bars match the page**: a ruled box on a dithered track, in day and night. The page scrolls between the header and the status bar, which stay full width.
+- **Wording for any kind of hardware.** A new organization's tier presets are Critical, Standard and Bulk, and examples no longer assume a rocket.
+
 ### Fixed
 - **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.
+- **Demo mode builds its files in the demo folder.** It took its folders from the real data folder, so a seed with attachments would have copied them into the real organization's files. The shipped seed has none, so nothing was written.
+- **A long step number keeps its own column**: C903.13 ran into its title on the run view.
+- **A number field shows its unit once.**
+- **An OP with sub-steps shows its unit slots** on the run view and in the editor.
+
+### Upgrading
+- **Seven migrations (0013-0019) run at the first start**, after OPAL copies the database beside it: the anomaly type, redline release, sign-off waivers, units, role marks, project roles and the part lot rule.
+- **API: `issueType: "bug"` is refused**; send `"anomaly"`.
+- **API: a receipt's serial goes in `serialNumber`.** In beta.2 a one-unit serialized receipt took its serial from `lotNumber`; `lotNumber` is now only the supplier's lot.
 
 ## 2.0.0-beta.2
 

@@ -10,6 +10,7 @@ import * as presence from '../services/execution/presence.ts';
 import * as redlines from '../services/execution/redlines.ts';
 import { buildReport, holdsPayload, qrSvg } from '../services/execution/report.ts';
 import * as steps from '../services/execution/steps.ts';
+import * as units from '../services/execution/units.ts';
 
 const e = contracts.execution;
 
@@ -38,6 +39,7 @@ export const executionImpls: Impl[] = [
 		steps.signStep(ctx, { id: i.id, stepId: i.stepId, slot: 0, dataCaptured: i.dataCaptured, notes: i.notes })
 	),
 	implement(e.sign, (ctx, i) => steps.signStep(ctx, { id: i.id, stepId: i.stepId, slot: i.slot, dataCaptured: i.dataCaptured })),
+	implement(e.waive, (ctx, i) => steps.waiveSlot(ctx, i)),
 	implement(e.signoff, (ctx, i) => steps.signNext(ctx, i)),
 	implement(e.skip, (ctx, i) => steps.skipStep(ctx, i)),
 	implement(e.addNote, (ctx, i) => steps.addNote(ctx, i)),
@@ -56,8 +58,19 @@ export const executionImpls: Impl[] = [
 	implement(e.bom, (ctx, i) => material.bom(ctx, i.id)),
 	implement(e.finalize, (ctx, i) => material.finalize(ctx, i)),
 
+	implement(e.units, (ctx, i) => units.listUnits(ctx, i.id)),
+	implement(e.bindUnit, (ctx, i) => units.bindUnit(ctx, i)),
+	implement(e.unbindUnit, (ctx, i) => {
+		units.unbindUnit(ctx, i);
+		return { ok: true as const };
+	}),
+	implement(e.installed, (ctx, i) => units.installedComponents(ctx, i)),
+	implement(e.removeComponent, (ctx, i) => units.removeComponent(ctx, i)),
+
 	implement(e.createRedline, (ctx, i) => redlines.createRedline(ctx, i)),
 	implement(e.listRedlines, (ctx, i) => redlines.listRedlines(ctx, i.id)),
-	implement(e.deleteRedline, (ctx, i) => redlines.deleteRedline(ctx, i))
+	implement(e.deleteRedline, (ctx, i) => redlines.deleteRedline(ctx, i)),
+	implement(e.updateRedline, (ctx, i) => redlines.updateRedline(ctx, i)),
+	implement(e.releaseRedline, (ctx, i) => redlines.releaseRedline(ctx, i))
 ];
 

@@ -1,9 +1,13 @@
 <script lang="ts">
 	// Printable traveler: the published snapshot with write-in lines for the floor.
 	import { page } from '$app/state';
-	import { specText, unitSymbol } from '@opal/shared';
+	import { hasOnlyDefaultSignoff, specText, unitSymbol } from '@opal/shared';
 	import { datetime, qty } from '#lib/format.js';
 	import Prose from '#lib/components/procedures/Prose.svelte';
+	import { RoleMark } from '#lib/components/opal/index.js';
+	import { stepRuns } from '#lib/components/procedures/runs.js';
+	import { orderCallouts } from '#lib/components/procedure-doc/callouts.js';
+	import UnitSlotsPrint from '#lib/components/units/UnitSlotsPrint.svelte';
 	import { groupOps, type DataField, type SnapshotStep } from '#lib/components/procedures/types.js';
 	import type { PageProps } from './$types';
 
@@ -12,6 +16,9 @@
 	const v = $derived(data.version);
 	const grouped = $derived(groupOps(v.snapshot.steps));
 	const partById = $derived(new Map(v.parts.map((p) => [p.id, p])));
+	const slotLabel = $derived(
+		new Map(v.snapshot.steps.flatMap((s) => s.units ?? []).map((u) => [u.key, u.label]))
+	);
 	const target = $derived(`${page.url.origin}/procedures/versions/${v.id}`);
 	const qr = $derived(`/api/procedures/versions/${v.id}/qr?url=${encodeURIComponent(target)}`);
 	const hasOps = $derived(grouped.ops.length > 0);
@@ -46,8 +53,16 @@
 	</div>
 {/snippet}
 
-{#snippet signLines(s: SnapshotStep)}
-	{#if s.signoffs.length}
+{#snippet signLines(s: SnapshotStep, leaf: boolean)}
+	{#if leaf && hasOnlyDefaultSignoff(s.signoffs)}
+		<!-- Routine work: the default slot is the completion stamp, not a sign-off. Initials, as on
+			 a short step's row. -->
+		<div class="mt-2 flex justify-end text-[9pt]" data-done>
+			<span class="flex w-28 items-baseline gap-1"
+				>Init <span class="inline-block flex-1 border-b border-black">&nbsp;</span></span
+			>
+		</div>
+	{:else if s.signoffs.length}
 		<div class="mt-2 border-t border-neutral-400 pt-1.5 text-[9pt]">
 			{#each s.signoffs as so, i (i)}
 				<div class="flex items-baseline gap-4 py-1" data-signoff={i}>
@@ -67,14 +82,24 @@
 {/snippet}
 
 {#snippet body(s: SnapshotStep)}
-	{#each s.callouts as c, i (i)}
+	{#each orderCallouts(s.callouts) as c, i (i)}
 		<p
 			class={[
-				'my-1 border-black px-2 py-1 text-[10pt]',
-				c.kind === 'caution' ? 'border-2' : 'border'
+				'my-1 break-inside-avoid border-black px-2 py-1 text-[10pt]',
+				{ warning: 'border-[3px]', caution: 'border-2', info: 'border' }[c.kind]
 			]}
 		>
-			<b>{c.kind === 'caution' ? 'CAUTION' : 'INFO'}</b>
+			{#if c.kind === 'warning'}
+				<!-- Paper colours whatever the app theme. A printer may drop the stripe, so the word
+					 sits in a box of its own, not on a fill that would take it with it. -->
+				<b class="mr-1 inline-flex align-baseline"
+					><span
+						class="hazard w-2 border border-r-0 border-black [--background:#fff] [--error-fill:#c8001e]"
+					></span><span class="border-2 border-black px-1">WARNING</span></b
+				>
+			{:else}
+				<b>{c.kind === 'caution' ? 'CAUTION' : 'INFO'}</b>
+			{/if}
 			{c.text}
 		</p>
 	{/each}
@@ -94,7 +119,12 @@
 	{#if s.kit.length}
 		<p class="my-1 text-[9pt]">
 			<b>PARTS</b>
-			{s.kit.map((k) => `${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}`).join(' · ')}
+			{s.kit
+				.map(
+					(k) =>
+						`${partById.get(k.partId)?.name ?? '—'} × ${qty(k.quantity)}${k.into ? ` into ${slotLabel.get(k.into) ?? k.into}` : ''}`
+				)
+				.join(' · ')}
 		</p>
 	{/if}
 	<div class="grid gap-1.5">
@@ -102,13 +132,13 @@
 	</div>
 {/snippet}
 
-{#snippet opBlock(g: { op: SnapshotStep; subs: SnapshotStep[] }, contingency: boolean)}
+{#snippet opBlock(g: { op: SnapshotStep; subs: SnapshotStep[] })}
 	<section class="mb-3 break-inside-avoid-page border border-black">
 		<div
 			class="flex items-center gap-2 border-b border-black bg-neutral-200 px-2.5 py-1.5 font-bold"
 		>
-			{#if contingency}<span class="border-2 border-black bg-white px-1.5 text-[9pt]">C</span>{/if}
 			<span class="text-[13pt]">OP {g.op.number}</span>
+			{#if g.op.performer}<RoleMark mark={g.op.performer} />{/if}
 			<span>{g.op.title}</span>
 			{#if g.op.estimatedDurationMinutes}
 				<span class="ml-auto text-[9pt] font-normal">EST {g.op.estimatedDurationMinutes} min</span>
@@ -116,23 +146,61 @@
 		</div>
 		<div class="px-2.5 py-2">
 			{@render body(g.op)}
-			{#if g.subs.length === 0}{@render signLines(g.op)}{/if}
+			<UnitSlotsPrint slots={g.op.units ?? []} {partById} />
+			{#if g.subs.length === 0}{@render signLines(g.op, true)}{/if}
 		</div>
-		{#each g.subs as s (s.id)}
-			<div class="break-inside-avoid border-t border-black px-2.5 py-2 pl-6">
-				<div class="flex items-baseline gap-2 font-bold">
-					<span>{s.number}</span>
-					<span>{s.title}</span>
-					{#if s.estimatedDurationMinutes}
-						<span class="ml-auto text-[9pt] font-normal">EST {s.estimatedDurationMinutes} min</span>
-					{/if}
-				</div>
-				{@render body(s)}
-				{@render signLines(s)}
-			</div>
+		{#each stepRuns(g.subs) as run (run.steps[0].id)}
+			{#if run.short}
+				<!-- Title-only steps: a tick, the number, the title and a blank for initials. -->
+				<table class="w-full border-collapse border-t border-black text-[10pt]" data-short-run>
+					<tbody>
+						{#each run.steps as s (s.id)}
+							<tr
+								class="break-inside-avoid border-t border-dotted border-neutral-500 first:border-t-0"
+							>
+								<td class="w-10 py-1 pl-6"
+									><span class="inline-block size-4 border-2 border-black align-middle"></span></td
+								>
+								<td class="w-12 py-1 pr-2 font-bold">{s.number}</td>
+								<td class="py-1"
+									>{#if s.performer}<RoleMark
+											mark={s.performer}
+											class="mr-2 align-middle"
+										/>{/if}{s.title}{#if s.estimatedDurationMinutes}<span class="ml-2 text-[9pt]"
+											>EST {s.estimatedDurationMinutes} min</span
+										>{/if}</td
+								>
+								<td class="w-20 py-1 pr-2 pl-3 text-[9pt]"
+									><span class="flex items-baseline gap-1"
+										>Init <span class="inline-block flex-1 border-b border-black">&nbsp;</span
+										></span
+									></td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{:else}
+				{#each run.steps as s (s.id)}
+					<div class="break-inside-avoid border-t border-black px-2.5 py-2 pl-6">
+						<div class="flex items-baseline gap-2 font-bold">
+							<span>{s.number}</span>
+							{#if s.performer}<RoleMark mark={s.performer} class="self-center" />{/if}
+							<span>{s.title}</span>
+							{#if s.estimatedDurationMinutes}
+								<span class="ml-auto text-[9pt] font-normal"
+									>EST {s.estimatedDurationMinutes} min</span
+								>
+							{/if}
+						</div>
+						{@render body(s)}
+						{@render signLines(s, true)}
+					</div>
+				{/each}
+			{/if}
 		{/each}
 		{#if g.subs.length > 0}
-			<div class="border-t border-black px-2.5 pb-1">{@render signLines(g.op)}</div>
+			<div class="border-t border-black px-2.5 pb-1">{@render signLines(g.op, false)}</div>
 		{/if}
 	</section>
 {/snippet}
@@ -214,14 +282,14 @@
 	{/if}
 
 	<h2 class="mt-5 mb-2 border-b-2 border-black pb-1 text-[12pt] font-bold uppercase">Operations</h2>
-	{#each grouped.ops as g (g.op.id)}{@render opBlock(g, false)}{/each}
+	{#each grouped.ops as g (g.op.id)}{@render opBlock(g)}{/each}
 	{#if !hasOps}<p class="mb-3 text-[10pt]">OPERATIONS — none</p>{/if}
 
 	{#if grouped.contingency.length}
 		<h2 class="mt-5 mb-2 border-b-2 border-black pb-1 text-[12pt] font-bold uppercase">
 			Contingency operations
 		</h2>
-		{#each grouped.contingency as g (g.op.id)}{@render opBlock(g, true)}{/each}
+		{#each grouped.contingency as g (g.op.id)}{@render opBlock(g)}{/each}
 	{/if}
 
 	<footer class="mt-8 flex break-inside-avoid justify-between border-t-[3px] border-black pt-4">

@@ -1,0 +1,145 @@
+# Fabricate Cables and Fill Line
+#
+# Adapted from HCR-5100 R01, Section 6.3, OP 7: Fabricate Cables and Fill Line (pp. 274-275).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: gse-cables-and-fill-line
+name: Fabricate Cables and Fill Line
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section 6.3, OP 7: Fabricate Cables and Fill Line'
+  pages: 274-275
+
+description: |
+  Make the servo cable and the ignition cable from extension cords, and the fill line from nylon
+  tubing and a quick disconnect fitting.
+
+  Tools: wire cutters, wire strippers, electrical tape or heat shrink tubing, crimping tool, cutter
+  for the nylon tubing, measuring tape, wrench, 9685T3 nylon tubing (about 6 ft), PTFE tape.
+  Optional: soldering iron and solder, grease.
+
+outputs:
+  - { part: gse-servo-cable, quantity: 1 }
+  - { part: gse-ignition-cable, quantity: 1 }
+  - { part: gse-fill-line, quantity: 1 }
+
+# "Gather the following" in the guidebook (p. 274). The parts list gives 2 extension cords: one
+# goes into each cable.
+kit:
+  - { part: '16-3-10FTXT', quantity: 1, for: gse-servo-cable }
+  - { part: SRV-3PIN-1MXT, quantity: 1, for: gse-servo-cable }
+  - { part: '16-3-10FTXT', quantity: 1, for: gse-ignition-cable }
+  - { part: ALG-CLP-INS, quantity: 1, for: gse-ignition-cable }
+  - { part: QDC-750x125FLG-270MB-O007, quantity: 1, for: gse-fill-line }
+  - { part: '9452K15', quantity: 1, for: gse-fill-line }
+  - { part: '9396T31', quantity: 1, for: gse-fill-line }
+
+operations:
+  - title: Fabricate Cables and Fill Line
+    source: { section: 'Section 6.3, OP 7', pages: 274-275 }
+    workcenter: BENCH
+    steps:
+      - title: Cut and strip the extension cords
+        source: { step: 1, page: 275 }
+        instructions: |
+          Cut the female end off of QTY 2 16-3-10FTXT extension cords, and strip approximately 1
+          inch of each wire.
+
+      - title: Cut and strip the servo extension cable
+        source: { step: 2, page: 275 }
+        instructions: |
+          Cut the male end off of QTY 1 SRV-3PIN-1MXT servo extension cable, and strip
+          approximately 1 inch of each wire.
+
+      - title: Splice the servo cable
+        source: { step: 3, page: 275 }
+        instructions: |
+          Splice the servo extension cable wires onto the wires of one of the extension cords as
+          follows:
+
+          - Red wire on servo extension cable to black wire on extension cord
+          - White wire on servo extension cable to white wire on extension cord
+          - Black wire on servo extension cable to green wire on extension cord.
+
+          *Splices should be tightly twisted and insulated with electrical tape or heat shrink
+          tubing. Soldering the splices is recommended but not required.*
+
+      - title: Crimp clips on the ignition cable
+        source: { step: 4, page: 275 }
+        instructions: |
+          Crimp QTY 2 insulated alligator clips onto the black and white wires of the second
+          extension cord (one clip per wire). This provides an easy method of connecting to the
+          igniter e-match wires. The alligator clips may optionally be omitted in favor of splicing
+          the stripped ends onto the e-match during pre-launch setup. The green wire is not used on
+          the ignition cable and should be cut flush with the end of the outer insulation jacket.
+        callouts:
+          - caution: >-
+              NEVER plug the ignition or servo cables into a live 120V wall outlet. Doing so
+              creates EXTREME DANGER of electrocution and/or fire.
+          - caution: >-
+              The servo cable must ONLY be plugged into the SRV outlet on the GSE box. Plugging
+              the servo cable into the IGN outlet may damage the servos.
+
+      - title: Cut the fill line tubing
+        source: { step: 5, page: 275 }
+        instructions: |
+          Cut a section of 9685T3 nylon tubing about 6 feet in length. This will serve as the fill
+          line from the GSE to the rocket.
+
+      - title: Install the PTC fitting
+        source: { step: 6, page: 275 }
+        instructions: |
+          Apply 2-3 wraps of PTFE tape to the male threads of QTY 1 9396T31 PTC fitting and install
+          into the port of QTY 1 QDC-750x125FLG-270MB-O007 male QD fitting.
+
+      - title: Seat the tubing in the fitting
+        source: { step: 7, page: 275 }
+        instructions: |
+          Firmly push one end of the 9685T3 nylon tubing into the PTC fitting until it is fully
+          seated.
+
+      - title: Install the QD O-ring
+        source: { step: 8, page: 275 }
+        instructions: |
+          Install QTY 1 9452K15 O-ring onto the male barb of the QD fitting. The O-ring may be
+          lightly greased if necessary to aid in installation. The QD O-ring generally will last
+          for many uses, and must only be replaced if visibly damaged.
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - >-
+    The OP makes three products, each its own output here: the servo cable (steps 1-3), the
+    ignition cable (steps 1 and 4) and the fill line (steps 5-8). The guidebook names them "servo
+    cable", "ignition cable" and "fill line" in steps 4 and 5.
+  - >-
+    Kit: the parts list's QTY 2 16-3-10FTXT extension cords is written as two lines of 1, one for
+    each cable.
+  - >-
+    9685T3 nylon tubing and PTFE tape, listed "As Needed", are in the tools line, not the kit.
+  - The first sentence of the description is new.
+  - >-
+    The tools line is compiled from the steps. Section 6.3 has no Required Tools list. The grease
+    of step 8 is not in the parts list and is in the tools line as optional.
+  - 'Step 1: "QTY 2 16-3-10FTXT extension cord" is written in the plural.'
+  - >-
+    The SRV-3PIN-1MXT cable is called the servo extension cable throughout. Step 3 also calls it
+    the servo extension.
+  - >-
+    The finished servo product is called the servo cable throughout. The step 4 note also calls it
+    the servo wire and the servo lead.
+  - 'Step 7: "the 9685T3 tube" is written "the 9685T3 nylon tubing", as in step 5.'
+  - 'Step 8: "The seal" is written "The O-ring".'
+  - >-
+    Step 4: the two notes that warn of injury and of damage are set apart as cautions. The second
+    is reworded from "Ensure that the servo wire is ONLY plugged into the SRV outlet on the GSE
+    box." to a statement.
+  - >-
+    The fill line steps (5-8) print under the page header "OP 7: Fabricate Servo and Ignition
+    Cables" (p. 275). The operation takes the title of the parts list page (p. 274).

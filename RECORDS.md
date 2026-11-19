@@ -46,20 +46,26 @@ No other record can own a file. A new record type gets files by declaring its ru
 
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
-| Pending, holding work | What is wrong, what is held, what do we do? | DISPOSITION (needs `issue.disposition`) | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
-| Pending, advisory | What is it, and who has it? | START WORK | Add comment, attachment | As above | VOID (reason required) |
-| In work | What is being done? | SUBMIT FOR REVIEW | Add comment, attachment | Root cause, corrective action, priority, assignee, + PART (adds a link, none comes off) | VOID, while no disposition is signed |
-| In review | Is this finished? | SIGN OFF (needs `issue.approve`) | RETURN (reason required), add comment, attachment | | |
+| Pending, holding work | What is wrong, what is held, what do we do? | EDIT, where the disposition is filled in and signed | Add comment, attachment | Title, description, should be, is, type, priority, assignee, links, widen containment (on a hold anchored to a step, needs `issue.disposition` and a note, because a wider scope stops holding that step), disposition type and rationale, SIGN DISPOSITION (needs `issue.disposition`) | NARROW CONTAINMENT (needs `issue.disposition`, note required), VOID (needs `issue.disposition`, reason required) |
+| Pending, non-conformance holding nothing | What is wrong, and what do we do with it? | EDIT, where the disposition is filled in and signed | Add comment, attachment | As above | VOID (reason required) |
+| Pending anomaly, task or improvement | What is it, and who has it? | START WORK | Add comment, attachment | As above, without the disposition | VOID (reason required) |
+| In work | What is being done? | SUBMIT FOR REVIEW (an issue that takes a disposition needs a signed one, and every redline of the issue finished) | Add comment, attachment | Root cause, corrective action, procedure revision, priority, assignee, + PART (adds a link, none comes off), + REDLINE, and the disposition while none is signed | VOID, while no disposition is signed |
+| In review | Is this finished? | SIGN OFF (needs `issue.approve`; a linked procedure revision must be released) | RETURN (reason required), add comment, attachment | | |
 | Done | What happened, and who signed? | | Add comment, attachment | | REOPEN (needs `issue.approve`, reason required) |
 | Void | Why was this struck? | | Add comment | | |
 
 - Raising needs only a title. Everything else can be filled in later, and an issue raised from a step carries its run, step and person.
+- A non-conformance takes a disposition whether or not it holds work, and so does any issue that holds work. Signing it starts the work, and the issue cannot close without it. A non-conformance that holds nothing holds nothing after its disposition either.
+- The type decides the flow, so it can change only until work starts or a disposition is signed.
 - A signed disposition freezes the observation and the disposition. A signed or done issue cannot be voided.
 - A part link can be added while Pending or In work, because investigation is when another affected part turns up. It comes off only while Pending. In review, Done and Void take no new link.
 - A risk link also obeys the risk, from either page: a realized or closed risk takes no new line, and an accepted, realized or closed risk loses none. A void issue's risk links stay as they are, and a risk cannot link a void issue.
 - Moving the boundary of a hold off an unfinished step releases that step, so it takes what narrowing takes. Setting a first boundary adds a hold and stays open.
 - A void issue shows its title struck through and its reason at the top. It has no controls except a comment.
 - Disposition fields sit behind EDIT until someone opens them. View mode shows a draft as facts.
+- Rework and repair on a work order are written as redlines: WRITE REDLINE is the move while the Correction row is blank. Signing a rework or repair without one asks once, inline, because the hold lifts and nothing is reworked on the work order.
+- Signing the disposition releases the issue's draft redlines with it, so the hold passes straight to the redline gate. Correction lists every redline with its state, and who finished it.
+- Corrective action is what stops it happening again. It may link a procedure: the next version after the one released when it was linked. The issue cannot close until that version is released.
 
 ## Execution (work order)
 
@@ -71,13 +77,23 @@ No other record can own a file. A new record type gets files by declaring its ru
 | Completed | What was done, by whom? | REPORT | Add note, comment | | |
 | Void, Closed short | Why did it stop, and where? | REPORT | Add comment | | |
 
-- A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time.
+- A step with no declared sign-off has one action: COMPLETE. No dialog, no signature row. The row then shows the title struck through with initials and time. The printed traveler gives it a blank for initials, not a sign-off line.
+- A short step has a title and nothing else: no instructions, pictures, parts, data fields, callouts or declared sign-off. It is derived from the content, never flagged. Its row is the number, the title and one tick, and the tick is COMPLETE. It is the primary key on the current step and quiet elsewhere, and it shows inert with the reason only on the step the work is waiting on. An operation of short steps is a checklist, on screen and on the printed traveler, where a run of them prints as tick rows with a blank for initials.
 - A step with declared sign-offs shows a slot for each. Pressing SIGN OFF is the attestation, with no dialog. Two slots need two different people.
-- Only the current step of the current operation is open by default. Others are one click away. SKIP and + ISSUE appear on the open step.
+- When only one person is there, whoever signed an earlier slot may WAIVE a later one with a reason, if they could otherwise sign it: the slot's role and any hold still apply. The slot then reads "waived: reason, name, time" on the run view and the report, never as a signature. A waiver cannot be changed or removed; a correction is a note on the step.
+- Only the current step of the current operation is open by default, unless it is short: a short step stays one row, and its notes box, file, SKIP and + ISSUE are one click behind the row. Others are one click away. SKIP and + ISSUE appear on the open step.
+- When a whole operation waits on another, its row says AFTER OP and its steps do not repeat it. A step shows what only it waits on, such as the step before it in a strict sequence.
 - SKIP on a step with required data or a declared sign-off needs `execution.skipRequired`, or every role its slots name. Once the work is done and waits on sign-off, or a slot is signed, SKIP is gone: sign it, or close the work order short.
 - Completed steps never reopen. A correction is a note or a redline.
+- A redline is written as a draft, dashed, in place above the OP it gates. The floor sees it and cannot claim, note, consume at or complete it. EDIT rewrites it and DELETE DRAFT removes it. Signing its issue's disposition releases it; one written after that is released on the work order (RELEASE, needs `issue.disposition`). Released, it is pen: no edit, no delete.
+- A redline may replace lines of the host OP's planned kit. Once released, the line reads struck where it is planned and in the Material tab, with its replacement under it. Consumption already booked against the struck line stays on it. The published version never changes.
+- The issues beside the work are grouped by when their hold is due: blocking now, due by the end of each OP (a hold bound to a later step names it), due by the end of the work order, then other open issues. Closed issues fold away.
 - Capture fields are editable while a step is workable and read-only afterwards.
 - Every quantity on the material tab shows its unit. Source is a search over stock of that part with stock on hand, defaulting to the oldest.
+- An OP that declares unit slots names the existing units the order acts on: a serialized stock record of the slot's part, or borrowed gear as text (what, serial, who lent it). Hardware the procedure did not list can be named as well. A unit is named or taken back while its OP is workable. Completing the OP puts the names on record; a correction is a note. A required slot left empty stops the OP, and skipping it takes what skipping required data takes.
+- A unit stays named once material went into it or came out of it on that order.
+- A kit line marked INTO a slot installs into the unit named there. A removal is a new line on the step: what came out of which unit, and where it went. It is offered where parts come off: a step that installs into a unit, and an OP that names units and has steps under it. An OP that only names units, such as a launch record, offers none. A serialized component may go back to stock under its own OPAL number. Lot and bulk parts are scrapped.
+- A unit's page lists every work order that named it, or an assembly it was in at the time, and counts the completed ones per procedure. Void and closed-short orders are listed and not counted.
 
 ## Procedure template
 

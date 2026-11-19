@@ -9,6 +9,7 @@
  * will be a different set of actions on the same components.
  */
 import { getContext, setContext } from 'svelte';
+import type { ExecUnit, InstalledComponent, RoleMark, UnitSlot } from '@opal/shared';
 import type { Callout, DocLabor, DocMode, DocOp, DocSchema, DocStep, SignoffDef } from './types.js';
 
 export interface StockRecord {
@@ -26,6 +27,44 @@ export interface ConsumeItem {
 	inventory_record_id: number;
 	quantity: number;
 	usage_type: string;
+	/** A unit slot key: the part goes into the unit named there. */
+	into?: string | null;
+}
+
+/** Naming the units a work order acts on, and taking components out of them. */
+export interface UnitActions {
+	bind(
+		step: DocStep,
+		body: {
+			slot?: string | null;
+			stockId?: number;
+			borrowed?: { name: string; serial?: string | null; lentBy?: string | null };
+		}
+	): Promise<boolean>;
+	unbind(unitId: number): Promise<boolean>;
+	/** Serialized records of a part to name as a unit. */
+	candidates(partId: number): Promise<StockRecordLite[]>;
+	installed(unitId: number): Promise<InstalledComponent[]>;
+	remove(
+		step: DocStep,
+		body: {
+			unitId: number;
+			stockId: number;
+			quantity: string;
+			location?: string | null;
+			notes?: string | null;
+		}
+	): Promise<boolean>;
+	/** The units named on the work order, for a removal at any step. */
+	named(): ExecUnit[];
+}
+
+export interface StockRecordLite {
+	id: number;
+	opal_number: string;
+	serial_number: string | null;
+	location: string;
+	balance: string;
 }
 
 /** Operator actions. Optional: an absent action removes its control. */
@@ -35,14 +74,20 @@ export interface DocActions {
 	release?(): Promise<void>;
 	/** Sign one sign-off slot. Slot 0 carries the captured data and the old COMPLETE gate. */
 	sign?(step: DocStep, slot: number): Promise<void>;
+	/** Waive a later slot the signer of an earlier one cannot sign. Resolves to false when refused. */
+	waive?(step: DocStep, slot: number, reason: string): Promise<boolean>;
 	/** Skip a step. The reason is required. Resolves to false when the host refused it. */
 	skip?(step: DocStep, reason: string): void | Promise<boolean>;
 	/** The issue form for this step, carrying its run and step. + ISSUE opens it in a new tab. */
 	issueHref?(step: DocStep): string;
 	/** Open the redline dialog on an OP that carries an open NC. */
 	redline?(op: DocOp): void;
-	/** Delete a not-yet-started redline OP. */
+	/** Delete a draft redline OP. */
 	deleteRedline?(op: DocOp): Promise<void>;
+	/** Open a draft redline OP for editing, in place. */
+	editRedline?(op: DocOp): void;
+	/** Release a draft written after its issue's disposition was signed. */
+	releaseRedline?(op: DocOp): Promise<void>;
 	/** Bring a step's evidence into view (the host keeps evidence outside the document). */
 	showEvidence?(step: DocStep): void;
 	/** Add a markdown execution note with files attached to it. */
@@ -51,6 +96,7 @@ export interface DocActions {
 	loadStock?(partId: number): Promise<StockRecord[]>;
 	/** Upload photos for a photo capture field; resolves to the new attachment ids. */
 	uploadPhotos?(step: DocStep, files: File[]): Promise<number[]>;
+	units?: UnitActions;
 }
 
 /**
@@ -75,11 +121,15 @@ export interface StepEdit {
 	role?: string | null;
 	requires_signoff?: boolean;
 	signoffs?: SignoffDef[] | null;
+	/** The role that does the step. Saved by name. */
+	performer?: RoleMark | null;
 	estimated_duration_minutes?: number | null;
 	is_contingency?: boolean;
 	strict_sequence?: boolean;
 	workcenter_id?: number | null;
 	data_schema?: DocSchema | null;
+	/** OPs only: the unit slots. Null or empty clears them. */
+	units?: UnitSlot[] | null;
 }
 
 export interface PartHit {
@@ -117,6 +167,8 @@ export interface AuthorActions {
 	/** Every top-level OP, for "waits on" choices. */
 	ops(): DocOp[];
 	workcenters: WorkcenterOption[];
+	/** The procedure's project: its roles are offered beside the organization's. */
+	projectId: number | null;
 	addImages(step: DocStep, files: File[]): Promise<void>;
 	setCaption(step: DocStep, imageId: number, caption: string): void;
 	removeImage(step: DocStep, imageId: number): Promise<void>;
@@ -126,13 +178,21 @@ export interface AuthorActions {
 		part: PartHit,
 		quantity: number,
 		usage: string,
-		notes: string | null
+		notes: string | null,
+		into?: string | null
 	): Promise<void>;
 	editKit(
 		step: DocStep,
 		kitId: number,
-		patch: { quantity_required?: number; usage_type?: string; notes?: string | null }
+		patch: {
+			quantity_required?: number;
+			usage_type?: string;
+			notes?: string | null;
+			into?: string | null;
+		}
 	): void;
+	/** Every unit slot the procedure declares, for kit lines that install into one. */
+	unitSlots(): UnitSlot[];
 	removeKit(step: DocStep, kitId: number): Promise<void>;
 	/** Upload an image for use inside markdown; resolves to the markdown to insert. */
 	uploadInline(file: File): Promise<string>;

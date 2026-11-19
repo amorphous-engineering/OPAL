@@ -1,0 +1,317 @@
+# Thrust Chamber Assembly
+#
+# Adapted from HCR-5100 R01, Section V, OP 7: Thrust Chamber Assembly (pp. 180-190).
+# Copyright 2024 Half Cat Rocketry. GPL-3.0-or-later. See ../README.md.
+#
+# Text blocks are Markdown. A blank line starts a new paragraph; the loader joins the lines of a
+# paragraph, so wrap them freely.
+
+key: thrust-chamber-assembly
+name: Thrust Chamber Assembly
+# build: the work order produces a part. op: the work order acts on hardware that already exists.
+type: build
+source:
+  document: HCR-5100 R01
+  section: 'Section V, OP 7: Thrust Chamber Assembly'
+  pages: 180-190
+
+description: |
+  Fit the injector with its fittings, seals and retaining ring, install it in the combustion
+  chamber, fit the nozzle throat insert and gasket to the nozzle, and clamp chamber and nozzle between two
+  flanges with eight rods and the mounting brackets.
+
+  Tools: wrenches and screwdriver, large external snap ring pliers, strap wrench, pliers or
+  vise-grips, razor knife, wooden dowel or plastic rod, mallet, PTFE tape, O-ring grease. Optional:
+  thin-walled socket, aluminum tape.
+
+output:
+  part: thrust-chamber-assembly
+  quantity: 1
+
+# "Gather the following" in the guidebook (p. 181).
+kit:
+  - part: NZZL-45C20D-200E
+    quantity: 1
+  - part: THRT-45C20D-100T
+    quantity: 1
+  - part: CMBR-200DI-250B-5375L
+    quantity: 1
+  - part: INJC-2X8NPT-38NPT-250T20-2XO230-BASIC
+    quantity: 1
+  - part: '50675K164'
+    quantity: 1
+  - part: '50675K435'
+    quantity: 1
+  - part: '50785K171'
+    quantity: 1
+  - part: '50785K91'
+    quantity: 1
+  - part: '9396K79'
+    quantity: 2
+  - part: '90213A101'
+    quantity: 1
+  - part: '94095K114'
+    quantity: 1
+  - part: FLNG-ST-25T-8X250C
+    quantity: 2
+  - part: BRKT-90A-125T-2X250C
+    quantity: 8
+  - part: '95505A601'
+    quantity: 16
+  - part: '92141A029'
+    quantity: 16
+  - part: '91102A750'
+    quantity: 8
+  - part: '90281A102'
+    quantity: 8
+  - part: '90015A410'
+    quantity: 1
+  - part: '9368T14'
+    quantity: 1
+  - part: '8284N57'
+    quantity: 1
+
+operations:
+  - title: Thrust Chamber Assembly
+    source: { section: 'Section V, OP 7', pages: 180-190 }
+    workcenter: BENCH
+    images:
+      - file: photos/op-07/thrust-chamber-assembly.png
+        caption: Thrust chamber assembly.
+        source_page: 180
+    steps:
+      - title: Install the injector fittings
+        source: { step: 1, page: 182 }
+        instructions: |
+          Apply 2-3 clockwise wraps of PTFE tape to the male threads of QTY 1 50675K164 and QTY 1
+          50675K435 flared adapter fittings and both ends of QTY 1 50785K171 pipe nipple. Install
+          the fittings into the injector ports as shown, with QTY 1 50785K91 installed on the upper
+          end of the pipe nipple. Tighten all fittings to snug, 1-3 turns past finger-tight. A
+          strap wrench is recommended to grip the injector while installing fittings.
+
+          *Install the 50675K164 fitting into the center port (oxidizer inlet) first, to allow for
+          tool access. A thin-walled socket may also be used to remove dependency on order of
+          installation.*
+
+          *Pliers or vise-grips should be used to install the 50785K171 pipe nipple. Marring of
+          the surface is acceptable and non-detrimental.*
+
+          *Note: Injector sectioned to show port geometry. Section cut faces are highlighted in
+          blue.*
+        images:
+          - file: photos/op-07/injector-fittings-section.jpg
+            caption: Fittings installed in the injector ports, injector sectioned.
+            source_page: 182
+
+      - title: Install the retaining ring
+        source: { step: 2, page: 183 }
+        instructions: |
+          Install QTY 1 90213A101 external retaining ring into the upper-most groove on the
+          injector as shown. Ensure that the ring is fully seated into the groove. The clocking of
+          the retaining ring does not matter.
+
+      - title: Install the bearing and screw
+        source: { step: 3, page: 183 }
+        instructions: |
+          Install QTY 1 9368T14 bronze sleeve bearing and QTY 1 90015A410 truss head slotted screw
+          as shown. Tighten firmly, ensuring that the bearing is compressed to the injector face.
+        images:
+          - file: photos/op-07/injector-face-screw-bearing.jpg
+            caption: Injector face with the bronze sleeve bearing and truss head slotted screw.
+            source_page: 183
+
+      - title: Install the injector O-rings
+        source: { step: 4, page: 183 }
+        instructions: |
+          Liberally grease QTY 2 9396K79 -141 high-temperature O-rings, and install into the
+          O-ring glands on the injector as shown. The deepest groove (2nd from the injector face) is
+          the fuel manifold; do NOT install an O-ring in this groove.
+        images:
+          - file: photos/op-07/injector-o-rings.jpg
+            caption: Injector with fittings, external retaining ring and O-rings.
+            source_page: 183
+
+      - title: Install the injector in the chamber
+        source: { step: 5, page: 184 }
+        instructions: |
+          Install the injector assembly into the larger bore in the combustion chamber. Apply slow,
+          even pressure to compress the seal into the bore.
+
+          *When the injector is fully seated, the external retaining ring should contact the
+          forward face of the combustion chamber. A small gap is acceptable at this time, as the
+          injector will be drawn in by the rods on a later step.*
+        callouts:
+          - caution: Take care not to damage the O-rings.
+        images:
+          - file: photos/op-07/injector-in-chamber.jpg
+            caption: Injector assembly installed in the combustion chamber.
+            source_page: 184
+
+      - title: Fit the spring to the insert
+        source: { step: 6, page: 185 }
+        instructions: |
+          Place QTY 1 8284N57 spring into the groove of QTY 1 THRT-45C20D-100T nozzle throat
+          insert.
+        images:
+          - file: photos/op-07/spring-on-throat-insert.jpg
+            caption: Spring in the groove of the nozzle throat insert.
+            source_page: 185
+
+      - title: Install the throat insert
+        source: { step: 7, page: 185 }
+        instructions: |
+          Coat the outside of the nozzle throat insert, including the spring, in a thin layer of
+          grease, then install the insert into the nozzle as shown in the section view. A wooden
+          dowel or plastic rod may be used to press or mallet the insert into the bore until the
+          spring seats in the retaining groove. The spring prevents the nozzle throat insert from
+          becoming easily dislodged and falling into the chamber during handling.
+
+          *Note that the nozzle throat insert does not have a soft seal; the compressive load
+          against the bottom face of the nozzle bore generated by chamber pressure is sufficient to
+          minimize blow-by, without requiring a gasket or O-ring.*
+        images:
+          - file: photos/op-07/throat-insert-in-nozzle-section.jpg
+            caption: Nozzle throat insert seated in the nozzle, section view.
+            source_page: 185
+
+      - title: Trim and place the gasket
+        source: { step: 8, page: 186 }
+        instructions: |
+          Using a razor knife, trim the inner edge of the 94095K114 graphite gasket to an
+          approximately 2-inch inner diameter. A high degree of precision is not required, so long
+          as there is at least 3/8 in of width remaining on all sides of the gasket. Slight
+          protrusion into the combustion chamber is non-detrimental.
+
+          Once trimmed, place the gasket onto the flat face of the nozzle as shown.
+
+          *Note: There is a thin layer of stainless steel foil in the middle of the gasket, however
+          it can be cut easily with a sharp blade.*
+        images:
+          - file: photos/op-07/gasket-on-nozzle.jpg
+            caption: Graphite gasket on the flat face of the nozzle.
+            source_page: 186
+
+      - title: Stack the flanges and chamber
+        source: { step: 9, page: 187 }
+        instructions: |
+          Place QTY 1 FLNG-ST-25T-8X250C flange over the external retaining ring on the injector.
+          Place the second flange around the nozzle, and stack the injector/chamber on top of the
+          nozzle and gasket as shown.
+
+          *Tip: use a strip of aluminum tape to hold the nozzle concentric to the chamber (not
+          shown).*
+        images:
+          - file: photos/op-07/flanges-on-chamber.jpg
+            caption: Combustion chamber stacked on the nozzle, between the two flanges.
+            source_page: 187
+
+      - title: Insert the first four rods
+        source: { step: 10, page: 187 }
+        instructions: |
+          Thread QTY 4 95505A601 hex nuts onto QTY 4 90281A102 rods with approximately 0.28 in of
+          thread protruding. Place QTY 1 91102A750 split lock washer onto each rod underneath the
+          nuts, followed by QTY 1 92141A029 flat washer on each rod. Then, insert the rods through
+          the upper flange as shown.
+
+          *Note the location of the flange holes and rods relative to the injector fittings. Two
+          holes must align with the fuel inlet and igniter port, and the rods should be installed
+          in the positions shown, adjacent to and +/-90 degrees from the injector fittings.*
+        images:
+          - file: photos/op-07/complete-forward-end-view.jpg
+            caption: Complete assembly, forward end view, showing the rods and flange holes around the injector fittings.
+            source_page: 190
+
+      - title: Retain the lower flange
+        source: { step: 11, page: 187 }
+        instructions: |
+          Place QTY 1 92141A029 flat washer and QTY 1 95505A601 hex nut onto the lower end of each
+          rod to retain the lower flange. Thread the nuts on until the flange is seated against the
+          nozzle, with approximately equal thread protrusion on each end of the rod. Tighten the
+          nuts to snug; they will be fully tightened on a later step.
+        images:
+          - file: photos/op-07/first-rods-in-flanges.jpg
+            caption: Four rods through both flanges, nuts snug.
+            source_page: 187
+
+      - title: Install the brackets and rods
+        source: { step: 12, page: 188 }
+        instructions: |
+          Thread QTY 4 95505A601 hex nuts onto QTY 4 90281A102 rods with approximately 0.15 in of
+          thread protruding. Place QTY 1 91102A750 split lock washer onto each rod underneath the
+          nuts, followed by QTY 1 92141A029 flat washer on each rod.
+
+          Then, place QTY 1 BRKT-90A-125T-2X250C bracket onto each rod, with the longer tab
+          extending vertically upward. Insert the rods through the unoccupied holes in both
+          flanges.
+
+          Place an additional QTY 4 BRKT-90A-125T-2X250C brackets onto the rods at the aft end of
+          the chamber assembly, in the same orientation. Secure with an additional QTY 4 95505A601
+          hex nuts and QTY 4 92141A029 flat washers to complete the assembly as shown. Split lock
+          washers are not required on the aft end.
+        images:
+          - file: photos/op-07/brackets-forward-end.jpg
+            caption: Brackets, nuts and washers at the forward flange.
+            source_page: 188
+          - file: photos/op-07/brackets-aft-end.jpg
+            caption: Brackets, nuts and washers at the aft flange.
+            source_page: 188
+
+      - title: Tighten all rod nuts
+        source: { step: 13, page: 189 }
+        instructions: |
+          Tighten the nuts on all 8 rods until the split lock washers are fully compressed, then
+          approximately ¼ additional turn. Ensure roughly equal thread protrusion on both ends of
+          each rod.
+
+          *Note: It is recommended to tighten the nuts in a star pattern. After tightening all 8
+          nuts, repeat the pattern as needed until all nuts are found to remain tight. Some visible
+          deflection of the FLNG-ST-25T-8X250C flanges is normal, and does not indicate a
+          problem.*
+        images:
+          - file: photos/op-07/complete-section-view.jpg
+            caption: Complete thrust chamber assembly, section view.
+            source_page: 190
+          - file: photos/op-07/complete-side-view.jpg
+            caption: Complete thrust chamber assembly, side view.
+            source_page: 190
+
+# Every difference from the guidebook's text, other than layout. This list is also the notice of
+# modification that the GPL asks for.
+changes_from_source:
+  - Step titles are new. The guidebook's steps have none.
+  - The first sentence of the description is new.
+  - The tools line is compiled from the steps and from Required Tools (pp. 136-137).
+  - PTFE tape and O-ring grease, listed with no quantity (p. 181), are in the tools line, not the kit.
+  - 'Step 1.1: "both ends QTY 1 50785K171" is written "both ends of QTY 1 50785K171".'
+  - >-
+    Step 1.2: the step prints 97633A450 for the external retaining ring. The number from the parts
+    list, 90213A101, is used.
+  - 'Step 1.5: the sentence that warns of damage to the O-rings is set apart as a caution.'
+  - >-
+    The 90281A102 studs are called rods throughout. The guidebook also calls them threaded studs
+    (steps 10 and 12) and, in step 5, tie-rods.
+  - >-
+    The THRT-45C20D-100T insert is called the nozzle throat insert throughout. Step 7 also calls it
+    the throat insert.
+  - >-
+    The 91102A750 washers are called split lock washers throughout. Steps 12 and 13 also call them
+    lock washers.
+  - 'Step 1.9: "over the external retaining on the injector" is written "over the external retaining ring on the injector".'
+  - 'Step 1.10: "QTY 1 91102A750 split lock washers" is written in the singular, as in step 12.'
+  - 'Step 1.10: "the rods should be installed the positions shown" is written "installed in the positions shown".'
+  - 'Step 1.12: "QTY 4 QTY 4 BRKT-90A-125T-2X250C" is written once, and "QTY 1 BRKT-90A-125T-2X250C brackets" is written in the singular.'
+  - 'Step 1.13: "8X nuts" is written "8 nuts", and "flange plates" is written "flanges".'
+  - 'Steps 1.8, 1.10 and 1.12: "3/8"", ".28”" and ".15”" are written "3/8 in", "0.28 in" and "0.15 in".'
+  - >-
+    Pictures moved from the step they sit under: the injector face view (p. 183, under step 4) is
+    on step 1.3, which installs the bearing and screw it shows; the spring on the throat insert
+    (p. 185, under step 7) is on step 1.6; the flanges and chamber without rods (p. 187, under
+    step 11) are on step 1.9.
+  - >-
+    Page 190 has no numbered step. It holds the sentence "Reference the images below for the
+    configuration of the complete thrust chamber assembly." and three views of the complete
+    assembly. The sentence is not reproduced; the captions say each view shows the complete
+    assembly. The forward end view is on step 1.10, whose note refers to the positions of the rods
+    relative to the injector fittings. The section and side views are on step 1.13, which
+    completes the assembly.
+  - Image captions are new.

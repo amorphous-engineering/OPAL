@@ -70,7 +70,7 @@ function freezeLinks(text: string | null, blobs: BlobMap): string | null {
 	});
 }
 
-/** The kinds OPAL 2 has. A warning is a caution, and the kind the text was written under stays in the text. */
+/** A kind OPAL 2 has is kept, in any case. Any other kind is info, and its name stays in the text. */
 function calloutsFrom(c: ImportCtx, value: unknown, where: string): ProcedureCallout[] | null {
 	const list = json<unknown>(value);
 	if (!Array.isArray(list)) return null;
@@ -80,10 +80,10 @@ function calloutsFrom(c: ImportCtx, value: unknown, where: string): ProcedureCal
 			warn(c, `${where}: callout ${i + 1} has no text, left out`);
 			return [];
 		}
-		if ((CALLOUT_KINDS as readonly unknown[]).includes(x.kind)) return [{ kind: x.kind as ProcedureCallout['kind'], text: x.text }];
-		const kind = String(x.kind).toLowerCase() === 'warning' ? ('caution' as const) : ('info' as const);
-		warn(c, `${where}: callout ${i + 1} of kind ${JSON.stringify(x.kind)} reads as ${kind}`);
-		return [{ kind, text: kind === 'info' ? `${String(x.kind)}: ${x.text}` : x.text }];
+		const named = String(x.kind).toLowerCase();
+		if ((CALLOUT_KINDS as readonly string[]).includes(named)) return [{ kind: named as ProcedureCallout['kind'], text: x.text }];
+		warn(c, `${where}: callout ${i + 1} of kind ${JSON.stringify(x.kind)} reads as info`);
+		return [{ kind: 'info' as const, text: `${String(x.kind)}: ${x.text}` }];
 	});
 }
 

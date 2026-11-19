@@ -7,11 +7,12 @@ import {
 	EXEC_TERMINAL_STATUSES,
 	type ProcedureSnapshot,
 	type SnapshotStep,
+	type UnitSlot,
 	notFound
 } from '@opal/shared';
 import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { adhocStep, execution, procedure, procedureVersion, stepExecution } from '../../db/schema/index.ts';
+import { adhocStep, execution, executionUnit, procedure, procedureVersion, stepExecution } from '../../db/schema/index.ts';
 import { effectiveSignoffs } from '../procedures/signoffs.ts';
 
 export type ExecutionRow = typeof execution.$inferSelect;
@@ -38,6 +39,8 @@ export interface Row {
 	instructions: string | null;
 	dataSchema: SnapshotStep['dataSchema'];
 	signoffs: { label: string; role: string | null }[];
+	/** The role that does the step, as frozen at publish. Redline steps have none. */
+	performer: SnapshotStep['performer'] | null;
 	isContingency: boolean;
 	strictSequence: boolean;
 	/** Step execution ids of the OPs this OP waits on. */
@@ -47,9 +50,13 @@ export interface Row {
 	callouts: SnapshotStep['callouts'];
 	images: SnapshotStep['images'];
 	kit: SnapshotStep['kit'];
+	/** OPs only: declared unit slots. */
+	units: UnitSlot[];
 	hasChildren: boolean;
 	/** A redline OP: the issue it answers and the OP it gates. */
 	redline: { issueId: number; hostId: number | null } | null;
+	/** A redline OP or step not yet released: pencil, which the floor cannot work. */
+	draft: boolean;
 	/** Index in document order. */
 	seq: number;
 }
@@ -63,7 +70,11 @@ export interface Model {
 	children: Map<number, Row[]>;
 	/** Snapshot step id to step execution id. */
 	seOfTemplate: Map<number, number>;
+	/** The units the work order acts on, in the order recorded. */
+	units: UnitRow[];
 }
+
+export type UnitRow = typeof executionUnit.$inferSelect;
 
 export function executionRow(db: Db, id: number): ExecutionRow {
 	const r = db.select().from(execution).where(eq(execution.id, id)).get();
@@ -104,6 +115,7 @@ export function loadModel(db: Db, executionId: number): Model {
 			instructions: s.instructions,
 			dataSchema: s.dataSchema,
 			signoffs: s.signoffs.map((x) => ({ label: x.label, role: x.role })),
+			performer: s.performer ?? null,
 			isContingency: s.isContingency,
 			strictSequence: s.strictSequence,
 			dependsOn: s.dependsOn.map((d) => seOfTemplate.get(d)).filter((x): x is number => x !== undefined),
@@ -112,11 +124,14 @@ export function loadModel(db: Db, executionId: number): Model {
 			callouts: s.callouts,
 			images: s.images,
 			kit: s.kit,
+			units: s.level === 0 ? (s.units ?? []) : [],
 			hasChildren: snapHasChildren.has(s.id),
 			redline: null,
+			draft: false,
 			seq: 0
 		};
 	};
+	const adhocById = new Map(adhocs.map((a) => [a.id, a]));
 	const fromAdhoc = (a: AdhocRow): Row | null => {
 		const seId = seOfAdhoc.get(a.id);
 		if (seId === undefined) return null;
@@ -133,6 +148,7 @@ export function loadModel(db: Db, executionId: number): Model {
 			instructions: a.instructions,
 			dataSchema: a.dataSchema ?? null,
 			signoffs: effectiveSignoffs(a.signoffs ?? null, hasKids).map((x) => ({ label: x.label, role: x.role })),
+			performer: null,
 			isContingency: false,
 			strictSequence: false,
 			dependsOn: [],
@@ -140,9 +156,11 @@ export function loadModel(db: Db, executionId: number): Model {
 			workcenterId: null,
 			callouts: [],
 			images: [],
-			kit: [],
+			kit: (a.kit ?? []).map((k) => ({ partId: k.partId, quantity: k.quantity, usage: 'consume' as const, notes: null })),
+			units: [],
 			hasChildren: hasKids,
 			redline: a.parentId === null ? { issueId: a.issueId, hostId: a.hostStepId === null ? null : (seOfTemplate.get(a.hostStepId) ?? null) } : null,
+			draft: (a.parentId === null ? a : adhocById.get(a.parentId))?.releasedAt == null,
 			seq: 0
 		};
 	};
@@ -184,14 +202,15 @@ export function loadModel(db: Db, executionId: number): Model {
 	for (const r of rows) {
 		if (r.parentId !== null) children.set(r.parentId, [...(children.get(r.parentId) ?? []), r]);
 	}
-	return { exec, version, snapshot, rows, byId, children, seOfTemplate };
+	const units = db.select().from(executionUnit).where(eq(executionUnit.executionId, executionId)).orderBy(asc(executionUnit.id)).all();
+	return { exec, version, snapshot, rows, byId, children, seOfTemplate, units };
 }
 
 export const opRowOf = (m: Model, row: Row): Row => (row.level === 0 || row.parentId === null ? row : (m.byId.get(row.parentId) ?? row));
 
 /** Leaf rows that count toward progress: contingency work is optional. */
 export function progress(m: Model): { done: number; total: number } {
-	const counted = m.rows.filter((r) => !r.hasChildren && !r.isContingency);
+	const counted = m.rows.filter((r) => !r.hasChildren && !r.isContingency && !r.draft);
 	return { done: counted.filter((r) => isTerminal(r.se.status)).length, total: counted.length };
 }
 

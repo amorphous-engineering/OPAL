@@ -42,9 +42,9 @@
 
 	let nextId = 0;
 	const DEFAULT_TIERS = [
-		['Flight', 'F', 'serialized', true, true],
-		['Ground', 'G', 'serialized', true, false],
-		['Loose', 'L', 'bulk', false, false]
+		['Critical', 'C', 'serialized', true, true],
+		['Standard', 'S', 'serialized', true, false],
+		['Bulk', 'B', 'bulk', false, false]
 	] as const;
 
 	// svelte-ignore state_referenced_locally
@@ -282,7 +282,7 @@
 								maxlength={24}
 								required
 								autocomplete="off"
-								placeholder="e.g. RV1"
+								placeholder="e.g. A1"
 							/>
 						</div>
 						<div class="grid grid-cols-1 gap-1.5">
@@ -447,7 +447,7 @@
 				<div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
 					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-prefix">Prefix</Label>
-						<Input id="pn-prefix" class="font-mono" bind:value={prefix} placeholder="e.g. RV1" />
+						<Input id="pn-prefix" class="font-mono" bind:value={prefix} placeholder="e.g. A1" />
 					</div>
 					<div class="grid grid-cols-1 gap-1.5">
 						<Label for="pn-sep">Separator</Label>

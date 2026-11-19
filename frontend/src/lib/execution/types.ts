@@ -10,6 +10,7 @@ import type {
 	DocLabor,
 	DocOp
 } from '#lib/components/procedure-doc/index.js';
+import type { ExecUnit } from '@opal/shared';
 
 export type InstanceStatus = 'cut' | 'in_work' | 'completed' | 'void' | 'closed_short';
 
@@ -57,6 +58,15 @@ export interface IssueRow {
 	disposition_type: string | null;
 	is_blocking: boolean;
 	raised_step_number: string | null;
+	/** Where its hold lands; null when it holds nothing. */
+	holds_at: {
+		kind: 'step' | 'op' | 'wo';
+		step_number: string | null;
+		op_order: number | null;
+		op_number: string | null;
+		seq: number;
+		now: boolean;
+	} | null;
 	created_at: string;
 }
 
@@ -67,6 +77,21 @@ export interface KitRow {
 	uom: string | null;
 	qty_required: number;
 	qty_consumed: number;
+	/** The released redline whose steps call for this part. */
+	added_by: string | null;
+}
+
+/** A planned kit line a released redline replaced. */
+export interface StruckKitRow {
+	part_id: number;
+	part_number: string;
+	part_name: string;
+	uom: string;
+	quantity: number;
+	qty_consumed: number;
+	step_number: string | null;
+	redline: string;
+	redline_order: number;
 }
 
 export interface UnplannedRow {
@@ -147,8 +172,10 @@ export interface ExecutionDocument {
 	holds: HoldEntry[];
 	roster: RosterEntry[];
 	my_cursor_order: number | null;
-	kit: { items: KitRow[]; unplanned: UnplannedRow[] };
+	kit: { items: KitRow[]; struck: StruckKitRow[]; unplanned: UnplannedRow[] };
 	consumptions: DocConsumption[];
+	/** Every unit the work order acts on. */
+	units: ExecUnit[];
 	outputs: OutputRow[];
 	productions: ProductionRow[];
 	kit_relevant: boolean;
@@ -175,6 +202,7 @@ export interface ExecutionState {
 		holds: { issue_id: number; issue_number: string; disposition_state: string; kind: string }[];
 		attachments: number;
 		consumed: number;
+		units: string;
 		notes: number;
 	}[];
 	roster: RosterEntry[];

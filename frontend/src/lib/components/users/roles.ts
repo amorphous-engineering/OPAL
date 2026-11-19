@@ -22,21 +22,28 @@ export function sortRoles(roles: Role[]): Role[] {
 	return [...roles].sort((a, b) => Number(b.isSystem) - Number(a.isSystem));
 }
 
-let names: Promise<string[]> | null = null;
+let list: Promise<Role[]> | null = null;
 
-/** Role names for pickers; fetched once per page load. */
-export function roleNames(): Promise<string[]> {
-	names ??= opal.org.roles
+/** Roles for pickers, system roles first; fetched once per page load. */
+export function roleList(): Promise<Role[]> {
+	list ??= opal.org.roles
 		.list({})
-		.then((r) => sortRoles(r).map((x) => x.name))
+		.then(sortRoles)
 		.catch((e) => {
-			names = null;
+			list = null;
 			throw e;
 		});
-	return names;
+	return list;
 }
 
-/** Forget the cached names (after roles change). */
+/** The roles a procedure of this project may name: the organization's and the project's own. */
+export const offeredIn = (roles: Role[], projectId: number | null): Role[] =>
+	roles.filter((r) => r.projectId === null || r.projectId === projectId);
+
+/** Role names for pickers. */
+export const roleNames = (): Promise<string[]> => roleList().then((r) => r.map((x) => x.name));
+
+/** Forget the cached roles (after roles change). */
 export function resetRoleNames() {
-	names = null;
+	list = null;
 }

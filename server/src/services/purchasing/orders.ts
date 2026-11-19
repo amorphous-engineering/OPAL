@@ -92,6 +92,7 @@ function presentLine(ctx: DbCtx, l: LineRow, p: PartRow, received: number): Purc
 		partExternalPn: p.externalPn,
 		unitOfMeasure: p.unitOfMeasure,
 		trackingType: p.trackingType,
+		lotRequired: rules.requireLot,
 		autoSerial: rules.autoSerial,
 		qtyOrdered: formatQty(l.qtyOrdered as Qty),
 		qtyCancelled: formatQty(l.qtyCancelled as Qty),
@@ -744,7 +745,14 @@ export function receive(
 	ctx: Ctx,
 	i: {
 		id: number;
-		lines: { lineId: number; quantity: string; location?: string | null; serialNumber?: string | null; allowOverReceipt: boolean }[];
+		lines: {
+			lineId: number;
+			quantity: string;
+			location?: string | null;
+			lotNumber?: string | null;
+			serialNumber?: string | null;
+			allowOverReceipt: boolean;
+		}[];
 	}
 ): Purchase {
 	const p = getRow(ctx, i.id);
@@ -774,12 +782,12 @@ export function receive(
 		if (serial && (pt.trackingType !== 'serialized' || qty !== QTY_SCALE)) {
 			throw invalid('serialNumber', `${pt.name}: a serial number applies to one serialized unit`);
 		}
-		// The order is the lot: everything received against it traces back to one purchase.
+		// The lot is the supplier's. The purchase is already on the receive move's line link.
 		receiveStock(ctx, {
 			partId: pt.id,
 			quantity: qty as Qty,
 			location,
-			lotNumber: p.reference,
+			lotNumber: r.lotNumber?.trim() || null,
 			serialNumber: serial,
 			sourceType: 'purchase',
 			links: { purchaseLineId: l.id }
