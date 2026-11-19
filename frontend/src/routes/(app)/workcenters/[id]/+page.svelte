@@ -115,9 +115,7 @@
 						{busy}
 						{error}
 						onsubmit={save}
-					>
-						{#snippet cancel()}{/snippet}
-					</WorkcenterForm>
+					/>
 				{/key}
 			</div>
 		{:else}

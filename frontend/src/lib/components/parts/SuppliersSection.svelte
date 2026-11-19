@@ -15,7 +15,7 @@
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
 	import { opal } from '#lib/api.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
-	import FormField from './FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import { act } from './actions.js';
 	import type { PartDetail } from '@opal/shared';
 	import type { SupplierPartRow } from '#lib/components/purchasing/types.js';

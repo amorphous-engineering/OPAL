@@ -3,13 +3,11 @@
 	// procedureId it creates the template: it shows the T-number the template would take, and
 	// nothing is written (and no number is used) until CREATE.
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { opal } from '#lib/api.js';
-	import { toastError } from '#lib/components/opal/index.js';
+	import { Field, FormKeys, needs, toastError } from '#lib/components/opal/index.js';
 	import type { Procedure, ProcedureType } from '@opal/shared';
 	import ProjectSelect from './ProjectSelect.svelte';
 
@@ -108,37 +106,32 @@
 					<span class="font-mono text-sm" data-next-number>{nextNumber ?? '…'}</span>
 				</div>
 			{/if}
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="edit-name">Name</Label>
+			<Field label="Name" for="edit-name" required>
 				<Input id="edit-name" bind:value={f.name} required maxlength={255} autofocus />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="edit-project">Project</Label>
+			</Field>
+			<Field label="Project" for="edit-project" required>
 				<ProjectSelect
 					id="edit-project"
 					bind:value={f.projectId}
 					keep={creating ? undefined : projectId}
 				/>
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="edit-type">Type</Label>
+			</Field>
+			<Field label="Type" for="edit-type">
 				<NativeSelect id="edit-type" bind:value={f.type} class="max-w-xs">
 					<NativeSelectOption value="op">OP</NativeSelectOption>
 					<NativeSelectOption value="build">BUILD</NativeSelectOption>
 				</NativeSelect>
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="edit-desc">Description</Label>
+			</Field>
+			<Field label="Description" for="edit-desc">
 				<MarkdownField id="edit-desc" bind:value={f.description} minRows={4} />
-			</div>
-			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={close}>
-					{creating ? 'EXIT WITHOUT SAVING' : 'CANCEL'}
-				</Button>
-				<Button type="submit" disabled={busy || !f.name.trim() || !f.projectId}>
-					{creating ? 'CREATE' : 'SAVE'}
-				</Button>
-			</Dialog.Footer>
+			</Field>
+			<FormKeys
+				submit={creating ? 'CREATE' : 'SAVE'}
+				cancel={close}
+				cancelLabel={creating ? 'EXIT WITHOUT SAVING' : 'CANCEL'}
+				missing={needs({ name: f.name.trim(), project: f.projectId })}
+				{busy}
+			/>
 		</form>
 	</Dialog.Content>
 </Dialog.Root>

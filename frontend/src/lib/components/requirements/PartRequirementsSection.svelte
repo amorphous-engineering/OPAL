@@ -17,7 +17,7 @@
 	import { opal } from '#lib/api.js';
 	import { stateLabel } from '#lib/format.js';
 	import type { RequirementPartRequirement as Link } from '@opal/shared';
-	import FormField from '../parts/FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 
 	let { partId, partNumber, version }: { partId: number; partNumber: string; version?: string } =
 		$props();

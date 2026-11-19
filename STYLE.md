@@ -96,6 +96,21 @@ action reads like the record numbers beside it.
 - `ActionLink` is being retired: the template editor no longer uses it, and the other pages follow.
 - Strikes (void, cancel, deactivate) go under MORE.
 
+## Forms
+
+- One box per form, titled with the record (Issue, Risk). A form with a table or a preview keeps its
+  boxes side by side, and its keys still sit under them.
+- `Field`: the label over its control, as a noun. Required fields carry a quiet `*`, never red.
+- `FormKeys` ends every form: the error, then CANCEL and the one primary key, at the right. Under a
+  create page's boxes; inside the box for an editor in a record's section.
+- The primary key names the act: CREATE for pencil, the commit word where creating is the commit
+  (RAISE, RECEIVE, CUT WORK ORDER). While it is inert it says what it needs: "Needs project and
+  title".
+- A placeholder never looks like a value. It may show a value the field inherits when left blank (a
+  line's destination from its order). Hints are for the grammar of the record (a risk statement's
+  parts), not for the interface.
+- An empty choice is `—`, not "None" or "Select …".
+
 ## Pages
 
 - Dense and explicit. Detail rows for facts, headed tables for collections.

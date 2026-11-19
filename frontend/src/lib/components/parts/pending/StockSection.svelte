@@ -15,7 +15,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { api } from '#lib/api.js';
 	import { qty } from '#lib/format.js';
-	import FormField from '../FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import { act } from '../actions.js';
 	import type { PartDetail, StockRecord } from './legacy-types.js';
 

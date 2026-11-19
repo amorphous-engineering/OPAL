@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
-	import { PageHeader, Section, toastError } from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import { PageHeader, toastError } from '#lib/components/opal/index.js';
 	import WorkcenterForm from '#lib/components/workcenters/WorkcenterForm.svelte';
 	import type { WorkcenterInput } from '#lib/components/workcenters/types.js';
 
@@ -30,13 +29,12 @@
 />
 
 <div class="max-w-xl p-4">
-	<Section title="Workcenter">
-		<div class="p-3">
-			<WorkcenterForm submitLabel="CREATE" {busy} {error} onsubmit={create}>
-				{#snippet cancel()}
-					<Button variant="outline" href="/workcenters">CANCEL</Button>
-				{/snippet}
-			</WorkcenterForm>
-		</div>
-	</Section>
+	<WorkcenterForm
+		title="Workcenter"
+		submitLabel="CREATE"
+		cancel="/workcenters"
+		{busy}
+		{error}
+		onsubmit={create}
+	/>
 </div>

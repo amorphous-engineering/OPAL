@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PageHeader, ErrorBanner } from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
+	import { Field, FormKeys, PageHeader, Section } from '#lib/components/opal/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
@@ -43,47 +42,39 @@
 	crumbs={[{ label: 'System' }, { label: 'Users', href: '/users' }, { label: 'New' }]}
 />
 
-<form class="max-w-xl p-4" onsubmit={submit}>
-	<ErrorBanner message={error} class="mb-3" />
-	<div class="grid grid-cols-1 gap-4">
-		<div class="grid grid-cols-1 gap-1.5">
-			<Label for="name">Name</Label>
-			<Input id="name" bind:value={name} maxlength={255} required autocomplete="off" />
+<form class="grid max-w-xl grid-cols-1 gap-3 p-4" onsubmit={submit}>
+	<Section title="User">
+		<div class="grid grid-cols-1 gap-3 p-3">
+			<Field label="Name" for="name" required>
+				<Input id="name" bind:value={name} maxlength={255} required autocomplete="off" autofocus />
+			</Field>
+			<Field label="Username" for="username">
+				<Input
+					id="username"
+					class="font-mono"
+					bind:value={username}
+					maxlength={64}
+					autocapitalize="none"
+					autocomplete="off"
+				/>
+			</Field>
+			<Field label="Email" for="email">
+				<Input id="email" type="email" bind:value={email} maxlength={255} autocomplete="off" />
+			</Field>
+			<Field label="Initial password" for="password">
+				<Input
+					id="password"
+					type="password"
+					bind:value={password}
+					minlength={10}
+					autocomplete="new-password"
+				/>
+			</Field>
+			<div class="flex items-center gap-2">
+				<Switch id="is-admin" bind:checked={isAdmin} />
+				<Label for="is-admin">Administrator</Label>
+			</div>
 		</div>
-		<div class="grid grid-cols-1 gap-1.5">
-			<Label for="username">Username</Label>
-			<Input
-				id="username"
-				class="font-mono"
-				bind:value={username}
-				maxlength={64}
-				autocapitalize="none"
-				autocomplete="off"
-				placeholder="From email or name when blank"
-			/>
-		</div>
-		<div class="grid grid-cols-1 gap-1.5">
-			<Label for="email">Email</Label>
-			<Input id="email" type="email" bind:value={email} maxlength={255} autocomplete="off" />
-		</div>
-		<div class="grid grid-cols-1 gap-1.5">
-			<Label for="password">Initial password</Label>
-			<Input
-				id="password"
-				type="password"
-				bind:value={password}
-				minlength={10}
-				autocomplete="new-password"
-				placeholder="Blank: the owner claims the account by link"
-			/>
-		</div>
-		<div class="flex items-center gap-2">
-			<Switch id="is-admin" bind:checked={isAdmin} />
-			<Label for="is-admin">Administrator</Label>
-		</div>
-	</div>
-	<div class="mt-5 flex gap-2">
-		<Button type="submit" disabled={busy || !name.trim()}>CREATE USER</Button>
-		<Button variant="outline" href="/users">CANCEL</Button>
-	</div>
+	</Section>
+	<FormKeys submit="CREATE" cancel="/users" missing={name.trim() ? [] : ['name']} {busy} {error} />
 </form>
