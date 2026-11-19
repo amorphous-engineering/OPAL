@@ -125,8 +125,8 @@
 					>One per serialized unit; one per batch for bulk parts.</DetailRow
 				>
 				<DetailRow label="Tiers"
-					>Classify parts by criticality, for example Flight, Ground, Dev. Tiers are configured per
-					organization.</DetailRow
+					>Classify parts by criticality, for example Critical, Standard, Bulk. Tiers are configured
+					per organization.</DetailRow
 				>
 				<DetailRow label="Stock"
 					>Quantity, location, lot, expiration and calibration per OPAL number.</DetailRow

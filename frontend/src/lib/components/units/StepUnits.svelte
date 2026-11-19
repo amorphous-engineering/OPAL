@@ -31,7 +31,7 @@
 	const naming = $derived(workable && isOp);
 	// Removal goes where parts come off: a step that installs into a unit (the old part comes out
 	// where the new one goes in), and an OP that names units and has work under it. An OP that only
-	// names them, such as a launch record, takes nothing out.
+	// names them, such as a test record, takes nothing out.
 	const named = $derived(
 		step.step_kit.some((k) => k.into) || (isOp && !!rec?.slots.length && op.steps.length > 0)
 			? (act?.named() ?? []).filter((u) => u.stockId !== null)

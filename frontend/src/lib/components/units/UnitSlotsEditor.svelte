@@ -1,6 +1,6 @@
 <script lang="ts">
-	// Authoring: the existing units an OP names when it runs (a launch names its rocket and ground
-	// equipment). One serialized part per slot. The key is set once from the first label and never
+	// Authoring: the existing units an OP names when it runs (a test names the unit under test and
+	// its fixture). One serialized part per slot. The key is set once from the first label and never
 	// edited, so a kit line that installs into the slot keeps pointing at it.
 	import type { UnitSlot } from '@opal/shared';
 	import { ActionLink } from '#lib/components/opal/index.js';

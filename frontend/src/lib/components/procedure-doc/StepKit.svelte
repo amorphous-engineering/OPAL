@@ -30,7 +30,7 @@
 	let pick = $state<Record<number, { record: string; qty: string }>>({});
 	let busy = $state(false);
 
-	// "INTO ROCKET OPAL-0042": the slot's label and the unit named there, once there is one.
+	// "INTO CHASSIS OPAL-0042": the slot's label and the unit named there, once there is one.
 	const intoText = (key: string) => {
 		const u = ctl.actions.units?.named().find((x) => x.slot === key);
 		return `INTO ${(u?.slotLabel ?? key).toUpperCase()}${u?.opalNumber ? ` ${u.opalNumber}` : ''}`;

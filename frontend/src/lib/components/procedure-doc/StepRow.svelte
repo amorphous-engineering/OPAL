@@ -38,6 +38,9 @@
 	// A step with nothing to act on yet (held, waiting) folds to its line.
 	const blocked = $derived(ctl.mode === 'execute' && isBlocked(step));
 	const open = $derived(ctl.isOpen(key, terminal, blocked));
+	// Wide enough for the longest number in the OP (C903.13), so titles start in one column and a
+	// long number never runs into its title. The extra character is room for the current mark.
+	const numberWidth = $derived(`${Math.max(5.5, ...op.steps.map((s) => s.number.length + 1))}ch`);
 	const focused = $derived(ctl.focusedOrder === step.order);
 	// You are here: the next thing to do.
 	const current = $derived(ctl.mode === 'execute' && ctl.currentOrder === step.order);
@@ -114,7 +117,7 @@
 			)}
 			aria-hidden="true"
 		/>
-		<span class="w-10 shrink-0 font-mono text-xs font-medium tabular-nums"
+		<span class="shrink-0 font-mono text-xs font-medium tabular-nums" style:width={numberWidth}
 			><span class={cn(current && '-ml-1 bg-foreground px-1 py-px font-semibold text-background')}
 				>{step.number}</span
 			></span
