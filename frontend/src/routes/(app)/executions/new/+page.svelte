@@ -7,6 +7,7 @@
 		ErrorBanner,
 		Field,
 		FormKeys,
+		NextNumber,
 		needs,
 		PageHeader,
 		Section,
@@ -129,6 +130,7 @@
 	<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 		<Section title="Cut">
 			<div class="grid grid-cols-1 gap-3 p-3">
+				<NextNumber kind="workOrder" count={n} />
 				<Field label="Procedure" for="cut-procedure" required>
 					<NativeSelect
 						id="cut-procedure"

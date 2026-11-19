@@ -5,6 +5,7 @@
 		DataTable,
 		Field,
 		FormKeys,
+		NextNumber,
 		needs,
 		PageHeader,
 		Section,
@@ -141,6 +142,7 @@
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
 			<Section title="Receipt">
 				<div class="grid grid-cols-1 gap-3 p-3">
+					<NextNumber kind="stock" count={serialized ? count : 1} />
 					<Field label="Part" for="rx-part" required>
 						{#if part}
 							<div class="flex flex-wrap items-center gap-2 text-sm">

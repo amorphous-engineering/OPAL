@@ -4,6 +4,7 @@
 		BankKey,
 		Field,
 		FormKeys,
+		NextNumber,
 		KeyBank,
 		needs,
 		PageHeader,
@@ -109,6 +110,7 @@
 	<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
 		<Section title="Order">
 			<div class="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:grid-cols-1">
+				<NextNumber kind="purchase" />
 				<Field label="Supplier" for="po-supplier" required>
 					<NativeSelect id="po-supplier" bind:value={supplierId} class="w-full">
 						<option value="">—</option>

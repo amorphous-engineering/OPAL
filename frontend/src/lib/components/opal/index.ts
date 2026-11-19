@@ -29,6 +29,7 @@ export { default as EntityPicker, type PickerOption } from './EntityPicker.svelt
 export { default as ErrorBanner } from './ErrorBanner.svelte';
 export { default as Field } from './Field.svelte';
 export { default as FormKeys } from './FormKeys.svelte';
+export { default as NextNumber } from './NextNumber.svelte';
 export { needs } from './needs.js';
 export { default as EmptyLine } from './EmptyLine.svelte';
 export { default as PageHeader } from './PageHeader.svelte';

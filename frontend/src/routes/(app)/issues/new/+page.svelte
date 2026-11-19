@@ -8,6 +8,7 @@
 	import {
 		Field,
 		FormKeys,
+		NextNumber,
 		needs,
 		PageHeader,
 		Section,
@@ -112,6 +113,7 @@
 <form bind:this={formEl} class="grid max-w-3xl grid-cols-1 gap-3 p-4" onsubmit={submit}>
 	<Section title="Issue">
 		<div class="grid grid-cols-1 gap-3 p-3">
+			<NextNumber kind="issue" />
 			<Field label="Project" for="project" required>
 				<ProjectSelect id="project" bind:value={projectId} />
 			</Field>

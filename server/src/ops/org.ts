@@ -97,6 +97,7 @@ export const orgImpls = [
 		if (!tier) throw new OpalError(400, 'unknown_tier', `Unknown tier level: ${input.tierLevel}`);
 		return { partNumber: project.renderPartNumber(config, tier, input.sequence), tierName: tier.name };
 	}),
+	implement(c.settings.nextNumber, (ctx, input) => numbering.peekNumbers(ctx, input.kind, input.count)),
 	implement(c.settings.nextPartNumber, (ctx, input) => numbering.peekNextPartNumber(ctx.db, input.tier)),
 	implement(c.settings.system, () => system.systemInfo()),
 	implement(c.settings.agentActivation, (ctx) => system.agentActivation(ctx)),
