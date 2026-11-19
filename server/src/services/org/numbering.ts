@@ -136,14 +136,15 @@ export function validatePartNumber(db: Db, tier: number, pn: string): number {
 	return sequence;
 }
 
-export type NumberKind = 'issue' | 'risk' | 'requirement' | 'purchase' | 'workOrder' | 'stock';
+export type NumberKind = 'issue' | 'risk' | 'requirement' | 'purchase' | 'workOrder' | 'stock' | 'template';
 
 const KIND_PREFIX = {
 	issue: PREFIX.issue,
 	risk: PREFIX.risk,
 	requirement: PREFIX.requirement,
 	workOrder: PREFIX.workOrder,
-	stock: PREFIX.opal
+	stock: PREFIX.opal,
+	template: PREFIX.template
 } as const;
 
 /**

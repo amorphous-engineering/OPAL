@@ -12,7 +12,6 @@ const ok = { ok: true as const };
 
 export const proceduresImpls = [
 	// Static paths before `/procedures/:id`.
-	implement(p.nextNumber, (ctx) => ({ templateNumber: procedures.nextTemplateNumber(ctx) })),
 	implement(p.build, (ctx, i) => procedures.build(ctx, i)),
 	implement(p.versions.get, (ctx, i) => versions.getVersion(ctx, i.versionId)),
 	implement(p.versions.qr, (ctx, i) => versions.versionQr(ctx, i.versionId, i.url)),

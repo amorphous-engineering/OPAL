@@ -202,7 +202,7 @@
 			submit={n === 1 ? 'CUT WORK ORDER' : `CUT ${n} WORK ORDERS`}
 			cancel="/executions"
 			{missing}
-			busy={busy || (!!procedureId && !preview && !previewError)}
+			busy={busy || (!!procedureId && !preview)}
 			{error}
 		/>
 	</form>

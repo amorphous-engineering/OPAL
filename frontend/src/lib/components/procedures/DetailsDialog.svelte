@@ -7,7 +7,7 @@
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { opal } from '#lib/api.js';
-	import { Field, FormKeys, needs, toastError } from '#lib/components/opal/index.js';
+	import { Field, FormKeys, needs, NextNumber, toastError } from '#lib/components/opal/index.js';
 	import type { Procedure, ProcedureType } from '@opal/shared';
 	import ProjectSelect from './ProjectSelect.svelte';
 
@@ -40,18 +40,11 @@
 	let busy = $state(false);
 	/** Saved: closing now is not a cancel. */
 	let done = false;
-	let nextNumber = $state<string | null>(null);
 
 	$effect(() => {
 		if (!open) return;
 		done = false;
 		f = { name, description: description ?? '', type, projectId };
-		if (creating) {
-			opal.procedures
-				.nextNumber({})
-				.then((r) => (nextNumber = r.templateNumber))
-				.catch(toastError);
-		}
 	});
 
 	function close() {
@@ -100,12 +93,7 @@
 			<Dialog.Title>{creating ? 'New template' : 'Edit details'}</Dialog.Title>
 		</Dialog.Header>
 		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
-			{#if creating}
-				<div class="grid grid-cols-1 gap-1.5">
-					<span class="label">Number</span>
-					<span class="font-mono text-sm" data-next-number>{nextNumber ?? '…'}</span>
-				</div>
-			{/if}
+			{#if creating}<NextNumber kind="template" />{/if}
 			<Field label="Name" for="edit-name" required>
 				<Input id="edit-name" bind:value={f.name} required maxlength={255} autofocus />
 			</Field>

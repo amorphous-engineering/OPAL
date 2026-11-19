@@ -786,7 +786,7 @@ const settings = {
 		summary:
 			'The number a new record of a kind would take, or the range a batch of `count` would. Nothing is reserved, so another create may take it first.',
 		input: z.object({
-			kind: z.enum(['issue', 'risk', 'requirement', 'purchase', 'workOrder', 'stock']),
+			kind: z.enum(['issue', 'risk', 'requirement', 'purchase', 'workOrder', 'stock', 'template']),
 			count: z.coerce.number().int().min(1).max(1000).default(1)
 		}),
 		output: z.object({ first: z.string(), last: z.string() }),

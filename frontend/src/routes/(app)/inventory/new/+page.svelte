@@ -52,6 +52,10 @@
 	});
 
 	const count = $derived(Math.max(0, Math.floor(Number(quantity)) || 0));
+	// One serial names one unit, so a batch clears it rather than keep a value it will not use.
+	$effect(() => {
+		if (count > 1 && serial) serial = '';
+	});
 	const missing = $derived([
 		...needs({
 			part,
@@ -75,8 +79,7 @@
 				quantity: String(quantity).trim(),
 				location: location.trim(),
 				lotNumber: lot.trim() || null,
-				// One serial names one unit; a batch takes generated serials.
-				serialNumber: count > 1 ? null : serial.trim() || null,
+				serialNumber: serial.trim() || null,
 				expirationDate: expiration || null,
 				enforceTierRules: true
 			});

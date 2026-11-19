@@ -843,17 +843,6 @@ export const procedures = {
 		mcp: true
 	}),
 	// Static paths before `/procedures/:id`.
-	nextNumber: op({
-		name: 'procedures.nextNumber',
-		method: 'GET',
-		path: '/procedures/next-number',
-		summary:
-			'The T-number the next new template would take. Nothing is reserved, so another create may take it first.',
-		input: z.object({}),
-		output: z.object({ templateNumber: z.string() }),
-		access: 'signed-in',
-		mcp: false
-	}),
 	build: op({
 		name: 'procedures.build',
 		method: 'POST',

@@ -1,14 +1,14 @@
 <script lang="ts">
-	// The number a record will take, shown on its form before it exists, as the new template
-	// dialog does. A batch shows its range. Nothing is reserved: leaving the form uses no number,
-	// and another create may take it first, so the record's own page has the final word.
+	// The number a record will take, shown on its form before it exists. A batch shows its range.
+	// Nothing is reserved: leaving the form uses no number, and another create may take it first,
+	// so the record's own page has the final word.
 	import { opal } from '#lib/api.js';
 
 	let {
 		kind,
 		count = 1
 	}: {
-		kind: 'issue' | 'risk' | 'requirement' | 'purchase' | 'workOrder' | 'stock';
+		kind: 'issue' | 'risk' | 'requirement' | 'purchase' | 'workOrder' | 'stock' | 'template';
 		count?: number;
 	} = $props();
 
