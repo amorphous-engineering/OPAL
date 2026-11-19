@@ -23,12 +23,12 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		? (p.get('flag') as Flag)
 		: '';
 	const depleted = p.get('depleted') === '1';
-	// By part is the default. A link to one part, or a filter only records have, means records.
-	const wantsRecords = !!partId || !!source || depleted || (flag !== '' && flag !== 'low');
+	// Records are the default. Low stock is a fact about a part (its reorder point), so that
+	// filter opens by part unless the link asks for records.
 	const view: 'records' | 'parts' =
-		p.get('view') === 'records' || (p.get('view') !== 'parts' && wantsRecords)
-			? 'records'
-			: 'parts';
+		p.get('view') === 'parts' || (p.get('view') !== 'records' && flag === 'low')
+			? 'parts'
+			: 'records';
 	const sortParam = p.get('sort') ?? '';
 	const dir = p.get('dir');
 	const page = Math.max(1, Number(p.get('page')) || 1);

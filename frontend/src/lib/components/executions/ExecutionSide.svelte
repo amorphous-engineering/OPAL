@@ -25,7 +25,7 @@
 	const opOf = (i: Issue) => i.holds_at?.op_order ?? opOfNumber(i.raised_step_number);
 	const scopeOp = $derived(store.focusOp);
 	const scopeOpNumber = $derived(store.allOps.find((o) => o.order === scopeOp)?.number ?? '');
-	let showAll = $state(false);
+	let showAll = $state(true);
 	let showClosed = $state(false);
 	const open = $derived(doc.issues.filter((i) => i.status === 'open'));
 	const closed = $derived(doc.issues.filter((i) => i.status !== 'open'));
@@ -135,7 +135,7 @@
 			{#snippet actions()}
 				{#if scopeOp !== null && outside}
 					<span class="inline-flex border border-border" role="group" aria-label="Which issues">
-						{#each [[false, `OP ${scopeOpNumber}`], [true, 'ALL']] as const as [all, label] (label)}
+						{#each [[true, 'ALL'], [false, `OP ${scopeOpNumber}`]] as const as [all, label] (label)}
 							<button
 								type="button"
 								aria-pressed={showAll === all}

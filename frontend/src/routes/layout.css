@@ -226,6 +226,52 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Scroll bars: a box on a dithered track, ruled like the rest of the page. Chromium and Safari
+   take the pseudo-elements; Firefox, which has none, gets the plain colours. Chromium ignores the
+   pseudo-elements wherever scrollbar-color is set, so Firefox's rule stays behind @supports. */
+::-webkit-scrollbar {
+	width: 14px;
+	height: 14px;
+}
+::-webkit-scrollbar-track {
+	background-color: var(--background);
+	background-image: conic-gradient(
+		color-mix(in srgb, var(--foreground) 22%, transparent) 25%,
+		transparent 0 50%,
+		color-mix(in srgb, var(--foreground) 22%, transparent) 0 75%,
+		transparent 0
+	);
+	background-size: 2px 2px;
+}
+::-webkit-scrollbar-track:vertical {
+	border-left: 1px solid var(--border);
+}
+::-webkit-scrollbar-track:horizontal {
+	border-top: 1px solid var(--border);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--card);
+	border: 1px solid var(--border);
+	min-height: 24px;
+	min-width: 24px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--accent);
+}
+::-webkit-scrollbar-thumb:active {
+	background: var(--foreground);
+}
+::-webkit-scrollbar-corner {
+	background: var(--background);
+	border-top: 1px solid var(--border);
+	border-left: 1px solid var(--border);
+}
+@supports not selector(::-webkit-scrollbar) {
+	* {
+		scrollbar-color: var(--quiet) var(--muted);
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

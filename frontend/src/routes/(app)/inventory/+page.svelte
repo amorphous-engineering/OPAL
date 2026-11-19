@@ -102,14 +102,14 @@
 			<Button
 				size="sm"
 				variant="outline"
-				aria-pressed={data.view === 'parts'}
-				onclick={() => setQuery({ view: 'parts', sort: null, dir: null })}>BY PART</Button
+				aria-pressed={data.view === 'records'}
+				onclick={() => setQuery({ view: 'records', sort: null, dir: null })}>RECORDS</Button
 			>
 			<Button
 				size="sm"
 				variant="outline"
-				aria-pressed={data.view === 'records'}
-				onclick={() => setQuery({ view: 'records', sort: null, dir: null })}>RECORDS</Button
+				aria-pressed={data.view === 'parts'}
+				onclick={() => setQuery({ view: 'parts', sort: null, dir: null })}>BY PART</Button
 			>
 		</div>
 
