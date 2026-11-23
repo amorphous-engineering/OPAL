@@ -1,5 +1,9 @@
 <script lang="ts">
+	// Raised from a run, the form asks only for a title (CLAUDE.md rule 9): the work order, step,
+	// part and person come with it as facts, type and containment arrive filled in, and the rest
+	// is written on the issue under EDIT. Raised from the desk, it is the whole form.
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { opal } from '#lib/api.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -30,6 +34,10 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	const fromRun = $derived(!!data.ctx.execution);
+	// The work order carries the project; asking for it again could only disagree.
+	const fixedProject = $derived(fromRun && !!data.projectId);
 
 	// Reset when the invoking context (the query string) changes.
 	let projectId = $state(0); // added by projects
@@ -114,9 +122,31 @@
 	<Section title="Issue">
 		<div class="grid grid-cols-1 gap-3 p-3">
 			<NextNumber kind="issue" />
-			<Field label="Project" for="project" required>
-				<ProjectSelect id="project" bind:value={projectId} />
-			</Field>
+			{#if !fixedProject}
+				<Field label="Project" for="project" required>
+					<ProjectSelect id="project" bind:value={projectId} />
+				</Field>
+			{/if}
+			{#if execution}
+				<!-- Carried from the run, worded as the issue page words it once raised. -->
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+					<Field label="Work order">
+						<span class="font-mono text-sm">{execution.label}{step ? ` OP ${step.label}` : ''}</span
+						>
+					</Field>
+					{#if part}
+						<Field label="Part">
+							<span class="text-sm"
+								>{#if part.sub}<span class="mono text-info">{part.sub}</span>
+								{/if}{part.label}</span
+							>
+						</Field>
+					{/if}
+					<Field label="Raised by">
+						<span class="text-sm">{page.data.user?.name ?? '—'}</span>
+					</Field>
+				</div>
+			{/if}
 
 			<Field label="Title" for="title" required>
 				<Input id="title" bind:value={title} required maxlength={255} autofocus />
@@ -130,144 +160,133 @@
 						{/each}
 					</NativeSelect>
 				</Field>
-				<Field label="Priority" for="priority">
-					<NativeSelect id="priority" bind:value={priority} class="w-full">
-						{#each ISSUE_PRIORITIES as p (p)}
-							<NativeSelectOption value={p}>{stateLabel(p)}</NativeSelectOption>
-						{/each}
-					</NativeSelect>
-				</Field>
-				<Field label="Assigned to" for="assignee">
-					<NativeSelect id="assignee" bind:value={assignee} class="w-full">
-						<NativeSelectOption value="">—</NativeSelectOption>
-						{#each data.assignees as a (a.id)}
-							<NativeSelectOption value={String(a.id)}>{a.name}</NativeSelectOption>
-						{/each}
-					</NativeSelect>
-				</Field>
+				{#if fromRun}
+					<!-- Containment needs a step to anchor it; raised on the whole work order it starts
+					     advisory and is widened on the issue. -->
+					{#if step}
+						<Field label="Containment" for="containment">
+							<NativeSelect id="containment" bind:value={containment} class="w-full">
+								{#each CONTAINMENTS as c (c)}
+									<NativeSelectOption value={c}>{CONTAINMENT_OPTION[c]}</NativeSelectOption>
+								{/each}
+							</NativeSelect>
+						</Field>
+					{/if}
+				{:else}
+					<Field label="Priority" for="priority">
+						<NativeSelect id="priority" bind:value={priority} class="w-full">
+							{#each ISSUE_PRIORITIES as p (p)}
+								<NativeSelectOption value={p}>{stateLabel(p)}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+					</Field>
+					<Field label="Assigned to" for="assignee">
+						<NativeSelect id="assignee" bind:value={assignee} class="w-full">
+							<NativeSelectOption value="">—</NativeSelectOption>
+							{#each data.assignees as a (a.id)}
+								<NativeSelectOption value={String(a.id)}>{a.name}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+					</Field>
+				{/if}
 			</div>
 
-			<Field label="Containment" for="containment">
-				<NativeSelect id="containment" bind:value={containment} class="w-full">
-					{#each CONTAINMENTS as c (c)}
-						<NativeSelectOption value={c}>{CONTAINMENT_OPTION[c]}</NativeSelectOption>
-					{/each}
-				</NativeSelect>
-			</Field>
-
-			<Field label="Description" for="description">
-				<MarkdownField
-					quiet
-					id="description"
-					bind:value={description}
-					minRows={4}
-					onsubmit={submitForm}
-				/>
-			</Field>
-
-			{#if type === 'non_conformance'}
-				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					<Field label="Should be" for="should-be">
-						<MarkdownField
-							quiet
-							id="should-be"
-							bind:value={shouldBe}
-							minRows={3}
-							onsubmit={submitForm}
-						/>
-					</Field>
-					<Field label="Is" for="actual">
-						<MarkdownField
-							quiet
-							id="actual"
-							bind:value={actual}
-							minRows={3}
-							onsubmit={submitForm}
-						/>
-					</Field>
-				</div>
-			{:else if type === 'anomaly'}
-				<Field label="Steps to reproduce" for="steps">
-					<MarkdownField quiet id="steps" bind:value={steps} minRows={3} onsubmit={submitForm} />
+			{#if !fromRun}
+				<Field label="Containment" for="containment">
+					<NativeSelect id="containment" bind:value={containment} class="w-full">
+						{#each CONTAINMENTS as c (c)}
+							<NativeSelectOption value={c}>{CONTAINMENT_OPTION[c]}</NativeSelectOption>
+						{/each}
+					</NativeSelect>
 				</Field>
-				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-					<Field label="Expected behavior" for="expected">
-						<MarkdownField
-							quiet
-							id="expected"
-							bind:value={expected}
-							minRows={2}
-							onsubmit={submitForm}
-						/>
-					</Field>
-					<Field label="Observed behavior" for="actual-behavior">
-						<MarkdownField
-							quiet
-							id="actual-behavior"
-							bind:value={actualBehavior}
-							minRows={2}
-							onsubmit={submitForm}
-						/>
-					</Field>
-				</div>
-			{:else if type === 'improvement'}
-				<Field label="Expected benefit" for="benefit">
+
+				<Field label="Description" for="description">
 					<MarkdownField
 						quiet
-						id="benefit"
-						bind:value={benefit}
-						minRows={2}
+						id="description"
+						bind:value={description}
+						minRows={4}
 						onsubmit={submitForm}
 					/>
 				</Field>
-			{/if}
 
-			<Field label="Part" for="issue-part">
-				{#if part}
-					<span class="flex items-center gap-2 text-sm">
-						{#if part.sub}<span class="mono text-info">{part.sub}</span>{/if}
-						<span>{part.label}</span>
-						<Button size="sm" variant="outline" onclick={() => (part = null)}>CLEAR</Button>
-					</span>
-				{:else}
-					<div class="max-w-sm">
-						<PartPicker
-							id="issue-part"
-							placeholder="Search parts"
-							onselect={(p) => {
-								if (!p) return;
-								const row = p as unknown as Record<string, string | null>;
-								part = { id: p.id, label: p.name, sub: row.internalPn ?? row.internal_pn };
-							}}
-						/>
+				{#if type === 'non_conformance'}
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<Field label="Should be" for="should-be">
+							<MarkdownField
+								quiet
+								id="should-be"
+								bind:value={shouldBe}
+								minRows={3}
+								onsubmit={submitForm}
+							/>
+						</Field>
+						<Field label="Is" for="actual">
+							<MarkdownField
+								quiet
+								id="actual"
+								bind:value={actual}
+								minRows={3}
+								onsubmit={submitForm}
+							/>
+						</Field>
 					</div>
+				{:else if type === 'anomaly'}
+					<Field label="Steps to reproduce" for="steps">
+						<MarkdownField quiet id="steps" bind:value={steps} minRows={3} onsubmit={submitForm} />
+					</Field>
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<Field label="Expected behavior" for="expected">
+							<MarkdownField
+								quiet
+								id="expected"
+								bind:value={expected}
+								minRows={2}
+								onsubmit={submitForm}
+							/>
+						</Field>
+						<Field label="Observed behavior" for="actual-behavior">
+							<MarkdownField
+								quiet
+								id="actual-behavior"
+								bind:value={actualBehavior}
+								minRows={2}
+								onsubmit={submitForm}
+							/>
+						</Field>
+					</div>
+				{:else if type === 'improvement'}
+					<Field label="Expected benefit" for="benefit">
+						<MarkdownField
+							quiet
+							id="benefit"
+							bind:value={benefit}
+							minRows={2}
+							onsubmit={submitForm}
+						/>
+					</Field>
 				{/if}
-			</Field>
 
-			{#if execution}
-				<!-- Carried from the run the issue was raised in. It can be dropped, not chosen here. -->
-				<Field label="Execution">
-					<span class="flex items-center gap-2 text-sm">
-						{#if execution.sub}<span class="mono text-info">{execution.sub}</span>{/if}
-						<span class="mono">{execution.label}</span>
-						<Button
-							size="sm"
-							variant="outline"
-							onclick={() => {
-								execution = null;
-								// A different execution invalidates its step anchor.
-								step = null;
-							}}>CLEAR</Button
-						>
-					</span>
-				</Field>
-			{/if}
-			{#if step}
-				<Field label="Raised at">
-					<span class="flex items-center gap-2 text-sm">
-						<span class="mono">{step.label}</span>
-						<Button size="sm" variant="outline" onclick={() => (step = null)}>CLEAR</Button>
-					</span>
+				<Field label="Part" for="issue-part">
+					{#if part}
+						<span class="flex items-center gap-2 text-sm">
+							{#if part.sub}<span class="mono text-info">{part.sub}</span>{/if}
+							<span>{part.label}</span>
+							<Button size="sm" variant="outline" onclick={() => (part = null)}>CLEAR</Button>
+						</span>
+					{:else}
+						<div class="max-w-sm">
+							<PartPicker
+								id="issue-part"
+								placeholder="Search parts"
+								onselect={(p) => {
+									if (!p) return;
+									const row = p as unknown as Record<string, string | null>;
+									part = { id: p.id, label: p.name, sub: row.internalPn ?? row.internal_pn };
+								}}
+							/>
+						</div>
+					{/if}
 				</Field>
 			{/if}
 		</div>
