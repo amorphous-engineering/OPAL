@@ -27,9 +27,9 @@ ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=%h/.local/share/opal
 PrivateTmp=yes
+# No ProtectKernelModules or ProtectKernelLogs: a user unit cannot drop the capabilities they
+# remove, and the start fails with status 218 (seen on Ubuntu 24.04, systemd 255).
 ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
 ProtectControlGroups=yes
 RestrictNamespaces=yes
 RestrictRealtime=yes

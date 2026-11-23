@@ -47,6 +47,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Wording for any kind of hardware.** A new organization's tier presets are Critical, Standard and Bulk, and examples no longer assume a rocket.
 
 ### Fixed
+- **The systemd user units start on Ubuntu 24.04.** `contrib/opal.service` and `opal-backup.service` asked for ProtectKernelModules and ProtectKernelLogs, which a user unit cannot apply, so the service failed at every start with status 218. Both lines are gone; the rest of the hardening stays.
 - **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.
 - **Demo mode builds its files in the demo folder.** It took its folders from the real data folder, so a seed with attachments would have copied them into the real organization's files. The shipped seed has none, so nothing was written.
 - **A long step number keeps its own column**: C903.13 ran into its title on the run view.
