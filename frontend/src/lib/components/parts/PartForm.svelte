@@ -1,13 +1,12 @@
 <script lang="ts">
-	// The one part form: create, edit and variant share it. Identity (tier, PN) is
-	// mutable only while the part is a draft; once active it renders as facts. A variant
-	// keeps the source's tier and takes the family's next number, so both render as facts.
+	// The form for a part that does not exist yet: create and variant share it. An existing part
+	// is edited in place on its own page (IdentitySection). A variant keeps the source's tier and
+	// takes the family's next number, so both render as facts.
 	import { goto } from '$app/navigation';
 	import {
 		Section,
 		DetailRow,
 		DetailTable,
-		confirm,
 		toast,
 		FormKeys,
 		needs
@@ -20,7 +19,6 @@
 	import { MarkdownField } from '#lib/components/markdown/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { opal, ApiError } from '#lib/api.js';
-	import { stateLabel } from '#lib/format.js';
 	import type {
 		Part,
 		PartCreate,
@@ -32,58 +30,48 @@
 		VariantBom
 	} from '@opal/shared';
 	import { Field as FormField } from '#lib/components/opal/index.js';
+	import CustomFieldInput from './CustomFieldInput.svelte';
 	import PartPicker from './PartPicker.svelte';
 	import PartTag from './PartTag.svelte';
+	import TierPicker from './TierPicker.svelte';
+	import { buildMetadata, metaValues } from './metadata.js';
 	import { partQr } from './qr.js';
 	import { untrack } from 'svelte';
 	import type { PartRef } from './types.js';
 
 	let {
 		schema,
-		part = null,
 		assembly: initialAssembly = null,
 		tier: initialTier = null,
 		variantOf = null,
-		nextNumber = null,
-		unitLocked = false,
-		identityLocked = false
+		nextNumber = null
 	}: {
 		schema: PartSchema;
-		part?: Part | null;
 		assembly?: PartRef | null;
 		tier?: number | null;
 		/** Variant mode: the new part copies this one. */
 		variantOf?: Part | null;
 		/** The number the variant takes, from the server. */
 		nextNumber?: string | null;
-		/** Stock or purchase order lines count in this unit. */
-		unitLocked?: boolean;
-		identityLocked?: boolean;
 	} = $props();
 	// The form is mounted once per page (keyed by part), so props seed local state on purpose.
-	const p0 = untrack(() => part);
 	const src = untrack(() => variantOf);
 	const variantPn = untrack(() => nextNumber);
 	const variantMode = src !== null;
-	// Every field starts from the part being edited, or from the variant's source.
-	const s0 = p0 ?? src;
+	// A variant's fields start from its source.
+	const s0: Part | null = src;
 	const schema0 = untrack(() => schema);
 	const iAssembly = untrack(() => initialAssembly);
 	const iTier = untrack(() => initialTier);
-
-	const editing = p0 !== null;
-	const draft = !p0 || p0.state === 'draft';
-	const knownKeys = new Set(schema0.customFields.map((f) => f.key));
-	const existingMeta = s0?.metadata ?? {};
 
 	let tier = $state<number | null>(s0?.tier ?? iTier);
 	let name = $state(s0?.name ?? '');
 	let externalPn = $state(s0?.externalPn ?? '');
 	let procurement = $state<Procurement>(s0?.procurement ?? 'make');
-	let procurementTouched = $state(editing || variantMode);
+	let procurementTouched = $state(variantMode);
 	let tracking = $state<TrackingType>(s0?.trackingType ?? 'bulk');
 	let lotRule = $state<LotRule>(s0?.lotRule ?? 'tier');
-	let trackingTouched = $state(editing || variantMode);
+	let trackingTouched = $state(variantMode);
 	let category = $state(s0?.category ?? '');
 	let uom = $state(s0?.unitOfMeasure ?? 'ea');
 	let reorder = $state(s0?.reorderPoint ?? '');
@@ -98,29 +86,8 @@
 	let assembly = $state<PartRef | null>(iAssembly);
 	let assemblyQty = $state('1');
 	let description = $state(s0?.description ?? '');
-	const seed = (key: string, fallback: unknown) => existingMeta[key] ?? fallback ?? '';
-	let customText = $state<Record<string, string>>(
-		Object.fromEntries(
-			schema0.customFields
-				.filter((f) => f.type !== 'boolean')
-				.map((f) => [f.key, String(seed(f.key, f.default))])
-		)
-	);
-	let customBool = $state<Record<string, boolean>>(
-		Object.fromEntries(
-			schema0.customFields
-				.filter((f) => f.type === 'boolean')
-				.map((f) => [f.key, Boolean(seed(f.key, f.default))])
-		)
-	);
-	let extraJson = $state(
-		(() => {
-			const extra = Object.fromEntries(
-				Object.entries(existingMeta).filter(([k]) => !knownKeys.has(k))
-			);
-			return Object.keys(extra).length ? JSON.stringify(extra, null, 2) : '';
-		})()
-	);
+	// The schema's defaults fill a new part; a variant keeps its source's values.
+	let metaVals = $state(metaValues(schema0.customFields, s0?.metadata ?? null, (f) => f.default));
 
 	let preview = $state<{ partNumber: string; tier: number } | null>(null);
 	let busy = $state(false);
@@ -129,13 +96,11 @@
 	let qr = $state<string | null>(null);
 
 	const tierInfo = $derived<SchemaTier | undefined>(schema0.tiers.find((t) => t.level === tier));
-	const originalTier = p0?.tier ?? null;
-	const tierChanged = $derived(editing && draft && tier !== originalTier);
 
 	// Tier drives the numbering preview and the tracking default.
 	$effect(() => {
 		const t = tier;
-		if (t === null || !draft || variantMode) return;
+		if (t === null || variantMode) return;
 		const mine = ++seq;
 		opal.parts
 			.nextPn({ tier: t })
@@ -149,44 +114,12 @@
 			});
 	});
 
-	if (p0) partQr(p0.id).then((u) => (qr = u));
+	if (src) partQr(src.id).then((u) => (qr = u));
 
-	const shownPn = $derived(
-		variantMode
-			? (variantPn ?? '')
-			: editing && !tierChanged
-				? (p0?.internalPn ?? '')
-				: (preview?.partNumber ?? '')
-	);
+	const shownPn = $derived(variantMode ? (variantPn ?? '') : (preview?.partNumber ?? ''));
 
 	function onExternalInput() {
-		if (!procurementTouched && !editing) procurement = externalPn.trim() ? 'buy' : 'make';
-	}
-
-	function buildMetadata(): Record<string, unknown> | null {
-		let meta: Record<string, unknown> = {};
-		if (extraJson.trim()) {
-			let parsed: unknown;
-			try {
-				parsed = JSON.parse(extraJson);
-			} catch {
-				throw new Error('Other metadata is not valid JSON');
-			}
-			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-				throw new Error('Other metadata must be a JSON object');
-			meta = parsed as Record<string, unknown>;
-		}
-		for (const f of schema0.customFields) {
-			const v = customText[f.key];
-			if (f.type === 'boolean') {
-				if (customBool[f.key]) meta[f.key] = true;
-			} else if (v !== '' && v !== undefined) {
-				meta[f.key] = f.type === 'number' ? Number(v) : v;
-			} else if (f.required) {
-				throw new Error(`${f.label} is required`);
-			}
-		}
-		return Object.keys(meta).length ? meta : null;
+		if (!procurementTouched) procurement = externalPn.trim() ? 'buy' : 'make';
 	}
 
 	const missing = $derived(needs({ tier: tier !== null, name: name.trim() }));
@@ -209,7 +142,7 @@
 				reorderPoint: String(reorder).trim() === '' ? null : String(reorder).trim(),
 				isTooling: tooling,
 				calibrationIntervalDays: tooling && calibration.trim() ? Number(calibration) : null,
-				metadata: buildMetadata()
+				metadata: buildMetadata(schema0.customFields, metaVals)
 			};
 			if (variantMode) {
 				const created = await opal.parts.variants.create({
@@ -222,35 +155,14 @@
 				await goto(`/parts/${created.id}`);
 				return;
 			}
-			if (!editing) {
-				const body: PartCreate = { ...fields, name: name.trim(), tier };
-				if (assembly) {
-					body.assemblyId = assembly.id;
-					body.assemblyQuantity = assemblyQty.trim() || '1';
-				}
-				const created = await opal.parts.create(body);
-				toast.success(`${created.internalPn} created as draft`);
-				await goto(`/parts/${created.id}`);
-				return;
+			const body: PartCreate = { ...fields, name: name.trim(), tier };
+			if (assembly) {
+				body.assemblyId = assembly.id;
+				body.assemblyQuantity = assemblyQty.trim() || '1';
 			}
-			const body: Parameters<typeof opal.parts.update>[0] = { ...fields, id: p0!.id };
-			if (name.trim() !== p0!.name) body.name = name.trim();
-			if (draft) {
-				if (tierChanged) {
-					const next = preview?.partNumber ?? 'the next number';
-					const ok = await confirm({
-						title: `Change tier to T${tier}`,
-						body: `${p0!.internalPn} is abandoned permanently and never reissued. New number: ${next}.`,
-						action: 'CHANGE TIER',
-						destructive: true
-					});
-					if (!ok) return;
-					body.tier = tier;
-				}
-			}
-			await opal.parts.update(body);
-			toast.success('Saved');
-			await goto(`/parts/${p0!.id}`);
+			const created = await opal.parts.create(body);
+			toast.success(`${created.internalPn} created as draft`);
+			await goto(`/parts/${created.id}`);
 		} catch (err) {
 			error =
 				err instanceof ApiError || err instanceof Error ? err.message : 'Could not save the part';
@@ -261,7 +173,7 @@
 
 	function cancel() {
 		if (history.length > 1) history.back();
-		else goto(editing ? `/parts/${p0!.id}` : variantMode ? `/parts/${src!.id}` : '/parts');
+		else goto(variantMode ? `/parts/${src!.id}` : '/parts');
 	}
 
 	function onkeydown(e: KeyboardEvent) {
@@ -292,42 +204,9 @@
 					<FormField label="Name" for="pf-name" required>
 						<Input id="pf-name" bind:value={name} required />
 					</FormField>
-				{:else if draft && !identityLocked}
+				{:else}
 					<FormField label="Tier" required>
-						{#if schema.tiers.length > 5}
-							<NativeSelect.Root
-								aria-label="Tier"
-								value={tier === null ? '' : String(tier)}
-								onchange={(e) =>
-									(tier = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-							>
-								<NativeSelect.Option value="">Select tier</NativeSelect.Option>
-								{#each schema.tiers as t (t.level)}
-									<NativeSelect.Option value={String(t.level)}
-										>T{t.level} {t.name.toUpperCase()}</NativeSelect.Option
-									>
-								{/each}
-							</NativeSelect.Root>
-						{:else}
-							<div class="flex flex-wrap gap-1.5" role="group" aria-label="Tier">
-								{#each schema.tiers as t (t.level)}
-									<Button
-										type="button"
-										size="sm"
-										variant="outline"
-										aria-pressed={tier === t.level}
-										onclick={() => (tier = t.level)}>T{t.level} {t.name.toUpperCase()}</Button
-									>
-								{/each}
-							</div>
-						{/if}
-						{#if tierInfo}
-							<p class="font-mono text-xs text-muted-foreground">
-								{tierInfo.defaultTracking.toUpperCase()} default{tierInfo.requireLot
-									? ' · LOT REQUIRED'
-									: ''}{tierInfo.autoSerial ? ' · AUTO SERIAL' : ''}
-							</p>
-						{/if}
+						<TierPicker tiers={schema.tiers} value={tier} onchange={(t) => (tier = t)} />
 					</FormField>
 					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<FormField label="Internal PN" for="pf-pn">
@@ -343,18 +222,6 @@
 							<Input id="pf-name" bind:value={name} required />
 						</FormField>
 					</div>
-				{:else}
-					<DetailTable>
-						<DetailRow label="Internal PN" value={p0?.internalPn} mono />
-						<DetailRow
-							label="Tier"
-							value={`T${p0?.tier}${p0?.tierName ? ` ${p0.tierName.toUpperCase()}` : ''}`}
-						/>
-						<DetailRow label="State" value={stateLabel(p0?.state)} />
-					</DetailTable>
-					<FormField label="Name" for="pf-name" required>
-						<Input id="pf-name" bind:value={name} required />
-					</FormField>
 				{/if}
 				<FormField label="External PN" for="pf-ext">
 					<Input
@@ -415,7 +282,7 @@
 					</datalist>
 				</FormField>
 				<FormField label="Unit of measure" for="pf-uom">
-					<Input id="pf-uom" bind:value={uom} class="font-mono" disabled={unitLocked} />
+					<Input id="pf-uom" bind:value={uom} class="font-mono" />
 				</FormField>
 				<FormField label="Reorder point" for="pf-reorder">
 					<Input id="pf-reorder" class="font-mono" inputmode="decimal" bind:value={reorder} />
@@ -439,7 +306,7 @@
 							{/each}
 						</div>
 					</FormField>
-				{:else if !editing}
+				{:else}
 					<FormField label="Add to assembly" for="pf-assembly">
 						<PartPicker id="pf-assembly" bind:value={assembly} placeholder="None" clearable />
 					</FormField>
@@ -482,25 +349,12 @@
 				{#each schema.customFields as f (f.key)}
 					{#if f.type === 'boolean'}
 						<div class="flex items-center gap-2">
-							<Checkbox id={`cf-${f.key}`} bind:checked={customBool[f.key]} />
+							<CustomFieldInput field={f} id={`cf-${f.key}`} bind:checked={metaVals.bool[f.key]} />
 							<Label for={`cf-${f.key}`}>{f.label}</Label>
 						</div>
-					{:else if f.type === 'select'}
-						<FormField label={f.label} for={`cf-${f.key}`} required={f.required}>
-							<NativeSelect.Root id={`cf-${f.key}`} class="w-full" bind:value={customText[f.key]}>
-								<NativeSelect.Option value="">—</NativeSelect.Option>
-								{#each f.options as o (o)}<NativeSelect.Option value={o}>{o}</NativeSelect.Option
-									>{/each}
-							</NativeSelect.Root>
-						</FormField>
 					{:else}
 						<FormField label={f.label} for={`cf-${f.key}`} required={f.required}>
-							<Input
-								id={`cf-${f.key}`}
-								type={f.type === 'number' ? 'number' : 'text'}
-								step="any"
-								bind:value={customText[f.key]}
-							/>
+							<CustomFieldInput field={f} id={`cf-${f.key}`} bind:text={metaVals.text[f.key]} />
 						</FormField>
 					{/if}
 				{/each}
@@ -509,21 +363,14 @@
 						id="pf-meta"
 						class="font-mono"
 						rows={2}
-						bind:value={extraJson}
+						bind:value={metaVals.extra}
 						spellcheck={false}
 					/>
 				</FormField>
 			</div>
 		</Section>
 
-		<FormKeys
-			sticky
-			submit={busy ? 'SAVING' : editing ? 'SAVE' : 'CREATE'}
-			{cancel}
-			{missing}
-			{busy}
-			{error}
-		/>
+		<FormKeys sticky submit={busy ? 'SAVING' : 'CREATE'} {cancel} {missing} {busy} {error} />
 	</div>
 
 	<aside class="min-w-0 xl:sticky xl:top-3 xl:self-start">
@@ -535,7 +382,7 @@
 			tierCode={tierInfo?.code ?? null}
 			{uom}
 			{tracking}
-			state={p0?.state ?? 'draft'}
+			state="draft"
 			{qr}
 		/>
 	</aside>

@@ -19,7 +19,6 @@
 	import RevisionsSection from '#lib/components/parts/RevisionsSection.svelte';
 	import CauseDialog from '#lib/components/parts/CauseDialog.svelte';
 	import ConsumedSection from '#lib/components/parts/ConsumedSection.svelte';
-	import PartTag from '#lib/components/parts/PartTag.svelte';
 	import ProcedureUseSection from '#lib/components/parts/ProcedureUseSection.svelte';
 	import HistorySection from '#lib/components/parts/HistorySection.svelte';
 	import IdentitySection from '#lib/components/parts/IdentitySection.svelte';
@@ -184,22 +183,9 @@
 	)}
 >
 	<div class="grid min-w-0 grid-cols-1 gap-3">
-		<PartTag
-			pn={part.internalPn}
-			name={part.name}
-			tierLevel={part.tier}
-			tierName={part.tierName}
-			tierCode={detail.tierCode}
-			uom={part.unitOfMeasure}
-			tracking={part.trackingType}
-			state={part.state}
-			qr={data.qr}
-		/>
-		<IdentitySection
-			{detail}
-			fields={data.fields}
-			editHref={editing ? `/parts/${part.id}/edit` : null}
-		/>
+		{#key part.id}
+			<IdentitySection {detail} schema={data.schema} qr={data.qr} {editing} />
+		{/key}
 		<RevisionsSection {detail} />
 		<VariantsSection {detail} />
 		<PluginPanels slot="part.side" recordId={part.id} number={part.internalPn} />

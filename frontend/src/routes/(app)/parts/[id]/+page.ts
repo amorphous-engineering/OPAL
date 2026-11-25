@@ -21,7 +21,7 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		);
 	return {
 		detail,
-		fields: schema.customFields,
+		schema,
 		suppliers,
 		poLines,
 		stock: stock.items,

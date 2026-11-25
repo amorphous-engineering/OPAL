@@ -1,15 +1,7 @@
-import { opal, orHttpError } from '#lib/api.js';
+import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ params, fetch }) => {
-	const client = opal.using(fetch);
-	const [detail, schema] = await orHttpError(
-		Promise.all([client.parts.detail({ id: Number(params.id) }), client.parts.schema({})])
-	);
-	return {
-		part: detail.part,
-		unitLocked: detail.unitLocked,
-		identityLocked: detail.identityLocked,
-		schema
-	};
+// The part page edits in place now; an old link lands there in edit mode.
+export const load: PageLoad = ({ params }) => {
+	redirect(308, `/parts/${params.id}?edit=1`);
 };
