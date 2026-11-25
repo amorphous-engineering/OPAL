@@ -55,6 +55,21 @@ describe('mcp', () => {
 		await client.close();
 	});
 
+	test('a client learns the sourcing rules on connect and the naming rules on the part fields', async () => {
+		const app = createApp({ db: await openTestDb(), resolveActor: () => token });
+		const { client, connected } = connect(app);
+		await connected;
+		expect(client.getInstructions()).toContain('source unconfirmed');
+		const { tools } = await client.listTools();
+		const props = (name: string) =>
+			(tools.find((t) => t.name === name)!.inputSchema.properties ?? {}) as Record<string, { description?: string }>;
+		expect(props('parts_create').name!.description).toContain('Noun first');
+		expect(props('parts_update').name!.description).toContain('Noun first');
+		expect(props('parts_variants_create').name!.description).toContain('Noun first');
+		expect(props('parts_create').externalPn!.description).toContain('vendor');
+		await client.close();
+	});
+
 	test('the variant operation is an MCP tool', async () => {
 		const app = createApp({ db: await openTestDb(), resolveActor: () => token });
 		const { client, connected } = connect(app);

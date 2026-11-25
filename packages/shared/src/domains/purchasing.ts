@@ -274,10 +274,13 @@ export const zPurchasePage = z.object({
 	total: z.number().int()
 });
 
+const LINE_QTY_GUIDE = "Pieces, in the part's unit, never packs: 2 packs of 50 is 100.";
+const LINE_COST_GUIDE = 'Cost of one piece: pack price divided by pieces per pack. Put the pack price in the line notes.';
+
 export const zPurchaseLineInput = z.object({
 	partId: zId,
-	qtyOrdered: zQty,
-	unitCost: zPurchaseMoney.nullable().optional(),
+	qtyOrdered: zQty.describe(LINE_QTY_GUIDE),
+	unitCost: zPurchaseMoney.nullable().optional().describe(LINE_COST_GUIDE),
 	destination: zText(255).nullable().optional(),
 	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
@@ -321,8 +324,8 @@ export const zPurchaseLineAmend = z.object({
 export const zPurchaseLineUpdate = z.object({
 	id: zId,
 	lineId: zId,
-	qtyOrdered: zQty.optional(),
-	unitCost: zPurchaseMoney.nullable().optional(),
+	qtyOrdered: zQty.optional().describe(LINE_QTY_GUIDE),
+	unitCost: zPurchaseMoney.nullable().optional().describe(LINE_COST_GUIDE),
 	destination: zText(255).nullable().optional(),
 	notes: z.string().max(MAX_TEXT).nullable().optional()
 });
@@ -533,7 +536,7 @@ const orders = {
 		name: 'purchasing.orders.create',
 		method: 'POST',
 		path: '/purchases',
-		summary: 'Create a purchase order as a draft. A PO number is assigned unless one is given.',
+		summary: 'Create a purchase order as a draft. A PO number is assigned unless one is given. The part on every line must be active; a draft part refuses the whole order, and nothing is created.',
 		input: zPurchaseCreate,
 		output: zPurchase,
 		access: 'signed-in',
