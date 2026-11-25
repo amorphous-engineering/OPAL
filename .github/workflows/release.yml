@@ -11,12 +11,15 @@ on:
         required: false
         type: string
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -74,6 +77,18 @@ jobs:
           rm -f release-assets/*.map
           ls -la release-assets/
 
+      # The image job builds from these, not from the release: a draft release is invisible to
+      # a token that can only read.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-binaries
+          path: |
+            release-assets/opal-linux-x86_64
+            release-assets/opal-linux-arm64
+            release-assets/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
+
       # Either order works: push the tag and let this create the release, or
       # create the release in the UI and let this attach the binaries. When the
       # release exists its notes belong to whoever wrote them, so only assets
@@ -96,3 +111,60 @@ jobs:
               *)   gh release create "$tag" release-assets/* --generate-notes --latest ;;
             esac
           fi
+
+  # The container image is built from the same binaries the release holds, so it carries exactly
+  # what the installers download. A prerelease gets only its own tag; a release also moves
+  # 2.0, 2 and latest.
+  image:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-binaries
+          path: assets
+
+      - name: Check the binaries and lay out the build context
+        run: |
+          (cd assets && sha256sum -c --ignore-missing SHA256SUMS)
+          mkdir -p ctx/amd64 ctx/arm64 ctx/root/data
+          mv assets/opal-linux-x86_64 ctx/amd64/opal
+          mv assets/opal-linux-arm64 ctx/arm64/opal
+
+      - name: Image name and tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/opal
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.release.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.release.outputs.tag }}
+            type=raw,value=latest,enable=${{ !contains(needs.release.outputs.tag, '-') }}
+          labels: |
+            org.opencontainers.image.title=OPAL
+            org.opencontainers.image.description=Operations, procedures, assets and logistics for small hardware teams
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # No RUN step in the Dockerfile, so the arm64 image builds without emulation.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ctx
+          file: contrib/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

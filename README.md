@@ -40,6 +40,16 @@ Or download a binary from [GitHub Releases](https://github.com/amorphous-enginee
 | Linux (arm64) | `opal-linux-arm64` |
 | Windows (x86_64) | `opal-windows-x86_64.exe` |
 
+### Docker
+
+Each release is also an image, `ghcr.io/amorphous-engineering/opal`, for `linux/amd64` and `linux/arm64`. Tags: the exact version (`2.0.0`), the minor line (`2.0`), the major line (`2`) and `latest`. A prerelease gets only its exact tag. The image holds the release binary and nothing else: no shell, a non-root user, and the data folder at `/data`.
+
+```bash
+docker run -d --init --name opal -p 8080:8080 -v opal-data:/data ghcr.io/amorphous-engineering/opal:2
+```
+
+[`contrib/docker/compose.yml`](contrib/docker/compose.yml) runs it hardened behind a Cloudflare Tunnel: a read-only filesystem, no capabilities, memory and process limits, and no port on the host. Run it with an init (`--init`, or `init: true` in Compose), so `docker stop` reaches OPAL. To update, pull the new image and recreate the container. `opal update` does not apply here. OPAL copies its database before a migration changes it, as it does outside a container. Keep `/data` on a local filesystem: SQLite is not safe on a network or FUSE share.
+
 ## Run
 
 | Command | What it does |
