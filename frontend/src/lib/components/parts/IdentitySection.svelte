@@ -4,6 +4,7 @@
 	// its control where it is read (the name on the tag), the rest stay facts, and SAVE in the box
 	// sends what changed. Edits are held as changes over the part, so a refresh from another section
 	// (a BOM line added) keeps them, and DONE drops them.
+	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import {
 		DetailRow,
@@ -90,6 +91,8 @@
 	function set<K extends Key>(k: K, v: Values[K]) {
 		if (v === base[k]) delete changes[k];
 		else changes[k] = v;
+		// Tooling off takes its unsaved interval with it; SAVE clears a stored one.
+		if (k === 'isTooling' && v === false) delete changes.calibrationIntervalDays;
 	}
 
 	const metaBase = $derived(metaValues(fields, part.metadata));
@@ -115,6 +118,16 @@
 			metaChanges = null;
 			error = null;
 		}
+	});
+
+	// A change to a field that has since locked (the part activated, stock arrived) goes with the
+	// control: the server would refuse it, and the page would show it as a fact it is not.
+	$effect(() => {
+		const open = can;
+		untrack(() => {
+			for (const k of Object.keys(changes) as Key[]) if (!open.has(k)) delete changes[k];
+			if (!open.has('metadata')) metaChanges = null;
+		});
 	});
 
 	// A new tier takes a fresh number; the tag shows the one it would get.

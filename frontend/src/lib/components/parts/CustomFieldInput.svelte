@@ -28,13 +28,16 @@
 		<NativeSelect.Option value="">—</NativeSelect.Option>
 		{#each field.options as o (o)}<NativeSelect.Option value={o}>{o}</NativeSelect.Option>{/each}
 	</NativeSelect.Root>
-{:else}
+{:else if field.type === 'number'}
+	<!-- A number input binds a number, or null when cleared; the field holds text either way. -->
 	<Input
 		{id}
 		class={className}
 		aria-label={field.label}
-		type={field.type === 'number' ? 'number' : 'text'}
+		type="number"
 		step="any"
-		bind:value={text}
+		bind:value={() => text, (v) => (text = v === null || v === undefined ? '' : String(v))}
 	/>
+{:else}
+	<Input {id} class={className} aria-label={field.label} bind:value={text} />
 {/if}
