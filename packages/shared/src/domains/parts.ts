@@ -67,8 +67,22 @@ export type Part = z.infer<typeof zPart>;
 /** Booleans arrive as "true"/"false" in query strings. */
 const zBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]);
 
+/**
+ * How to name a part. It travels with every tool that names one, because an agent filling in a
+ * list of parts sees the field description and nothing else.
+ */
+export const PART_NAME_GUIDE =
+	'Name the part so a reader with no project context can tell what it is: "Valve Assembly", "Piston" or "Bracket" alone is too vague. ' +
+	'Noun first, so sorted lists group like parts; then type or parent; then the size or rating that sets it apart from its nearest sibling. ' +
+	'Examples: "Poppet Valve Assembly, Pneumatic, 1/8 NPT, 0.25 in Orifice"; "Valve Body, Pneumatic Poppet Valve, 1/8 NPT". ' +
+	'Take sizes from the source. If it gives none, leave the size out and say so, or ask; never invent one. ' +
+	'No project names, drawing numbers or vendor part numbers in the name: a drawing number or vendor part number goes in externalPn. ' +
+	"A bought part takes the vendor's noun and key specs without marketing words; pack size goes in the description.";
+
+const zPartName = z.string().trim().min(1).max(255).describe(PART_NAME_GUIDE);
+
 const partFields = {
-	externalPn: z.string().trim().max(255).nullable().optional(),
+	externalPn: z.string().trim().max(255).nullable().optional().describe('Drawing number or vendor part number.'),
 	description: z.string().max(MAX_MARKDOWN).nullable().optional(),
 	category: z.string().trim().max(100).nullable().optional(),
 	reorderPoint: zQty.nullable().optional(),
@@ -80,7 +94,7 @@ const partFields = {
 };
 
 export const zPartCreate = z.object({
-	name: z.string().trim().min(1).max(255),
+	name: zPartName,
 	tier: z.number().int().min(1).default(1),
 	unitOfMeasure: z.string().trim().min(1).max(20).default('ea'),
 	/** Default: the tier's default tracking. */
@@ -98,7 +112,7 @@ export type PartCreate = z.input<typeof zPartCreate>;
 
 export const zPartUpdate = z.object({
 	id: zId,
-	name: z.string().trim().min(1).max(255).optional(),
+	name: zPartName.optional(),
 	tier: z.number().int().min(1).optional(),
 	unitOfMeasure: z.string().trim().min(1).max(20).optional(),
 	trackingType: z.enum(TRACKING_TYPES).optional(),
@@ -115,7 +129,7 @@ export type VariantBom = (typeof VARIANT_BOM)[number];
 /** Omit a field to copy it from the source; send null to clear a nullable field. */
 export const zVariantCreate = z.object({
 	id: zId,
-	name: z.string().trim().min(1).max(255).optional(),
+	name: zPartName.optional(),
 	unitOfMeasure: z.string().trim().min(1).max(20).optional(),
 	trackingType: z.enum(TRACKING_TYPES).optional(),
 	procurement: z.enum(PROCUREMENT).optional(),
@@ -429,7 +443,7 @@ const parts_ = {
 		name: 'parts.importPreview',
 		method: 'POST',
 		path: '/parts/import/preview',
-		summary: 'Parse and check CSV text for a parts import. Creates nothing.',
+		summary: 'Parse and check CSV text for a parts import. Creates nothing. Name parts as the name field of parts_create describes.',
 		input: z.object({ csv: z.string().max(MAX_CSV).min(1) }),
 		output: zImportPreview,
 		access: 'signed-in',
