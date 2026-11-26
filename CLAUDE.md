@@ -92,7 +92,7 @@ screen, in links, in exports and in MCP, and moves no stored row.
 - Name tests after the business rule they check.
 - Every operation needs at least one HTTP-level test (`test:ops` checks it).
 - `server/test/fixtures/legacy-released` holds databases made by the released 1.x code. `build.sh` there remakes them; real Alembic's result is the expected output of `src/import/bridge.ts`.
-- Real data for screen checks: copy `server/assets/demo-seed.db` (a 1.x demo database) into a temp `OPAL_DATA_DIR` as `opal.db`. The first start imports it. Sign in as `build` / `kestrel-demo`.
+- Real data for screen checks and demos: the Mojave Sphinx dataset. `cd server && bun scripts/load-demo.ts <new empty folder>` loads it through OPAL's own operations (about a minute), then serve with `OPAL_DATA_DIR` set to that folder. Sign in as `build` / `sphinx-demo`. `server/assets/demo-seed.db` is an old 1.x database: keep it for import tests, never for demos.
 
 ## Records
 
