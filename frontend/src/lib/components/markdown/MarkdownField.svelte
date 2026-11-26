@@ -9,7 +9,8 @@
 
 <script lang="ts">
 	// The one markdown editor: CodeMirror 6 with three view modes (LIVE, HYBRID, SOURCE) and the
-	// shared formatting toolbar. The mode is a per-viewer preference common to every editor.
+	// shared formatting toolbar. The mode is a per-viewer preference common to every editor, set
+	// under Preferences in the account menu, so the toolbar holds only formatting.
 	import type { Snippet } from 'svelte';
 	import { untrack } from 'svelte';
 	import { Compartment, EditorState, Prec } from '@codemirror/state';
@@ -36,7 +37,7 @@
 		type Command
 	} from './commands.js';
 	import { livePreview } from './livePreview.js';
-	import { MARKDOWN_MODES, markdownMode, setMarkdownMode } from './mode.svelte.js';
+	import { MARKDOWN_MODES, markdownMode } from './mode.svelte.js';
 	import { sourceHighlight, theme } from './theme.js';
 
 	let {
@@ -54,8 +55,6 @@
 		toolbarEnd,
 		toolbarTail,
 		between,
-		quiet = false,
-		toolbarOnFocus = false,
 		class: className
 	}: {
 		value: string;
@@ -70,21 +69,16 @@
 		autofocus?: boolean;
 		onsubmit?: () => void;
 		onfiles?: (files: File[]) => void;
-		/** Host buttons, before the mode switch. */
+		/** Host buttons, at the right end of the toolbar. */
 		toolbarEnd?: Snippet;
-		/** Host content after the mode switch (a save badge). */
+		/** Host content after those (a save badge). */
 		toolbarTail?: Snippet;
-		/** Host content between the toolbar row and the editor (callout boxes). */
+		/** Host content above the editor (callout boxes). */
 		between?: Snippet;
-		/** One quiet line: the toolbar and mode switch appear once the editor has focus or content. */
-		quiet?: boolean;
-		/** The toolbar shows only while the editor has focus, under the box so the text stays put. */
-		toolbarOnFocus?: boolean;
 		class?: string;
 	} = $props();
 
-	let focused = $state(false);
-	/** toolbarOnFocus: the editor box or its toolbar holds the focus. */
+	/** The editor box or its toolbar holds the focus. */
 	let editing = $state(false);
 	let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -314,71 +308,37 @@
 		{/each}
 		<span class="ml-auto flex flex-wrap items-center gap-1">
 			{@render toolbarEnd?.()}
-			<Toolbar.Group
-				type="single"
-				value={markdownMode.value}
-				onValueChange={(v: string) => v && setMarkdownMode(v as (typeof MARKDOWN_MODES)[number])}
-				size="sm"
-				variant="outline"
-				class="gap-0"
-				aria-label="View mode"
-			>
-				{#each MARKDOWN_MODES as m, i (m)}
-					<Toolbar.GroupItem
-						value={m}
-						class={cn(
-							'font-mono text-xs uppercase',
-							joined(i),
-							'data-[state=on]:bg-foreground data-[state=on]:text-background'
-						)}
-						onmousedown={(e) => e.preventDefault()}>{m}</Toolbar.GroupItem
-					>
-				{/each}
-			</Toolbar.Group>
 			{@render toolbarTail?.()}
 		</span>
 	</Toolbar.Root>
 {/snippet}
 
-<div
-	bind:this={root}
-	class={cn('grid grid-cols-1 gap-2', className)}
-	onfocusin={() => (focused = true)}
-	onfocusout={(e) => {
-		if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focused = false;
-	}}
->
-	{#if !toolbarOnFocus && (!quiet || focused || value)}
-		{@render toolbar()}
-	{/if}
+<!-- One behaviour for every editor: the toolbar sits under the box while the editor has focus,
+     so the box and its neighbours never move. Focus in the host content above (callout boxes)
+     does not count. The toolbar goes only after the click that moved the focus away has landed,
+     so nothing shifts under the pointer mid-click. -->
+<div bind:this={root} class={cn('grid grid-cols-1 gap-2', className)}>
 	{@render between?.()}
-	{#if toolbarOnFocus}
-		<!-- The toolbar sits under the box while the editor itself has focus; focus in the host
-		     content between (callout boxes) does not count. It goes only after the click that
-		     moved the focus away has landed, so nothing shifts under the pointer mid-click. -->
-		<div
-			class="grid min-w-0 grid-cols-1 gap-2"
-			onfocusin={() => {
-				clearTimeout(hideTimer);
-				editing = true;
-			}}
-			onfocusout={(e) => {
-				if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-				if (!pointerDown) {
-					editing = false;
-					return;
-				}
-				window.addEventListener(
-					'pointerup',
-					() => (hideTimer = setTimeout(() => (editing = false), 0)),
-					{ once: true }
-				);
-			}}
-		>
-			<div bind:this={host} class="min-w-0"></div>
-			{#if editing}{@render toolbar()}{/if}
-		</div>
-	{:else}
+	<div
+		class="grid min-w-0 grid-cols-1 gap-2"
+		onfocusin={() => {
+			clearTimeout(hideTimer);
+			editing = true;
+		}}
+		onfocusout={(e) => {
+			if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+			if (!pointerDown) {
+				editing = false;
+				return;
+			}
+			window.addEventListener(
+				'pointerup',
+				() => (hideTimer = setTimeout(() => (editing = false), 0)),
+				{ once: true }
+			);
+		}}
+	>
 		<div bind:this={host} class="min-w-0"></div>
-	{/if}
+		{#if editing}{@render toolbar()}{/if}
+	</div>
 </div>

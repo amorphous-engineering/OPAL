@@ -21,6 +21,10 @@ All notable user-visible changes to OPAL. Dates are release dates.
 
 ### Changed
 - **The template editor shows what a step has, and offers the rest once.** An open step shows its instructions and whatever it holds (callouts, images, parts, data, sign-offs, role, duration). One ADD bank offers the rest. Empty sections are no longer drawn as "none" in edit mode. The formatting toolbar shows only while you type in a box. Every OP has a + STEP key at its foot, and titles are drawn as fields.
+- **Every text box shows its formatting toolbar the same way:** under the box, on one row, while you type in it. The box and the boxes beside it no longer move when you click in.
+- **LIVE, HYBRID and SOURCE moved to the account menu**, under Preferences as Text boxes. It was already one setting for every editor; it no longer takes a row in each toolbar.
+- **A new record's way out reads EXIT WITHOUT SAVING** on every form. Leaving keeps nothing and uses no number. Editing a record still says CANCEL.
+- **The new-risk form reads as the risk statement.** Its four boxes are labelled Given that, there is a possibility of, adversely impacting, and thereby leading to: the sentence the risk page builds from them.
 - **A new template starts from its details.** + NEW TEMPLATE opens the details with the T-number the template would take. Nothing is created, and no number is used, until CREATE, which goes straight into the editor.
 - **A routine step shows no sign-off.** A step anyone may complete no longer reads "Primary buyoff" in the editor or the reader. A declared sign-off reads Sign-off and Second sign-off, with "Any role" when it names none.
 - **A data field can use a unit outside OPAL's list**, typed as written; it is never converted. The common units come first in the picker. Only a number field has a unit, and the field's internal key is no longer shown.

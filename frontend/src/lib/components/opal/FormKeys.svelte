@@ -1,7 +1,8 @@
 <script lang="ts">
-	// The end of a form: its error, then CANCEL and the one primary key, at the right. While the
-	// primary is inert the fields it still needs are named beside it, so an inert key always says
-	// why (CLAUDE.md, what a page presents, 5).
+	// The end of a form: its error, then the way out and the one primary key, at the right. A new
+	// record's way out says what it does, EXIT WITHOUT SAVING: nothing is kept and no number is used.
+	// An edit passes CANCEL. While the primary is inert the fields it still needs are named beside
+	// it, so an inert key always says why (CLAUDE.md, what a page presents, 5).
 	import type { Snippet } from 'svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
@@ -10,7 +11,7 @@
 	let {
 		submit,
 		cancel,
-		cancelLabel = 'CANCEL',
+		cancelLabel = 'EXIT WITHOUT SAVING',
 		missing = [],
 		busy = false,
 		error = null,
@@ -19,7 +20,7 @@
 		class: className
 	}: {
 		submit: string;
-		/** Where CANCEL goes, or what it does. None on a form whose page already has DONE. */
+		/** Where the way out goes, or what it does. None on a form whose page already has DONE. */
 		cancel?: string | (() => void);
 		cancelLabel?: string;
 		/** Required fields still blank, as nouns. */

@@ -8,6 +8,7 @@
 	import GlobeIcon from 'phosphor-svelte/lib/Globe';
 	import MonitorIcon from 'phosphor-svelte/lib/Monitor';
 	import MoonIcon from 'phosphor-svelte/lib/Moon';
+	import NotePencilIcon from 'phosphor-svelte/lib/NotePencil';
 	import PaletteIcon from 'phosphor-svelte/lib/Palette';
 	import ScrollIcon from 'phosphor-svelte/lib/Scroll';
 	import SignOutIcon from 'phosphor-svelte/lib/SignOut';
@@ -24,6 +25,12 @@
 		stepText,
 		type StepTextSize
 	} from '#lib/stepText.svelte.js';
+	import {
+		MARKDOWN_MODES,
+		markdownMode,
+		setMarkdownMode,
+		type MarkdownMode
+	} from '#lib/components/markdown/mode.svelte.js';
 
 	const user = $derived(session.user);
 	const shortcut = (href: string) => NAV_SHORTCUTS.find((s) => s.href === href)?.keys;
@@ -34,6 +41,7 @@
 		{ value: 'system', label: 'System', icon: MonitorIcon }
 	] as const;
 	const theme = $derived(THEMES.find((t) => t.value === userPrefersMode.current) ?? THEMES[2]);
+	const capital = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 	// The local zone name (PDT, CET) makes "Local" concrete, whichever mode is chosen.
 	const localZone =
@@ -144,6 +152,24 @@
 								<span class="text-muted-foreground">{localZone}</span></DropdownMenu.RadioItem
 							>
 							<DropdownMenu.RadioItem value="utc"><GlobeIcon />UTC</DropdownMenu.RadioItem>
+						</DropdownMenu.RadioGroup>
+					</DropdownMenu.SubContent>
+				</DropdownMenu.Sub>
+				<DropdownMenu.Sub>
+					<DropdownMenu.SubTrigger>
+						<NotePencilIcon />Text boxes
+						<span class="flex-1 text-right text-muted-foreground"
+							>{capital(markdownMode.value)}</span
+						>
+					</DropdownMenu.SubTrigger>
+					<DropdownMenu.SubContent class="w-32">
+						<DropdownMenu.RadioGroup
+							value={markdownMode.value}
+							onValueChange={(v) => setMarkdownMode(v as MarkdownMode)}
+						>
+							{#each MARKDOWN_MODES as m (m)}
+								<DropdownMenu.RadioItem value={m}>{capital(m)}</DropdownMenu.RadioItem>
+							{/each}
 						</DropdownMenu.RadioGroup>
 					</DropdownMenu.SubContent>
 				</DropdownMenu.Sub>
