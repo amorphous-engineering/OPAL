@@ -4,6 +4,10 @@ All notable user-visible changes to OPAL. Dates are release dates.
 
 ## Unreleased
 
+### Previews
+- **Requirements are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.
+- **Datasets are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.
+
 ### Added
 - **A container image with each release**, `ghcr.io/amorphous-engineering/opal`, for amd64 and arm64: the release binary on a base with no shell, run as a non-root user. `contrib/docker/compose.yml` runs it hardened behind a Cloudflare Tunnel. Update by pulling a new image.
 - **Work orders name the units they act on.** An OP declares unit slots (a test names the unit under test and its fixture). At run time each slot names a serialized stock record, or borrowed gear as text. The names can be taken back while the OP is workable and are on record once it completes, and a required slot stops its OP. A kit line can install INTO a slot, and a removal takes a component out of a named unit: a serialized one can go back to stock under its own OPAL number. A unit's page lists the work orders that named it and counts the completed ones per procedure. + OTHER HARDWARE names gear no slot asked for.
