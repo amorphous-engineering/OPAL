@@ -1,11 +1,12 @@
 /**
- * Builds the `opal` binaries: the web client and the migrations are embedded.
+ * Builds the `opal` binaries: the web client, the migrations and the demo pack are embedded.
  * Usage: bun scripts/build.ts [--target bun-darwin-arm64] [--version 1.2.3]
  * Run `pnpm --filter frontend build` first.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { buildDemoPack } from '../src/services/reports/demo.ts';
 
 const root = resolve(import.meta.dir, '..');
 const clientDir = resolve(root, '../frontend/build');
@@ -47,6 +48,10 @@ function generate(): string {
 	rmSync(genDir, { recursive: true, force: true });
 	mkdirSync(genDir, { recursive: true });
 
+	// LOAD DEMO's content: Mojave Sphinx, loaded once here rather than on every entry.
+	console.log('building the demo pack (Mojave Sphinx)');
+	buildDemoPack(join(genDir, 'demo-pack.db'));
+
 	const files = walk(clientDir).sort();
 	const imports = files.map(
 		(f, i) => `import f${i} from ${JSON.stringify(slash(relative(genDir, f)))} with { type: 'file' };`
@@ -75,10 +80,10 @@ function generate(): string {
 // First: the passkey library's X.509 code (tsyringe) checks for this polyfill when it loads.
 import 'reflect-metadata';
 ${imports.join('\n')}
-import demoSeed from '../../assets/demo-seed.db' with { type: 'file' };
+import demoPack from './demo-pack.db' with { type: 'file' };
 
 globalThis.__opalEmbedded = {
-	demoSeed,
+	demoPack,
 	migrations: ${JSON.stringify(migrations)},
 	web: {
 ${web.join(',\n')}

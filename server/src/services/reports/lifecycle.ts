@@ -45,7 +45,7 @@ import { storeNumbersAtFullWidth } from '../../db/full-width-numbers.ts';
 import { renameCheckboxFields } from '../../db/boolean-fields.ts';
 import { removeSnapshots } from '../../db/snapshot.ts';
 import { DEMO_PREFIX, dataDir } from '../../paths.ts';
-import { buildDemoContent } from './demo.ts';
+import { writeDemo } from './demo.ts';
 
 interface Home {
 	dbPath: string;
@@ -143,7 +143,7 @@ function copyAuthSettings(from: Db, to: Db): void {
 }
 
 /**
- * The seed is a public 1.x database with a known admin password. Only the operator signs in to
+ * The demo's people come from a public dataset. Only the operator signs in to
  * the demo, so every other seeded person loses the password, admin rights, tokens and passkeys.
  */
 function lockSeededUsers(demo: Ctx, operatorId: number | null): void {
@@ -211,15 +211,22 @@ export async function enterDemo(ctx: Ctx): Promise<LifecycleState> {
 	const operator = operatorId === null ? undefined : ctx.db.select().from(user).where(eq(user.id, operatorId)).get();
 
 	mkdirSync(demoAttachments(h), { recursive: true });
-	const demoDb = await openFile(demoPath(h));
-	const demoCtx: Ctx = { ...ctx, db: demoDb, actor: { kind: 'system' } };
-	// Freshness is a property of the content, not the file: an interrupted first build leaves a
-	// blank file, and the next entry builds it again.
-	const fresh = !demoDb.select({ id: user.id }).from(user).limit(1).get() && !demoDb.select({ id: part.id }).from(part).limit(1).get();
-	if (fresh) {
-		buildDemoContent(demoDb, demoAttachments(h));
-		copyAuthSettings(ctx.db, demoDb);
+	let built = false;
+	if (!existsSync(demoPath(h))) {
+		writeDemo(demoPath(h), demoAttachments(h));
+		built = true;
 	}
+	let demoDb = await openFile(demoPath(h));
+	// Freshness is a property of the content, not the file: a file left blank by something
+	// interrupted is replaced on the next entry.
+	if (!demoDb.select({ id: user.id }).from(user).limit(1).get() && !demoDb.select({ id: part.id }).from(part).limit(1).get()) {
+		(demoDb.$client as Database).close();
+		writeDemo(demoPath(h), demoAttachments(h));
+		built = true;
+		demoDb = await openFile(demoPath(h));
+	}
+	if (built) copyAuthSettings(ctx.db, demoDb);
+	const demoCtx: Ctx = { ...ctx, db: demoDb, actor: { kind: 'system' } };
 	const operatorRow = operator ? upsertOperator(demoCtx, operator) : null;
 	// Every entry, not only the first build: a kept demo file may predate the lock.
 	lockSeededUsers(demoCtx, operatorRow?.id ?? null);

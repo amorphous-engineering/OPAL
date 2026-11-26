@@ -1,7 +1,8 @@
 <script lang="ts">
 	// The part tag: one identity, one rendering. Forming on the create form,
-	// current on the edit form, and the printed label. If the screen tag and
-	// the label ever differ, that is a bug by definition.
+	// current on the part page (where EDIT puts the name field in place), and the
+	// printed label. If the screen tag and the label ever differ, that is a bug by definition.
+	import type { Snippet } from 'svelte';
 	import { cn } from '#lib/utils.js';
 
 	let {
@@ -15,6 +16,7 @@
 		state = 'draft',
 		qr,
 		print = false,
+		nameField,
 		class: className
 	}: {
 		pn: string | null | undefined;
@@ -28,6 +30,8 @@
 		state?: 'draft' | 'active' | 'obsolete';
 		qr?: string | null;
 		print?: boolean;
+		/** The name's control, in place of the name, while the part page edits it. */
+		nameField?: Snippet;
 		class?: string;
 	} = $props();
 
@@ -64,7 +68,9 @@
 					>{segments[2]}{:else if pn}{pn}{:else}<span class="text-muted-foreground">· · · · ·</span
 					>{/if}
 			</div>
-			<div class="mt-1 min-h-4 font-sans text-sm break-words">{name}</div>
+			<div class="mt-1 min-h-4 font-sans text-sm break-words">
+				{#if nameField}{@render nameField()}{:else}{name}{/if}
+			</div>
 		</div>
 		<div
 			class={cn(

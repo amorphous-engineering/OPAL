@@ -4,6 +4,9 @@
 
 A local-first system for hardware teams: parts, stock, purchasing, procedures and their execution, issues, risks and requirements. One binary and one SQLite file. It runs on one computer and serves the local network.
 
+- **Requirements are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.
+- **Datasets are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.
+
 ## Install
 
 **OPAL 2 is in beta.** Try it and tell us what breaks, but do not keep your only copy of real data in it yet. New here? Start with the [quickstart](QUICKSTART.md).
@@ -204,4 +207,4 @@ pnpm check
 
 ## License
 
-MIT
+MIT, except the Mojave Sphinx demo dataset in [`demo/mojave-sphinx`](demo/mojave-sphinx), which the release binaries carry for LOAD DEMO. It is adapted from Half Cat Rocketry's HCR-5100 guidebook and licensed under the GPL, version 3: see its [LICENSE](demo/mojave-sphinx/LICENSE) and [README](demo/mojave-sphinx/README.md).

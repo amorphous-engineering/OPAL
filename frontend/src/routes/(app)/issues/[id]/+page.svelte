@@ -835,7 +835,6 @@
 					id="comment"
 					bind:value={comment}
 					minRows={1}
-					quiet
 					placeholder="Add a comment"
 					onsubmit={postComment}
 				/>

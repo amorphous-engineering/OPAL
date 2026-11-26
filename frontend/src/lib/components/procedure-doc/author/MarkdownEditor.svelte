@@ -49,7 +49,6 @@
 <MarkdownField
 	{id}
 	ariaLabel={label}
-	toolbarOnFocus
 	value={text}
 	{onchange}
 	bind:this={field}

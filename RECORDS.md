@@ -145,7 +145,7 @@ No other record can own a file. A new record type gets files by declaring its ru
 | State | The page answers | Primary | Also | EDIT | MORE |
 |---|---|---|---|---|---|
 | Draft | What is this, and can it activate? | ACTIVATE, inert with blockers until ready | Print label | Everything, including tier and number | DELETE (if unreferenced) |
-| Active | What is it, where is it, what uses it? | | Print label, receive stock, order, variant, REVISE (reason required, once copies exist) | Description, category, reorder point, BOM until copies exist | OBSOLETE (reason required) |
+| Active | What is it, where is it, what uses it? | | Print label, receive stock, order, variant, REVISE (reason required, once copies exist) | Every field but the tier, unless a lock below holds it; BOM until copies exist | OBSOLETE (reason required) |
 | Obsolete | What was this, and where was it used? | | Print label | | REINSTATE (reason required) |
 
 - The part tag with QR stays at the top. Stock, procedure use and consumption all show on the part page.
@@ -153,6 +153,8 @@ No other record can own a file. A new record type gets files by declaring its ru
 - A published procedure does not lock the BOM, because nothing exists yet. Its kit stays as published, and EDIT on the BOM says so.
 - The unit of measure stops changing once stock or a purchase order line counts in it, or once an assembly with copies names the part in its BOM. A different unit is a new part.
 - A draft part in the BOM of an assembly with copies keeps its number and tier.
+- Tracking stops changing once stock records exist, because they are stored by it.
+- EDIT offers exactly the fields the server accepts: one rule in shared (`partFieldLock`) decides both.
 
 ## Stock record
 

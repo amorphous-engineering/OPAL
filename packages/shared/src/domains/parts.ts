@@ -147,6 +147,41 @@ export const zPartUpdate = z.object({
 	...partFields
 });
 
+/** A field `parts.update` changes. Taken from the contract, so a new field needs a decision below. */
+export type PartField = Exclude<keyof typeof zPartUpdate.shape, 'id'>;
+export const PART_FIELDS = Object.keys(zPartUpdate.shape).filter((k) => k !== 'id') as PartField[];
+
+/** What holds a part's fields in place, apart from its state. `parts.detail` reports each one. */
+export interface PartLocks {
+	/** A locked BOM names the part: its number and tier stay. */
+	identityLocked: boolean;
+	/** Stock or PO lines count in the unit, or a locked BOM reads through it. */
+	unitLocked: boolean;
+	/** Stock records are stored by the tracking type. */
+	trackingLocked: boolean;
+}
+
+export type PartFieldLock = 'wrong_state' | 'identity_locked' | 'unit_locked' | 'has_stock';
+
+/**
+ * Why `parts.update` refuses to change this field, or null when it may change. The server refuses
+ * with this code and the part page offers every field that has none, so the two cannot disagree.
+ * An obsolete part changes nothing. The tier is identity: it changes only on a draft that no locked
+ * BOM names. Everything else stays open on an active part unless a lock holds it.
+ */
+export function partFieldLock(state: PartState, field: PartField, locks: PartLocks): PartFieldLock | null {
+	if (state === 'obsolete') return 'wrong_state';
+	if (field === 'tier' && (state !== 'draft' || locks.identityLocked)) return 'identity_locked';
+	if (field === 'unitOfMeasure' && locks.unitLocked) return 'unit_locked';
+	if (field === 'trackingType' && locks.trackingLocked) return 'has_stock';
+	return null;
+}
+
+/** The fields a part in this state, under these locks, may change. */
+export function editablePartFields(state: PartState, locks: PartLocks): Set<PartField> {
+	return new Set(PART_FIELDS.filter((f) => partFieldLock(state, f, locks) === null));
+}
+
 // ---------------------------------------------------------------- variants
 
 /** Where a new variant's BOM comes from: the source part as its one line, a copy, or nothing. */
@@ -266,6 +301,8 @@ export const zPartDetail = z.object({
 	unitLocked: z.boolean(),
 	/** A locked BOM names this part, so a draft keeps its number and tier. */
 	identityLocked: z.boolean(),
+	/** Stock records are stored by its tracking type, so it cannot change. */
+	trackingLocked: z.boolean(),
 	bom: z.array(zBomLine),
 	/** What exists of this part, in words, when that locks its BOM. Null while the BOM is pencil. */
 	bomLockedBy: z.string().nullable(),

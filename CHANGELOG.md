@@ -4,6 +4,10 @@ All notable user-visible changes to OPAL. Dates are release dates.
 
 ## Unreleased
 
+### Previews
+- **Requirements are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.
+- **Datasets are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.
+
 ### Added
 - **A container image with each release**, `ghcr.io/amorphous-engineering/opal`, for amd64 and arm64: the release binary on a base with no shell, run as a non-root user. `contrib/docker/compose.yml` runs it hardened behind a Cloudflare Tunnel. Update by pulling a new image.
 - **Work orders name the units they act on.** An OP declares unit slots (a test names the unit under test and its fixture). At run time each slot names a serialized stock record, or borrowed gear as text. The names can be taken back while the OP is workable and are on record once it completes, and a required slot stops its OP. A kit line can install INTO a slot, and a removal takes a component out of a named unit: a serialized one can go back to stock under its own OPAL number. A unit's page lists the work orders that named it and counts the completed ones per procedure. + OTHER HARDWARE names gear no slot asked for.
@@ -13,10 +17,14 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Role marks on steps.** A step can name the role that does it, shown as the role's letters in its colour beside the step number, on screen and on the traveler. It gates nothing. A role's letters and colour are set on the role, and a published version keeps the mark it was published with.
 - **Roles can belong to a project**: crew positions that only that project's procedures offer, managed on the project page. They pass no gate. Settings keeps the organization's roles, which do.
 - **Each bulk part says whether its receipts need the supplier's lot**: as its tier says, always (O-rings, adhesives) or never (parts made to print). A serialized part never needs a lot.
-- **A new demo dataset, Mojave Sphinx**, adapted from Half Cat Rocketry's HCR-5100 guidebook under the GPL, in `demo/mojave-sphinx/`. `server/scripts/load-demo.ts` loads it into a new data folder through OPAL's own operations: 173 parts, 21 procedures, 35 work orders, purchase orders, issues, risks, requirements and datasets. LOAD DEMO in the app still loads the 1.x seed.
+- **A new demo dataset, Mojave Sphinx**, adapted from Half Cat Rocketry's HCR-5100 guidebook under the GPL, in `demo/mojave-sphinx/`. `server/scripts/load-demo.ts` loads it into a new data folder through OPAL's own operations: 174 parts, 21 procedures, 35 work orders, purchase orders, issues, risks, requirements and datasets, with the guidebook's photos on their steps. **LOAD DEMO now opens Mojave Sphinx** instead of the old 1.x demo database: the release build loads it once and carries the result in the binary, so entering the demo takes a moment, not a minute.
 
 ### Changed
 - **The template editor shows what a step has, and offers the rest once.** An open step shows its instructions and whatever it holds (callouts, images, parts, data, sign-offs, role, duration). One ADD bank offers the rest. Empty sections are no longer drawn as "none" in edit mode. The formatting toolbar shows only while you type in a box. Every OP has a + STEP key at its foot, and titles are drawn as fields.
+- **Every text box shows its formatting toolbar the same way:** under the box, on one row, while you type in it. The box and the boxes beside it no longer move when you click in.
+- **LIVE, HYBRID and SOURCE moved to the account menu**, under Preferences as Text boxes. It was already one setting for every editor; it no longer takes a row in each toolbar.
+- **A new record's way out reads EXIT WITHOUT SAVING** on every form. Leaving keeps nothing and uses no number. Editing a record still says CANCEL.
+- **The new-risk form reads as the risk statement.** Its four boxes are labelled Given that, there is a possibility of, adversely impacting, and thereby leading to: the sentence the risk page builds from them.
 - **A new template starts from its details.** + NEW TEMPLATE opens the details with the T-number the template would take. Nothing is created, and no number is used, until CREATE, which goes straight into the editor.
 - **A routine step shows no sign-off.** A step anyone may complete no longer reads "Primary buyoff" in the editor or the reader. A declared sign-off reads Sign-off and Second sign-off, with "Any role" when it names none.
 - **A data field can use a unit outside OPAL's list**, typed as written; it is never converted. The common units come first in the picker. Only a number field has a unit, and the field's internal key is no longer shown.

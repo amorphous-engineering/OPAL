@@ -202,7 +202,6 @@
 
 				<Field label="Description" for="description">
 					<MarkdownField
-						quiet
 						id="description"
 						bind:value={description}
 						minRows={4}
@@ -214,7 +213,6 @@
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<Field label="Should be" for="should-be">
 							<MarkdownField
-								quiet
 								id="should-be"
 								bind:value={shouldBe}
 								minRows={3}
@@ -222,23 +220,16 @@
 							/>
 						</Field>
 						<Field label="Is" for="actual">
-							<MarkdownField
-								quiet
-								id="actual"
-								bind:value={actual}
-								minRows={3}
-								onsubmit={submitForm}
-							/>
+							<MarkdownField id="actual" bind:value={actual} minRows={3} onsubmit={submitForm} />
 						</Field>
 					</div>
 				{:else if type === 'anomaly'}
 					<Field label="Steps to reproduce" for="steps">
-						<MarkdownField quiet id="steps" bind:value={steps} minRows={3} onsubmit={submitForm} />
+						<MarkdownField id="steps" bind:value={steps} minRows={3} onsubmit={submitForm} />
 					</Field>
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<Field label="Expected behavior" for="expected">
 							<MarkdownField
-								quiet
 								id="expected"
 								bind:value={expected}
 								minRows={2}
@@ -247,7 +238,6 @@
 						</Field>
 						<Field label="Observed behavior" for="actual-behavior">
 							<MarkdownField
-								quiet
 								id="actual-behavior"
 								bind:value={actualBehavior}
 								minRows={2}
@@ -257,13 +247,7 @@
 					</div>
 				{:else if type === 'improvement'}
 					<Field label="Expected benefit" for="benefit">
-						<MarkdownField
-							quiet
-							id="benefit"
-							bind:value={benefit}
-							minRows={2}
-							onsubmit={submitForm}
-						/>
+						<MarkdownField id="benefit" bind:value={benefit} minRows={2} onsubmit={submitForm} />
 					</Field>
 				{/if}
 

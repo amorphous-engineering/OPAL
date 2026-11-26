@@ -64,3 +64,10 @@ jobs:
           for i in $(seq 1 30); do curl -sf localhost:8081/api/health && break; sleep 1; done
           cd frontend && node scripts/check-records.mjs 8081 build kestrel-demo
           node scripts/check-markdown.mjs 8081 build kestrel-demo
+          # LOAD DEMO opens Mojave Sphinx from the pack the build embedded, not the imported seed.
+          jar=$(mktemp)
+          curl -sf -c "$jar" -H 'content-type: application/json' -d '{"username":"build","password":"kestrel-demo"}' localhost:8081/api/auth/login >/dev/null
+          curl -sf -b "$jar" -c "$jar" -X POST -H 'content-type: application/json' -d '{}' localhost:8081/api/settings/demo/enter >/dev/null
+          sleep 1
+          curl -sf -b "$jar" localhost:8081/api/settings/organization | grep -q '"name":"Sphinx Build Team"'
+          test "$(curl -sf -b "$jar" 'localhost:8081/api/procedures?limit=100' | jq .total)" -ge 21

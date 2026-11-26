@@ -116,7 +116,7 @@
 			<FormKeys
 				submit={creating ? 'CREATE' : 'SAVE'}
 				cancel={close}
-				cancelLabel={creating ? 'EXIT WITHOUT SAVING' : 'CANCEL'}
+				cancelLabel={creating ? undefined : 'CANCEL'}
 				missing={needs({ name: f.name.trim(), project: f.projectId })}
 				{busy}
 			/>
