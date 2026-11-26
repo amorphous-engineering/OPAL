@@ -9,27 +9,26 @@ A local-first system for hardware teams: parts, stock, purchasing, procedures an
 
 ## Install
 
-**OPAL 2 is in beta.** Try it and tell us what breaks, but do not keep your only copy of real data in it yet. New here? Start with the [quickstart](QUICKSTART.md).
+New here? Start with the [quickstart](QUICKSTART.md).
 
 ```bash
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --prerelease
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-$env:OPAL_PRERELEASE = "1"
 irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 ```
 
-The prerelease option is needed for now: the release marked Latest is still 1.x, which these installers cannot verify, so they stop. To install one exact release:
+To install one exact release:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --version v2.0.0-beta.1
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --version v2.0.0
 ```
 
 ```powershell
-$env:OPAL_VERSION = "v2.0.0-beta.1"
+$env:OPAL_VERSION = "v2.0.0"
 irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 ```
 

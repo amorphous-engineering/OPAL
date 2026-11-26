@@ -2,7 +2,9 @@
 
 All notable user-visible changes to OPAL. Dates are release dates.
 
-## Unreleased
+## 2.0.0 — 2026-11-26
+
+Everything since 2.0.0-beta.2. Betas 3 and 4 were cut from this list along the way.
 
 ### Previews
 - **Requirements are a preview.** They move from OPAL itself to a plugin after 2.0.0, and their data carries over.

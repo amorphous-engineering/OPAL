@@ -1,17 +1,14 @@
 # OPAL quickstart
 
-OPAL 2 is in beta. It is ready to try, and not yet ready to hold your only copy of real data.
-
 ## Install
 
 ```bash
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh -s -- --prerelease
+curl -LsSf https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-$env:OPAL_PRERELEASE = "1"
 irm https://raw.githubusercontent.com/amorphous-engineering/OPAL/rewrite/install.ps1 | iex
 ```
 
@@ -61,10 +58,10 @@ Move-Item -Force "$env:LOCALAPPDATA\OPAL\opal.before-v2.exe" "$env:LOCALAPPDATA\
 cd "$env:LOCALAPPDATA\OPAL"; Move-Item opal.db opal.v2.db; Move-Item opal.legacy.db opal.db
 ```
 
-To try the beta beside your 1.x data without importing it, give it its own empty folder:
+To try OPAL 2 beside your 1.x data without importing it, give it its own empty folder:
 
 ```bash
-OPAL_DATA_DIR=~/opal-beta opal
+OPAL_DATA_DIR=~/opal-2 opal
 ```
 
 ## Create the first account
@@ -81,7 +78,7 @@ Good places to start: open a work order under **Executions** and complete a step
 
 OPAL listens on every network interface, on port 8080. People on your network can reach it at `http://<this-computer>:8080`, and an admin adds them under **Users**.
 
-OPAL serves plain HTTP, so passwords cross the network unencrypted. Keep it on a network you trust, or put a TLS proxy in front of it and set `OPAL_PUBLIC_URL`. The README lists the [network settings](README.md#network-settings). This beta has not been tested on the open internet, so do not expose it there.
+OPAL serves plain HTTP, so passwords cross the network unencrypted. Keep it on a network you trust, or put a TLS proxy in front of it and set `OPAL_PUBLIC_URL`. The README lists the [network settings](README.md#network-settings). OPAL has not been tested on the open internet, so do not expose it there.
 
 On macOS and Windows, installing a plugin gives it shell-level access to this computer. On Linux, OPAL keeps a plugin to its own folder where the kernel allows it, and the plugin's page shows whether it did. Install only plugins you trust either way. The README has [the details](README.md#plugins). To turn plugins off, set `OPAL_PLUGINS=0`.
 
@@ -136,7 +133,7 @@ Without `enable-linger`, OPAL and the timer stop when you log out. To check the 
 opal update
 ```
 
-The control page has the same button. Restart OPAL afterward. A beta follows later betas and the final release.
+The control page has the same button. Restart OPAL afterward. A prerelease follows later prereleases and the next release.
 
 ## Go back after a bad update
 
