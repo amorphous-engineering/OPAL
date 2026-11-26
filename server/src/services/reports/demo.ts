@@ -14,7 +14,7 @@
  */
 import { Database } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, sep } from 'node:path';
 
@@ -114,7 +114,9 @@ export function writeDemo(file: string, folder: string): void {
 	const tmp = `${file}.new`;
 	mkdirSync(dirname(file), { recursive: true });
 	rmSync(tmp, { force: true });
-	copyFileSync(demoPackPath(), tmp);
+	// Read, not copied: a file embedded in the binary lives in Bun's own file system, which
+	// readFileSync reads and copyFileSync cannot.
+	writeFileSync(tmp, readFileSync(demoPackPath()), { mode: 0o600 });
 	const db = new Database(tmp, { strict: true });
 	try {
 		for (const row of db.query(`SELECT path, data FROM ${FILES}`).all() as { path: string; data: Uint8Array }[]) {
