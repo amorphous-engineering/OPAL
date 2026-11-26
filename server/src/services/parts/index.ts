@@ -2,6 +2,7 @@
 import {
 	type Part,
 	type PartDetail,
+	type PartLocks,
 	type PartSchema,
 	type PartState,
 	type Qty,
@@ -12,7 +13,8 @@ import {
 	formatQty,
 	notFound,
 	OpalError,
-	parseQty
+	parseQty,
+	partFieldLock
 } from '@opal/shared';
 import { and, asc, desc, eq, inArray, like, notInArray, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -202,6 +204,7 @@ export function detail(ctx: Ctx, id: number): PartDetail {
 		deletable: row.state === 'draft' && Object.keys(refs).length === 0,
 		unitLocked: hasUnitLock(ctx, id),
 		identityLocked: lockedAssemblyUsing(ctx, id) !== null,
+		trackingLocked: hasTrackingLock(ctx, id),
 		bom: listLines(ctx, id),
 		bomLockedBy: row.state === 'obsolete' ? null : copiesOf(ctx, id),
 		publishedKits: publishedKits(ctx, id),
@@ -320,24 +323,45 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 	if (row.state === 'obsolete') throw conflict('wrong_state', `${row.internalPn} is obsolete. Reinstate it to change it.`);
 	const patch: Partial<typeof part.$inferInsert> = {};
 
-	// Identity (number, tier) changes only while draft.
+	// Only a change runs into a lock: sending the current value is not one. Each lock is a query, so
+	// only the ones a change meets are asked. `partFieldLock` is the rule the part page offers by.
 	const tierChange = input.tier !== undefined && input.tier !== row.tier;
-	if (tierChange && row.state !== 'draft') {
-		throw conflict(
-			'identity_locked',
-			`${row.internalPn} is ${row.state}: its tier cannot change`
-		);
-	}
+	const trackingChange = input.trackingType !== undefined && input.trackingType !== row.trackingType;
+	const unitChange = input.unitOfMeasure !== undefined && input.unitOfMeasure !== row.unitOfMeasure;
+	const usedBy = tierChange || unitChange ? lockedAssemblyUsing(ctx, row.id) : null;
+	const locks: PartLocks = {
+		identityLocked: usedBy !== null,
+		unitLocked: unitChange && hasUnitLock(ctx, row.id),
+		trackingLocked: trackingChange && hasTrackingLock(ctx, row.id)
+	};
 	if (tierChange) {
-		const usedBy = lockedAssemblyUsing(ctx, row.id);
-		if (usedBy) throw conflict('identity_locked', `${row.internalPn} is in the BOM of ${usedBy}, which has copies built to it: its number and tier cannot change`);
+		const lock = partFieldLock(row.state, 'tier', locks);
+		if (lock) {
+			throw conflict(
+				lock,
+				row.state !== 'draft'
+					? `${row.internalPn} is ${row.state}: its tier cannot change`
+					: `${row.internalPn} is in the BOM of ${usedBy}, which has copies built to it: its number and tier cannot change`
+			);
+		}
 	}
 	// Tracking decides how stock is stored (one record per unit or one lump).
-	if (input.trackingType !== undefined && input.trackingType !== row.trackingType) {
-		if (hasTrackingLock(ctx, row.id)) {
-			throw conflict('has_stock', `${row.internalPn} has stock records: tracking cannot change`);
-		}
+	if (trackingChange) {
+		const lock = partFieldLock(row.state, 'trackingType', locks);
+		if (lock) throw conflict(lock, `${row.internalPn} has stock records: tracking cannot change`);
 		patch.trackingType = input.trackingType;
+	}
+	if (unitChange) {
+		const lock = partFieldLock(row.state, 'unitOfMeasure', locks);
+		if (lock) {
+			throw conflict(
+				lock,
+				usedBy
+					? `${row.internalPn} is in the BOM of ${usedBy}, which has copies built to it: the unit cannot change`
+					: `${row.internalPn} has stock or purchase order lines counted in ${row.unitOfMeasure}: the unit cannot change`
+			);
+		}
+		patch.unitOfMeasure = input.unitOfMeasure;
 	}
 	if (tierChange) {
 		const tier = input.tier!;
@@ -348,18 +372,6 @@ export function updatePart(ctx: Ctx, input: z.output<typeof zPartUpdate>): Part 
 		patch.tier = tier;
 	}
 	if (input.name !== undefined) patch.name = input.name;
-	if (input.unitOfMeasure !== undefined && input.unitOfMeasure !== row.unitOfMeasure) {
-		if (hasUnitLock(ctx, row.id)) {
-			const usedBy = lockedAssemblyUsing(ctx, row.id);
-			throw conflict(
-				'unit_locked',
-				usedBy
-					? `${row.internalPn} is in the BOM of ${usedBy}, which has copies built to it: the unit cannot change`
-					: `${row.internalPn} has stock or purchase order lines counted in ${row.unitOfMeasure}: the unit cannot change`
-			);
-		}
-		patch.unitOfMeasure = input.unitOfMeasure;
-	}
 	if (input.procurement !== undefined) patch.procurement = input.procurement;
 	if (input.externalPn !== undefined) patch.externalPn = blank(input.externalPn);
 	if (input.description !== undefined) patch.description = blank(input.description);

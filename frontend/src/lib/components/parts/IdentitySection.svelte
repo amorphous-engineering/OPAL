@@ -1,6 +1,6 @@
 <script lang="ts">
 	// The part tag and every fact about the part, always rendered; absence is a muted dash.
-	// Under EDIT this is the part's one form: each field the state still leaves in pencil turns into
+	// Under EDIT this is the part's one form: each field the server would still accept turns into
 	// its control where it is read (the name on the tag), the rest stay facts, and SAVE in the box
 	// sends what changed. Edits are held as changes over the part, so a refresh from another section
 	// (a BOM line added) keeps them, and DONE drops them.
