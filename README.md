@@ -207,4 +207,4 @@ pnpm check
 
 ## License
 
-MIT
+MIT, except the Mojave Sphinx demo dataset in [`demo/mojave-sphinx`](demo/mojave-sphinx), which the release binaries carry for LOAD DEMO. It is adapted from Half Cat Rocketry's HCR-5100 guidebook and licensed under the GPL, version 3: see its [LICENSE](demo/mojave-sphinx/LICENSE) and [README](demo/mojave-sphinx/README.md).

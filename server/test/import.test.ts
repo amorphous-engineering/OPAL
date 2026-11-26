@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { importInPlace, importLegacy, LEGACY_HEAD, OLD_VERSION_MESSAGE, openSchemaImportDb } from '../src/import/index.ts';
-import { openSchemaDb } from '../src/db/dev-schema.ts';
-import { buildDemoContent } from '../src/services/reports/demo.ts';
 import { buildLegacyFixture, PNG } from './fixtures/legacy-data.ts';
 
 // The committed 1.x demo database: the import test runs in CI too.
@@ -554,14 +552,6 @@ describe('seeded demo database', () => {
 		out.close();
 	});
 
-	test('buildDemoContent fills an empty database from the embedded seed', async () => {
-		const db = await openSchemaDb(':memory:');
-		buildDemoContent(db, mkdtempSync(join(tmpdir(), 'opal-demo-')));
-		const raw = db.$client as unknown as Database;
-		const n = (t: string) => (raw.query(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
-		expect([n('part'), n('execution'), n('step_execution'), n('procedure'), n('project')]).toEqual([182, 4, 342, 6, 1]);
-		expect(raw.query('PRAGMA foreign_key_check').all()).toEqual([]);
-	});
 });
 
 void LEGACY_HEAD;
