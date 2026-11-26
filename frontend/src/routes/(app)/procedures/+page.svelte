@@ -47,6 +47,12 @@
 		},
 		{ key: 'updatedAt', label: 'Updated', sortable: true, width: '10rem' }
 	];
+	// A new template starts in the project the list is filtered to.
+	const newHref = $derived(
+		page.url.searchParams.get('project')
+			? `/procedures/new?project=${page.url.searchParams.get('project')}`
+			: '/procedures/new'
+	);
 </script>
 
 <PageHeader title="Templates">
@@ -56,7 +62,7 @@
 		>
 	{/snippet}
 	{#snippet actions()}
-		<Button size="sm" href="/procedures/new">+ NEW TEMPLATE</Button>
+		<Button size="sm" href={newHref}>+ NEW TEMPLATE</Button>
 	{/snippet}
 </PageHeader>
 
@@ -104,7 +110,7 @@
 				>
 			{:else}
 				<a
-					href="/procedures/new"
+					href={newHref}
 					class="font-mono text-xs font-medium tracking-wide text-info hover:underline"
 					>+ NEW TEMPLATE</a
 				>

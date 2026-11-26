@@ -16,7 +16,7 @@
 	import { opal } from '#lib/api.js';
 	import { qty, stateLabel } from '#lib/format.js';
 	import type { StockTestTemplate } from '@opal/shared';
-	import FormField from './FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import { act } from './actions.js';
 
 	let {

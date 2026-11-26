@@ -2,15 +2,17 @@
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
 	import {
-		ActionLink,
+		BankKey,
+		Field,
+		FormKeys,
+		KeyBank,
+		needs,
 		PageHeader,
 		Section,
-		toastError,
-		ErrorBanner
+		toastError
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
@@ -60,6 +62,10 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	const missing = $derived(
+		needs({ project: projectId, name: name.trim(), field: rows.some((r) => r.name.trim()) })
+	);
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = null;
@@ -107,36 +113,32 @@
 	crumbs={[{ label: 'Datasets', href: '/datasets' }, { label: 'New' }]}
 />
 
-<form class="grid max-w-6xl grid-cols-1 gap-4 p-4" onsubmit={submit}>
+<form class="grid max-w-6xl grid-cols-1 gap-3 p-4" onsubmit={submit}>
 	<Section title="Dataset">
 		<div class="grid grid-cols-1 gap-3 p-3">
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="ds-project">Project</Label>
+			<Field label="Project" for="ds-project" required>
 				<ProjectSelect id="ds-project" bind:value={projectId} />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="ds-name">Name</Label>
-				<Input id="ds-name" bind:value={name} required maxlength={255} />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="ds-desc">Description</Label>
+			</Field>
+			<Field label="Name" for="ds-name" required>
+				<Input id="ds-name" bind:value={name} required maxlength={255} autofocus />
+			</Field>
+			<Field label="Description" for="ds-desc">
 				<Textarea id="ds-desc" bind:value={description} rows={2} />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="ds-proc">Procedure</Label>
+			</Field>
+			<Field label="Procedure" for="ds-proc">
 				<NativeSelect id="ds-proc" bind:value={procedure} class="w-full max-w-sm">
-					<NativeSelectOption value="">None</NativeSelectOption>
+					<NativeSelectOption value="">—</NativeSelectOption>
 					{#each data.procedures as p (p.id)}
 						<NativeSelectOption value={String(p.id)}>{p.name}</NativeSelectOption>
 					{/each}
 				</NativeSelect>
-			</div>
+			</Field>
 		</div>
 	</Section>
 
-	<Section title="Fields" count={rows.length}>
+	<Section title="Fields">
 		{#snippet actions()}
-			<ActionLink type="button" onclick={() => rows.push(blank())}>+ ADD FIELD</ActionLink>
+			<Button size="sm" variant="outline" onclick={() => rows.push(blank())}>+ FIELD</Button>
 		{/snippet}
 		<table class="w-full border-collapse text-sm">
 			<thead>
@@ -151,7 +153,7 @@
 			</thead>
 			<tbody>
 				{#each rows as row, i (i)}
-					<tr class="border-b border-border last:border-b-0">
+					<tr class="group/row border-b border-border last:border-b-0">
 						<td class="px-3 py-1.5"
 							><Input
 								bind:value={row.name}
@@ -174,12 +176,12 @@
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<UnitPicker bind:value={row.unit} label={`Field ${i + 1} unit`} />
-							{:else}<span class="text-quiet">—</span>{/if}
+							{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<SpecEditor bind:draft={row.spec} unit={row.unit} label={`Field ${i + 1} spec`} />
-							{:else}<span class="text-quiet">—</span>{/if}
+							{/if}
 						</td>
 						<td class="px-3 py-1.5">
 							<Checkbox bind:checked={row.required} aria-label={`Field ${i + 1} required`} />
@@ -187,14 +189,14 @@
 						<td class="px-3 py-1.5">
 							{#if row.type === 'number'}
 								<Checkbox bind:checked={row.chart} aria-label={`Field ${i + 1} charted`} />
-							{:else}<span class="text-quiet">—</span>{/if}
+							{/if}
 						</td>
 						<td class="px-3 py-1.5 text-right">
-							<ActionLink
-								type="button"
-								disabled={rows.length === 1}
-								onclick={() => rows.splice(i, 1)}>REMOVE</ActionLink
-							>
+							{#if rows.length > 1}
+								<KeyBank quiet label={`Field ${i + 1}`}>
+									<BankKey onclick={() => rows.splice(i, 1)}>REMOVE</BankKey>
+								</KeyBank>
+							{/if}
 						</td>
 					</tr>
 				{/each}
@@ -202,9 +204,5 @@
 		</table>
 	</Section>
 
-	<ErrorBanner message={error} />
-	<div class="flex gap-2">
-		<Button type="submit" disabled={busy || !name.trim() || !projectId}>CREATE</Button>
-		<Button variant="outline" href="/datasets">CANCEL</Button>
-	</div>
+	<FormKeys submit="CREATE" cancel="/datasets" {missing} {busy} {error} />
 </form>

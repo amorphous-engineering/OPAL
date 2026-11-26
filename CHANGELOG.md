@@ -5,6 +5,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 ## Unreleased
 
 ### Added
+- **A container image with each release**, `ghcr.io/amorphous-engineering/opal`, for amd64 and arm64: the release binary on a base with no shell, run as a non-root user. `contrib/docker/compose.yml` runs it hardened behind a Cloudflare Tunnel. Update by pulling a new image.
 - **Work orders name the units they act on.** An OP declares unit slots (a test names the unit under test and its fixture). At run time each slot names a serialized stock record, or borrowed gear as text. The names can be taken back while the OP is workable and are on record once it completes, and a required slot stops its OP. A kit line can install INTO a slot, and a removal takes a component out of a named unit: a serialized one can go back to stock under its own OPAL number. A unit's page lists the work orders that named it and counts the completed ones per procedure. + OTHER HARDWARE names gear no slot asked for.
 - **A second sign-off can be waived when one person is there.** Two slots still mean two people: the same person never signs both. The waiver is its own record with a reason, who and when, and the step stamp reads "BL WAIVED 20:00". The slot's role and any hold still apply.
 - **A warning callout**, for a person who can be hurt, above caution (hardware or work) and note. 1.x warnings import as warnings.
@@ -15,6 +16,16 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **A new demo dataset, Mojave Sphinx**, adapted from Half Cat Rocketry's HCR-5100 guidebook under the GPL, in `demo/mojave-sphinx/`. `server/scripts/load-demo.ts` loads it into a new data folder through OPAL's own operations: 173 parts, 21 procedures, 35 work orders, purchase orders, issues, risks, requirements and datasets. LOAD DEMO in the app still loads the 1.x seed.
 
 ### Changed
+- **The template editor shows what a step has, and offers the rest once.** An open step shows its instructions and whatever it holds (callouts, images, parts, data, sign-offs, role, duration). One ADD bank offers the rest. Empty sections are no longer drawn as "none" in edit mode. The formatting toolbar shows only while you type in a box. Every OP has a + STEP key at its foot, and titles are drawn as fields.
+- **A new template starts from its details.** + NEW TEMPLATE opens the details with the T-number the template would take. Nothing is created, and no number is used, until CREATE, which goes straight into the editor.
+- **A routine step shows no sign-off.** A step anyone may complete no longer reads "Primary buyoff" in the editor or the reader. A declared sign-off reads Sign-off and Second sign-off, with "Any role" when it names none.
+- **A data field can use a unit outside OPAL's list**, typed as written; it is never converted. The common units come first in the picker. Only a number field has a unit, and the field's internal key is no longer shown.
+- **The Graph tab is now Sequence**, on templates and work orders. Which OPs wait on which, and whether an OP's steps go in order (IN ORDER, formerly SEQ), are set there, not in the document.
+- **Every action in the template editor is a key.** Blue text now only links somewhere. Row tools, field tools and the ADD list are banks of small keys.
+- **Every new-record form has the same shape.** Projects, workcenters, users, suppliers, issues, risks, requirements, purchases, work orders, stock receipts, datasets, parts and templates: one box, labels over fields, a quiet mark on required fields, and CANCEL then the one primary key at the bottom right. While the primary key is inert it says what it still needs ("Needs project and title"). Blue-text CLEAR, REMOVE and + ADD are keys. Placeholders that looked like values (SUP001, AB1, https://) are gone, and so is copy that explained the form.
+- **A new issue, risk, requirement, purchase, work order or stock receipt shows the number it will take.** A batch cut or a receipt of several units shows the range. Nothing is reserved, so leaving the form uses no number.
+- **Raising an issue is RAISE, and from a run it asks only for a title.** + ISSUE on a step or work order carries the work order, step, part and person as facts, with type and containment filled in; description, priority, assignee and should-be/is are written on the issue under EDIT. From the issue list or a project the form is one box, with assignee and part beside the other fields.
+- **A purchase starts with no supplier chosen.** Pick one from the list, or OTHER to type a name. A blank line destination shows the order's destination it will take.
 - **A purchase receipt records the supplier's lot** again, typed on the receive row of a bulk part. A serialized part takes its serial in its own field.
 - **A short step is one row with a tick.** A step with a title and nothing else (no instructions, pictures, fields, callouts or declared sign-off) completes from its row, and the traveler prints a run of them as tick rows. Routine steps print a blank for initials instead of "Primary buyoff".
 - **Contingency operations are numbered from C901**, so one is never read as a normal OP. Versions published before keep C1, C2, and the version diff treats C1 and C901 as the same step.
@@ -37,6 +48,7 @@ All notable user-visible changes to OPAL. Dates are release dates.
 - **Wording for any kind of hardware.** A new organization's tier presets are Critical, Standard and Bulk, and examples no longer assume a rocket.
 
 ### Fixed
+- **The systemd user units start on Ubuntu 24.04.** `contrib/opal.service` and `opal-backup.service` asked for ProtectKernelModules and ProtectKernelLogs, which a user unit cannot apply, so the service failed at every start with status 218. Both lines are gone; the rest of the hardening stays.
 - **The Material tab opens on a work order with planned outputs.** A work order whose procedure plans outputs, with nothing produced yet, showed "500 Internal Error" on its Material tab instead of the assembly output form.
 - **Demo mode builds its files in the demo folder.** It took its folders from the real data folder, so a seed with attachments would have copied them into the real organization's files. The shipped seed has none, so nothing was written.
 - **A long step number keeps its own column**: C903.13 ran into its title on the run view.

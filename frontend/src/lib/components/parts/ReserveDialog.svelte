@@ -8,7 +8,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as NativeSelect from '#lib/components/ui/native-select/index.js';
 	import { opal } from '#lib/api.js';
-	import FormField from './FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import type { SchemaTier } from '@opal/shared';
 
 	let { tiers, open = $bindable(false) }: { tiers: SchemaTier[]; open?: boolean } = $props();

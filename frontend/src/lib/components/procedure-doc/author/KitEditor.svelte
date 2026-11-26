@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ActionLink } from '#lib/components/opal/index.js';
+	import { BankKey, KeyBank } from '#lib/components/opal/index.js';
 	// Step parts as a table: quantity, usage and notes edit in place; a part
 	// picker adds a line. Consume lines are drawn from stock at execution;
 	// tooling is recorded, not deducted.
@@ -29,7 +29,8 @@
 			? { usage_type: 'consume', into: v.slice(5) }
 			: { usage_type: v, into: null };
 
-	function open(p: PartHit | null) {
+	/** ADD STEP PARTS: start a line for the chosen part. */
+	export function open(p: PartHit | null) {
 		if (!p) return;
 		adding = true;
 		chosen = p;
@@ -47,122 +48,124 @@
 	}
 </script>
 
-<div class="grid grid-cols-1 gap-1.5" data-step-kit-editor={step.order}>
-	<div class="flex items-center gap-2">
-		<span class="label">Step parts</span>
-		{#if !adding}
-			<PartPicker exclude={[...taken]} onselect={open}>
-				{#snippet trigger({ props })}
-					<Button {...props} size="sm" variant="outline">+ PART</Button>
-				{/snippet}
-			</PartPicker>
-		{/if}
-	</div>
-	{#if step.step_kit.length}
-		<table class="w-full border-collapse text-xs">
-			<thead>
-				<tr class="border-b border-border bg-muted/60 text-left">
-					{#each ['PN', 'NAME', 'REQ', 'TYPE', 'NOTES', ''] as h (h)}
-						<th class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
-							>{h}</th
-						>
-					{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each step.step_kit as k (k.id)}
-					<tr class="border-b border-border">
-						<td class="px-2 py-1 whitespace-nowrap"
-							><a class="font-mono text-info hover:underline" href={`/parts/${k.part_id}`}
-								>{k.part_number ?? '—'}</a
-							></td
-						>
-						<td class="px-2 py-1">{k.part_name}</td>
-						<td class="px-2 py-1">
-							<Input
-								type="number"
-								min="0"
-								step="any"
-								class="h-7 w-24 font-mono"
-								aria-label={`Quantity of ${k.part_name}`}
-								aria-invalid={!(k.quantity_required > 0)}
-								value={k.quantity_required}
-								onkeydown={(e) => e.stopPropagation()}
-								oninput={(e) => {
-									const v = Number(e.currentTarget.value);
-									au.editKit(step, k.id!, { quantity_required: v });
-								}}
-							/>
-						</td>
-						<td class="px-2 py-1">
-							<NativeSelect
-								aria-label={`Usage of ${k.part_name}`}
-								value={typeOf(k)}
-								onchange={(e) => au.editKit(step, k.id!, parseType(e.currentTarget.value))}
-							>
-								<option value="consume">CONSUME</option>
-								<option value="tooling">TOOLING</option>
-								{#each slots as s (s.key)}<option value={`into:${s.key}`}
-										>INTO {s.label.toUpperCase()}</option
-									>{/each}
-							</NativeSelect>
-						</td>
-						<td class="px-2 py-1">
-							<Input
-								class="h-7 min-w-40"
-								aria-label={`Notes for ${k.part_name}`}
-								value={k.notes ?? ''}
-								onkeydown={(e) => e.stopPropagation()}
-								oninput={(e) => au.editKit(step, k.id!, { notes: e.currentTarget.value })}
-							/>
-						</td>
-						<td class="px-2 py-1 text-right">
-							<ActionLink
-								aria-label={`Remove ${k.part_name}`}
-								onclick={() => au.removeKit(step, k.id!)}>REMOVE</ActionLink
-							>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/if}
-	{#if adding && chosen}
-		<form class="grid grid-cols-1 gap-2 border border-border bg-muted/30 p-2" onsubmit={add}>
-			<div class="flex flex-wrap items-center gap-2 text-xs">
-				<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
-				<span class="min-w-0 truncate">{chosen.name}</span>
-				<PartPicker exclude={[...taken]} onselect={(p: PartHit | null) => p && (chosen = p)}>
+{#if step.step_kit.length || adding}
+	<div class="grid grid-cols-1 gap-1.5" data-step-kit-editor={step.order}>
+		<div class="flex items-center gap-2">
+			<span class="label">Step parts</span>
+			{#if !adding}
+				<PartPicker exclude={[...taken]} onselect={open}>
 					{#snippet trigger({ props })}
-						<button {...props} type="button" class="font-mono text-xs text-info hover:underline"
-							>CHANGE</button
-						>
+						<Button {...props} size="sm" variant="outline">+ PART</Button>
 					{/snippet}
 				</PartPicker>
-				<Input
-					type="number"
-					min="0"
-					step="any"
-					class="ml-auto h-7 w-24 font-mono"
-					aria-label="Quantity"
-					bind:value={qty}
-					required
-				/>
-				<NativeSelect aria-label="Usage" bind:value={usage}>
-					<option value="consume">CONSUME</option>
-					<option value="tooling">TOOLING</option>
-					{#each slots as s (s.key)}<option value={`into:${s.key}`}
-							>INTO {s.label.toUpperCase()}</option
-						>{/each}
-				</NativeSelect>
-				<Input class="h-7 w-48" aria-label="Notes" placeholder="Notes" bind:value={notes} />
-				<Button type="submit" size="sm" disabled={!(Number(qty) > 0)}>ADD</Button>
-				<Button type="button" size="sm" variant="outline" onclick={() => (adding = false)}
-					>CANCEL</Button
-				>
-			</div>
-		</form>
-	{:else if !step.step_kit.length}
-		<span class="font-mono text-xs text-muted-foreground">none</span>
-	{/if}
-</div>
+			{/if}
+		</div>
+		{#if step.step_kit.length}
+			<table class="w-full border-collapse text-xs">
+				<thead>
+					<tr class="border-b border-border bg-muted/60 text-left">
+						{#each ['PN', 'NAME', 'REQ', 'TYPE', 'NOTES', ''] as h (h)}
+							<th
+								class="h-7 px-2 font-mono text-xs font-medium tracking-wider text-muted-foreground"
+								>{h}</th
+							>
+						{/each}
+					</tr>
+				</thead>
+				<tbody>
+					{#each step.step_kit as k (k.id)}
+						<tr class="border-b border-border">
+							<td class="px-2 py-1 whitespace-nowrap"
+								><a class="font-mono text-info hover:underline" href={`/parts/${k.part_id}`}
+									>{k.part_number ?? '—'}</a
+								></td
+							>
+							<td class="px-2 py-1">{k.part_name}</td>
+							<td class="px-2 py-1">
+								<Input
+									type="number"
+									min="0"
+									step="any"
+									class="h-7 w-24 font-mono"
+									aria-label={`Quantity of ${k.part_name}`}
+									aria-invalid={!(k.quantity_required > 0)}
+									value={k.quantity_required}
+									onkeydown={(e) => e.stopPropagation()}
+									oninput={(e) => {
+										const v = Number(e.currentTarget.value);
+										au.editKit(step, k.id!, { quantity_required: v });
+									}}
+								/>
+							</td>
+							<td class="px-2 py-1">
+								<NativeSelect
+									class="w-32"
+									aria-label={`Usage of ${k.part_name}`}
+									value={typeOf(k)}
+									onchange={(e) => au.editKit(step, k.id!, parseType(e.currentTarget.value))}
+								>
+									<option value="consume">CONSUME</option>
+									<option value="tooling">TOOLING</option>
+									{#each slots as s (s.key)}<option value={`into:${s.key}`}
+											>INTO {s.label.toUpperCase()}</option
+										>{/each}
+								</NativeSelect>
+							</td>
+							<td class="px-2 py-1">
+								<Input
+									class="h-7 min-w-40"
+									aria-label={`Notes for ${k.part_name}`}
+									value={k.notes ?? ''}
+									onkeydown={(e) => e.stopPropagation()}
+									oninput={(e) => au.editKit(step, k.id!, { notes: e.currentTarget.value })}
+								/>
+							</td>
+							<td class="px-2 py-1 text-right">
+								<KeyBank label={`${k.part_name} tools`}>
+									<BankKey
+										aria-label={`Remove ${k.part_name}`}
+										onclick={() => au.removeKit(step, k.id!)}>REMOVE</BankKey
+									>
+								</KeyBank>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		{/if}
+		{#if adding && chosen}
+			<form class="grid grid-cols-1 gap-2 border border-border bg-muted/30 p-2" onsubmit={add}>
+				<div class="flex flex-wrap items-center gap-2 text-xs">
+					<span class="font-mono text-info">{chosen.internal_pn ?? '—'}</span>
+					<span class="min-w-0 truncate">{chosen.name}</span>
+					<PartPicker exclude={[...taken]} onselect={(p: PartHit | null) => p && (chosen = p)}>
+						{#snippet trigger({ props })}
+							<Button {...props} size="sm" variant="outline">CHANGE</Button>
+						{/snippet}
+					</PartPicker>
+					<Input
+						type="number"
+						min="0"
+						step="any"
+						class="ml-auto h-7 w-24 font-mono"
+						aria-label="Quantity"
+						bind:value={qty}
+						required
+					/>
+					<NativeSelect aria-label="Usage" bind:value={usage}>
+						<option value="consume">CONSUME</option>
+						<option value="tooling">TOOLING</option>
+						{#each slots as s (s.key)}<option value={`into:${s.key}`}
+								>INTO {s.label.toUpperCase()}</option
+							>{/each}
+					</NativeSelect>
+					<Input class="h-7 w-48" aria-label="Notes" placeholder="Notes" bind:value={notes} />
+					<Button type="submit" size="sm" disabled={!(Number(qty) > 0)}>ADD</Button>
+					<Button type="button" size="sm" variant="outline" onclick={() => (adding = false)}
+						>CANCEL</Button
+					>
+				</div>
+			</form>
+		{/if}
+	</div>
+{/if}

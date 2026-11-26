@@ -1,7 +1,8 @@
 <script lang="ts">
-	// The OP dependency graph of a template. Maps the AuthorStore document to graph nodes
-	// and edges; connects and disconnects save through the store's setDependencies, which
-	// toasts server refusals and restores the previous prerequisites.
+	// The Sequence tab of a template: which OPs wait on which, and whether an OP's steps go in
+	// order. Maps the AuthorStore document to graph nodes and edges; connects and disconnects save
+	// through the store's setDependencies, which toasts server refusals and restores the previous
+	// prerequisites. IN ORDER on a selected OP sets its strict sequence.
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { OpGraph, type GraphEdge, type GraphNode } from '#lib/components/op-graph/index.js';
 	import type { AuthorStore } from '#lib/authoring/store.svelte.js';
@@ -25,13 +26,15 @@
 			id: o.order,
 			number: o.number,
 			title: o.title,
-			kind: 'op' as const
+			kind: 'op' as const,
+			flags: o.strict_sequence ? ['IN ORDER'] : undefined
 		})),
 		...store.doc.contingency.map((o) => ({
 			id: o.order,
 			number: o.number,
 			title: o.title,
-			kind: 'contingency' as const
+			kind: 'contingency' as const,
+			flags: o.strict_sequence ? ['IN ORDER'] : undefined
 		}))
 	]);
 
@@ -86,6 +89,17 @@
 	ondisconnect={disconnect}
 >
 	{#snippet nodeActions(node)}
+		{@const op = all.find((o) => o.order === node.id)}
 		<Button size="sm" variant="outline" onclick={() => onopen(node.id)}>OPEN</Button>
+		{#if editable && op && op.steps.length > 1}
+			<Button
+				size="sm"
+				variant="outline"
+				aria-pressed={op.strict_sequence}
+				title="Its steps complete in order"
+				onclick={() => store.edit(op.step, { strict_sequence: !op.strict_sequence })}
+				>IN ORDER</Button
+			>
+		{/if}
 	{/snippet}
 </OpGraph>

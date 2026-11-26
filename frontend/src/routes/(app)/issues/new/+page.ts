@@ -25,9 +25,10 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	const executionId = num('execution');
 	const stepId = num('step');
 
+	// Raised from a run, assignee is set later on the issue, so the list is not fetched.
 	const [part, assignees] = await Promise.all([
 		partId ? client.parts.get({ id: partId }).catch(() => null) : null,
-		client.issues.assignees({})
+		executionId ? [] : client.issues.assignees({})
 	]);
 
 	const ctx = {

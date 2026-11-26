@@ -14,7 +14,7 @@
 	import type { PickedPart } from '#lib/components/parts/types.js';
 	import type { DocOp, DocStep } from '#lib/components/procedure-doc/index.js';
 	import type { ExecutionStore } from '#lib/execution/store.svelte.js';
-	import FormRow from './FormRow.svelte';
+	import { Field as FormRow } from '#lib/components/opal/index.js';
 
 	let {
 		store,

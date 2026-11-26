@@ -9,7 +9,8 @@
 		DetailTable,
 		confirm,
 		toast,
-		ErrorBanner
+		FormKeys,
+		needs
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
@@ -30,7 +31,7 @@
 		LotRule,
 		VariantBom
 	} from '@opal/shared';
-	import FormField from './FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import PartPicker from './PartPicker.svelte';
 	import PartTag from './PartTag.svelte';
 	import { partQr } from './qr.js';
@@ -188,6 +189,8 @@
 		return Object.keys(meta).length ? meta : null;
 	}
 
+	const missing = $derived(needs({ tier: tier !== null, name: name.trim() }));
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		error = null;
@@ -275,8 +278,6 @@
 	novalidate
 >
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
-		<ErrorBanner message={error} class="font-mono" />
-
 		<Section title="Identity">
 			<div class="grid grid-cols-1 gap-4 p-3">
 				{#if variantMode}
@@ -361,7 +362,6 @@
 						class="font-mono"
 						bind:value={externalPn}
 						oninput={onExternalInput}
-						placeholder="Vendor PN or CAD designator"
 						autocomplete="off"
 					/>
 				</FormField>
@@ -456,7 +456,7 @@
 				{/if}
 				<div class="flex items-center gap-2 sm:col-span-2">
 					<Checkbox id="pf-tooling" bind:checked={tooling} />
-					<Label for="pf-tooling" class="label">Tooling</Label>
+					<Label for="pf-tooling">Tooling</Label>
 				</div>
 				{#if tooling}
 					<FormField label="Calibration interval (days)" for="pf-cal">
@@ -472,7 +472,6 @@
 					id="pf-description"
 					ariaLabel="Description"
 					bind:value={description}
-					placeholder="Markdown"
 					minRows={4}
 				/>
 			</div>
@@ -484,7 +483,7 @@
 					{#if f.type === 'boolean'}
 						<div class="flex items-center gap-2">
 							<Checkbox id={`cf-${f.key}`} bind:checked={customBool[f.key]} />
-							<Label for={`cf-${f.key}`} class="label">{f.label}</Label>
+							<Label for={`cf-${f.key}`}>{f.label}</Label>
 						</div>
 					{:else if f.type === 'select'}
 						<FormField label={f.label} for={`cf-${f.key}`} required={f.required}>
@@ -517,20 +516,14 @@
 			</div>
 		</Section>
 
-		<div
-			class="sticky bottom-0 z-10 -mx-4 flex items-center justify-end gap-2 border-t border-border bg-background px-4 py-2"
-		>
-			<Button type="button" variant="outline" onclick={cancel} disabled={busy}>CANCEL</Button>
-			<Button type="submit" disabled={busy}
-				>{busy
-					? 'SAVING'
-					: editing
-						? 'SAVE'
-						: variantMode
-							? 'CREATE VARIANT'
-							: 'CREATE DRAFT'}</Button
-			>
-		</div>
+		<FormKeys
+			sticky
+			submit={busy ? 'SAVING' : editing ? 'SAVE' : 'CREATE'}
+			{cancel}
+			{missing}
+			{busy}
+			{error}
+		/>
 	</div>
 
 	<aside class="min-w-0 xl:sticky xl:top-3 xl:self-start">

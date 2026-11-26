@@ -12,15 +12,9 @@
 	import ExecutionNotes from './ExecutionNotes.svelte';
 	import SignoffTable from './SignoffTable.svelte';
 	import StepActions from './StepActions.svelte';
-	import SignoffEditor from './author/SignoffEditor.svelte';
-	import CalloutAdd from './author/CalloutAdd.svelte';
-	import CalloutsEditor from './author/CalloutsEditor.svelte';
-	import MarkdownEditor from './author/MarkdownEditor.svelte';
-	import SaveBadge from './author/SaveBadge.svelte';
-	import StepProps from './author/StepProps.svelte';
+	import AuthorBody from './author/AuthorBody.svelte';
 	import { isRoutine, type DocOp, type DocStep } from './types.js';
 	import StepUnits from '#lib/components/units/StepUnits.svelte';
-	import UnitSlotsEditor from '#lib/components/units/UnitSlotsEditor.svelte';
 
 	let { step, op }: { step: DocStep; op: DocOp } = $props();
 	const ctl = useDoc();
@@ -34,31 +28,22 @@
 	const hasFields = $derived((step.data_schema?.fields?.length ?? 0) > 0);
 </script>
 
-<div class="grid grid-cols-1 gap-2 px-3 py-2" data-step-body={step.order}>
-	{#if step.issue_history.length}
-		<div class="font-mono text-xs text-muted-foreground">
-			{#each step.issue_history as i, n (i.issue_id)}
-				{#if n > 0}<span> · </span>{/if}<a
-					class="text-info hover:underline"
-					href={`/issues/${i.issue_id}`}>{i.issue_number}</a
-				>
-				— {stateLabel(i.disposition_type ?? i.state)}
-			{/each}
-		</div>
-	{/if}
+{#if authoring}
+	<div class="px-3 py-2" data-step-body={step.order}><AuthorBody {step} {op} /></div>
+{:else}
+	<div class="grid grid-cols-1 gap-2 px-3 py-2" data-step-body={step.order}>
+		{#if step.issue_history.length}
+			<div class="font-mono text-xs text-muted-foreground">
+				{#each step.issue_history as i, n (i.issue_id)}
+					{#if n > 0}<span> · </span>{/if}<a
+						class="text-info hover:underline"
+						href={`/issues/${i.issue_id}`}>{i.issue_number}</a
+					>
+					— {stateLabel(i.disposition_type ?? i.state)}
+				{/each}
+			</div>
+		{/if}
 
-	{#if authoring}
-		<MarkdownEditor
-			id={`instr-${step.order}`}
-			label="Instructions"
-			value={step.instructions}
-			onchange={(v) => ctl.author?.edit(step, { instructions: v })}
-		>
-			{#snippet actions()}<CalloutAdd {step} />{/snippet}
-			{#snippet badge()}<SaveBadge {step} />{/snippet}
-			{#snippet between()}<CalloutsEditor {step} />{/snippet}
-		</MarkdownEditor>
-	{:else}
 		<CalloutList callouts={step.callouts ?? []} />
 
 		{#if step.instructions}
@@ -67,41 +52,29 @@
 				{@html markdown(step.instructions)}
 			</div>
 		{/if}
-	{/if}
-	<StepImages images={step.images} {step} />
-	{#if authoring && op.step === step}
-		<UnitSlotsEditor {step} />
-	{:else if !authoring}
+		<StepImages images={step.images} {step} />
 		<StepUnits {step} {op} />
-	{/if}
-	<StepKit {step} />
+		<StepKit {step} />
 
-	{#if hasFields || authoring}
-		{#if workable || authoring}
-			<CaptureFields {step} />
-		{:else}
-			<CaptureReadout {step} />
+		{#if hasFields}
+			{#if workable}
+				<CaptureFields {step} />
+			{:else}
+				<CaptureReadout {step} />
+			{/if}
 		{/if}
-	{/if}
 
-	{#if step.status === 'skipped' && step.skip_reason}
-		<div class="font-mono text-xs text-muted-foreground">
-			<span class="label">Skip reason</span>
-			{step.skip_reason}
-		</div>
-	{/if}
-	{#if !authoring}
+		{#if step.status === 'skipped' && step.skip_reason}
+			<div class="font-mono text-xs text-muted-foreground">
+				<span class="label">Skip reason</span>
+				{step.skip_reason}
+			</div>
+		{/if}
 		<ExecutionNotes {step} />
-	{/if}
 
-	{#if authoring}
-		<SignoffEditor {step} {op} />
-	{:else if !isRoutine(step, op)}
-		<SignoffTable {step} {op} />
-	{/if}
-	{#if !authoring}<StepActions {step} {op} />{/if}
-
-	{#if authoring}
-		<StepProps {step} {op} isOp={op.step === step} />
-	{/if}
-</div>
+		{#if !isRoutine(step, op)}
+			<SignoffTable {step} {op} />
+		{/if}
+		<StepActions {step} {op} />
+	</div>
+{/if}

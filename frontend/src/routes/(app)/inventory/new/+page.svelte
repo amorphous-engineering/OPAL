@@ -2,14 +2,14 @@
 	import { goto } from '$app/navigation';
 	import { opal } from '#lib/api.js';
 	import {
-		ActionLink,
 		DataTable,
-		DetailRow,
-		DetailTable,
+		Field,
+		FormKeys,
+		NextNumber,
+		needs,
 		PageHeader,
 		Section,
-		toast,
-		ErrorBanner
+		toast
 	} from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -52,18 +52,25 @@
 	});
 
 	const count = $derived(Math.max(0, Math.floor(Number(quantity)) || 0));
-	const valid = $derived(
-		!!part &&
-			Number(quantity) > 0 &&
-			(!serialized || Number.isInteger(Number(quantity))) &&
-			!!location.trim() &&
-			(!rule.requireLot || !!lot.trim()) &&
-			!(serialized && count > 1 && !!serial.trim())
-	);
+	// One serial names one unit, so a batch clears it rather than keep a value it will not use.
+	$effect(() => {
+		if (count > 1 && serial) serial = '';
+	});
+	const missing = $derived([
+		...needs({
+			part,
+			quantity: Number(quantity) > 0,
+			location: location.trim(),
+			lot: !rule.requireLot || lot.trim()
+		}),
+		...(serialized && Number(quantity) > 0 && !Number.isInteger(Number(quantity))
+			? ['whole units']
+			: [])
+	]);
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		if (!part || !valid) return;
+		if (!part || missing.length) return;
 		busy = true;
 		error = null;
 		try {
@@ -135,91 +142,99 @@
 			</DataTable>
 		</Section>
 	{:else}
-		<form onsubmit={submit} class="border border-border bg-card">
-			<DetailTable>
-				<DetailRow label="Part *">
-					{#if part}
-						<div class="flex items-center gap-2">
-							<span class="font-mono text-info">{part.internal_pn ?? '—'}</span>
-							<span>{part.name}</span>
-							<span class="font-mono text-xs text-muted-foreground uppercase"
-								>{part.tracking_type}{rules?.tierName ? ` · ${rules?.tierName}` : ''}</span
-							>
-							<ActionLink class="ml-auto" onclick={() => (part = null)}>CHANGE</ActionLink>
-						</div>
-					{:else}
-						<PartPicker
-							placeholder="Part number or name"
-							activeOnly
-							meta="tracking_type"
-							onselect={(p: PickedPart | null) => p && pick(p)}
-						/>
-					{/if}
-				</DetailRow>
-				<DetailRow label={serialized ? 'Units *' : 'Quantity *'}>
-					<div class="flex items-center gap-2">
-						<Input
-							aria-label={serialized ? 'Units' : 'Quantity'}
-							type="number"
-							min="0"
-							step={serialized ? '1' : 'any'}
-							class="w-32 font-mono"
-							bind:value={quantity}
-							required
-						/>
-						{#if part && part.unit_of_measure !== 'ea'}
-							<span class="font-mono text-xs text-muted-foreground uppercase"
-								>{part.unit_of_measure}</span
-							>
+		<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+			<Section title="Receipt">
+				<div class="grid grid-cols-1 gap-3 p-3">
+					<NextNumber kind="stock" count={serialized ? count : 1} />
+					<Field label="Part" for="rx-part" required>
+						{#if part}
+							<div class="flex flex-wrap items-center gap-2 text-sm">
+								<span class="font-mono text-info">{part.internal_pn ?? '—'}</span>
+								<span>{part.name}</span>
+								<span class="font-mono text-xs text-muted-foreground uppercase"
+									>{part.tracking_type}{rules?.tierName ? ` · ${rules?.tierName}` : ''}</span
+								>
+								<Button size="sm" variant="outline" onclick={() => (part = null)}>CHANGE</Button>
+							</div>
+						{:else}
+							<PartPicker
+								id="rx-part"
+								placeholder="Part number or name"
+								activeOnly
+								meta="tracking_type"
+								onselect={(p: PickedPart | null) => p && pick(p)}
+							/>
 						{/if}
-						{#if serialized && count > 1}
-							<span class="font-mono text-xs text-muted-foreground">{count} records</span>
+					</Field>
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<Field label={serialized ? 'Units' : 'Quantity'} for="rx-qty" required>
+							<div class="flex items-center gap-2">
+								<Input
+									id="rx-qty"
+									type="number"
+									min="0"
+									step={serialized ? '1' : 'any'}
+									class="w-32 font-mono"
+									bind:value={quantity}
+									required
+								/>
+								{#if part && part.unit_of_measure !== 'ea'}
+									<span class="font-mono text-xs text-muted-foreground uppercase"
+										>{part.unit_of_measure}</span
+									>
+								{/if}
+								{#if serialized && count > 1}
+									<span class="font-mono text-xs text-muted-foreground">{count} records</span>
+								{/if}
+							</div>
+						</Field>
+						<Field label="Location" for="rx-location" required>
+							<Input
+								id="rx-location"
+								list="locations"
+								class="font-mono"
+								bind:value={location}
+								required
+								autocomplete="off"
+							/>
+							<datalist id="locations">
+								{#each data.locations as l (l)}<option value={l}></option>{/each}
+							</datalist>
+						</Field>
+						<Field label="Lot" for="rx-lot" required={rule.requireLot}>
+							<Input
+								id="rx-lot"
+								class="font-mono"
+								bind:value={lot}
+								required={rule.requireLot}
+								autocomplete="off"
+							/>
+						</Field>
+						{#if serialized}
+							<Field label="Serial" for="rx-serial">
+								<Input
+									id="rx-serial"
+									class="font-mono"
+									placeholder={rule.autoSerial ? 'Generated per unit' : ''}
+									bind:value={serial}
+									disabled={count > 1}
+									autocomplete="off"
+								/>
+							</Field>
 						{/if}
+						<Field label="Expires" for="rx-expires">
+							<Input id="rx-expires" type="date" class="w-44 font-mono" bind:value={expiration} />
+						</Field>
 					</div>
-				</DetailRow>
-				<DetailRow label="Location *">
-					<Input
-						aria-label="Location"
-						list="locations"
-						class="max-w-xs font-mono"
-						bind:value={location}
-						required
-						autocomplete="off"
-					/>
-					<datalist id="locations">
-						{#each data.locations as l (l)}<option value={l}></option>{/each}
-					</datalist>
-				</DetailRow>
-				<DetailRow label={`Lot${rule.requireLot ? ' *' : ''}`}>
-					<Input
-						aria-label="Lot"
-						class="max-w-xs font-mono"
-						bind:value={lot}
-						required={rule.requireLot}
-						autocomplete="off"
-					/>
-				</DetailRow>
-				{#if serialized}
-					<DetailRow label="Serial">
-						<Input
-							aria-label="Serial"
-							class="max-w-xs font-mono"
-							placeholder={rule.autoSerial ? 'Generated per unit' : ''}
-							bind:value={serial}
-							disabled={count > 1}
-							autocomplete="off"
-						/>
-					</DetailRow>
-				{/if}
-				<DetailRow label="Expires">
-					<Input aria-label="Expires" type="date" class="w-44 font-mono" bind:value={expiration} />
-				</DetailRow>
-			</DetailTable>
-			<ErrorBanner message={error} class="mx-3 mb-3" />
-			<div class="flex justify-end gap-2 border-t border-border bg-muted/40 px-3 py-2">
-				<Button variant="outline" href={part ? `/parts/${part.id}` : '/inventory'}>CANCEL</Button>
-				<Button type="submit" disabled={busy || !valid}>RECEIVE</Button>
-			</div>
+				</div>
+			</Section>
+			<FormKeys
+				submit="RECEIVE"
+				cancel={part ? `/parts/${part.id}` : '/inventory'}
+				{missing}
+				{busy}
+				{error}
+			/>
 		</form>
 	{/if}
 </div>

@@ -11,7 +11,8 @@ import { eq } from 'drizzle-orm';
 import type { Ctx } from '../../context.ts';
 import type { Db } from '../../db/client.ts';
 import { designatorSequence, part } from '../../db/schema/index.ts';
-import { nextValue } from '../designators.ts';
+import { nextValue, peekDesignators, PREFIX } from '../designators.ts';
+import { peekReference } from '../purchasing/orders.ts';
 import { fallbackPartNumber, getProjectConfig, getTier, numbersFor, renderPartNumber } from './project.ts';
 
 const sequenceKey = (tier: number) => `PN-${tier}`;
@@ -133,4 +134,27 @@ export function validatePartNumber(db: Db, tier: number, pn: string): number {
 		throw new OpalError(422, 'invalid_part_number', `'${pn}' has a sequence outside 1 to ${MAX_SEQUENCE}`);
 	}
 	return sequence;
+}
+
+export type NumberKind = 'issue' | 'risk' | 'requirement' | 'purchase' | 'workOrder' | 'stock' | 'template';
+
+const KIND_PREFIX = {
+	issue: PREFIX.issue,
+	risk: PREFIX.risk,
+	requirement: PREFIX.requirement,
+	workOrder: PREFIX.workOrder,
+	stock: PREFIX.opal,
+	template: PREFIX.template
+} as const;
+
+/**
+ * The number a new record would take, shown on its form before it exists. A batch (a cut of
+ * several work orders, a serialized receipt) takes `count` numbers in a row inside one write.
+ */
+export function peekNumbers(ctx: Pick<Ctx, 'db'>, kind: NumberKind, count = 1): { first: string; last: string } {
+	if (kind === 'purchase') {
+		const ref = peekReference(ctx);
+		return { first: ref, last: ref };
+	}
+	return peekDesignators(ctx, KIND_PREFIX[kind], count);
 }

@@ -13,6 +13,20 @@ import { errorResponse, type Impl, type ResolveActor, runOp } from '../registry.
 
 const toolName = (opName: string) => opName.replaceAll('.', '_');
 
+/**
+ * Read by MCP clients once per connection. Rules that apply across tools live here; rules for
+ * one field live in that field's description, where an agent filling it in sees them.
+ */
+export const INSTRUCTIONS = [
+	'OPAL is the record of what an organization builds: parts, stock, purchasing, procedures, work orders, issues, risks and requirements. People sign and rely on these records, so write only what you can stand behind.',
+	'',
+	'- Sources. Every value comes from a source: a file, a drawing, the CAD model, a receipt, or the person. Say in the description which one. When the source is unknown, leave the field empty and write "source unconfirmed". Never fill a size, part number or supplier from general knowledge.',
+	'- Scope. Create a part only when it was ordered, is in stock, or is in the CAD assembly. A part that is merely mentioned is not created.',
+	'- Bulk edits. Before renaming or editing more than a handful of records, show the list, before and after, and wait for approval. A question about a convention is not approval to apply it.',
+	'- Before creating parts, call parts_schema for the tiers, categories, custom fields and numbering format.',
+	'- Part numbers are never reused, so a part created by mistake keeps its number. Search for an existing part (parts_list, search_query) before creating one.'
+].join('\n');
+
 function errorText(e: unknown): string {
 	if (e instanceof OpalError) {
 		const fields = e.fields ? ` ${JSON.stringify(e.fields)}` : '';
@@ -31,7 +45,7 @@ function buildServer(impls: Impl[], db: Db, actor: Actor): Server {
 		}
 	}
 
-	const server = new Server({ name: 'opal', version: '1.0.0' }, { capabilities: { tools: {} } });
+	const server = new Server({ name: 'opal', version: '1.0.0' }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
 	server.setRequestHandler(ListToolsRequestSchema, () => ({
 		tools: [...tools].map(([name, impl]) => ({
 			name,

@@ -71,7 +71,7 @@
 	);
 	const tabs = $derived([
 		{ id: 'document', label: 'Document' },
-		{ id: 'graph', label: 'Graph' },
+		{ id: 'sequence', label: 'Sequence' },
 		...(hasData ? [{ id: 'data', label: 'Data' }] : []),
 		...(doc?.material_relevant ? [{ id: 'material', label: 'Material' }] : []),
 		{ id: 'details', label: 'Details' }
@@ -261,7 +261,7 @@
 								{/if}
 							{/snippet}
 						</ProcedureDocument>
-					{:else if tab === 'graph'}
+					{:else if tab === 'sequence'}
 						<ExecutionGraph {store} onopen={jump} />
 					{:else if tab === 'data'}
 						<DataPanel {store} />

@@ -67,24 +67,65 @@ export type Part = z.infer<typeof zPart>;
 /** Booleans arrive as "true"/"false" in query strings. */
 const zBool = z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]);
 
+/**
+ * How to name a part. It travels with every tool that names one, because an agent filling in a
+ * list of parts sees the field description and nothing else.
+ */
+export const PART_NAME_GUIDE =
+	'Name the part so a reader with no project context can tell what it is: "Valve Assembly", "Piston" or "Bracket" alone is too vague. ' +
+	'Noun first, so sorted lists group like parts; then type or parent; then the size or rating that sets it apart from its nearest sibling. ' +
+	'Examples: "Poppet Valve Assembly, Pneumatic, 1/8 NPT, 0.25 in Orifice"; "Valve Body, Pneumatic Poppet Valve, 1/8 NPT". ' +
+	'Take sizes from the source. If it gives none, leave the size out and say so, or ask; never invent one. ' +
+	'A part unique to one product or vehicle carries its name as a qualifier ("Thrust Chamber, Mk 2 Engine, 0.825 in Throat"); a part that could be used elsewhere does not. ' +
+	'Drawing numbers and vendor part numbers never go in the name; they go in externalPn. ' +
+	"A bought part takes the vendor's noun and key specs without marketing words; pack size goes in the description.";
+
+const zPartName = z.string().trim().min(1).max(255).describe(PART_NAME_GUIDE);
+
+const TIER_GUIDE =
+	'The tier sets how units are tracked by default: serialized or bulk, auto-serial, lot required. parts_schema lists the tiers. ' +
+	'Pick the tier by how closely each unit must be traced, and give it: the default is 1, which is often a serialized tier, so leaving it out can make every fastener serialized.';
+const TRACKING_GUIDE =
+	"Leave it out to take the tier's default. Set it where that default is wrong for this part: four identical fins are bulk, one lot, not four serials.";
+const UNIT_GUIDE =
+	'Count stock in single pieces (ea), never packs; pack size goes in the description. Rod, tube and wire are stocked by length. The unit stops changing once stock or a PO line counts in it.';
+
 const partFields = {
-	externalPn: z.string().trim().max(255).nullable().optional(),
-	description: z.string().max(MAX_MARKDOWN).nullable().optional(),
+	externalPn: z
+		.string()
+		.trim()
+		.max(255)
+		.nullable()
+		.optional()
+		.describe(
+			"A bought part: the vendor's part number. A made part: its drawing or CAD number. When the CAD model gives a bought part a drawing number of its own, do not create a second part for it: put the vendor part on the BOM and record the CAD number in metadata."
+		),
+	description: z
+		.string()
+		.max(MAX_MARKDOWN)
+		.nullable()
+		.optional()
+		.describe('Pack size and where each value came from (a file, a receipt, a drawing) go here.'),
 	category: z.string().trim().max(100).nullable().optional(),
 	reorderPoint: zQty.nullable().optional(),
 	isTooling: z.boolean().optional(),
 	calibrationIntervalDays: z.number().int().positive().nullable().optional(),
-	metadata: zJsonObject().nullable().optional(),
+	metadata: zJsonObject()
+		.nullable()
+		.optional()
+		.describe(
+			'Custom fields, by key. parts_schema lists the keys this organization defines; use those. For drawings and CAD files use drawingNo, drawingRev and cadFile unless the schema names others, so the same key means the same thing on every part.'
+		),
 	/** Default `tier`. */
 	lotRule: z.enum(LOT_RULES).optional()
 };
 
 export const zPartCreate = z.object({
-	name: z.string().trim().min(1).max(255),
-	tier: z.number().int().min(1).default(1),
-	unitOfMeasure: z.string().trim().min(1).max(20).default('ea'),
+	name: zPartName,
+	tier: z.number().int().min(1).default(1).describe(TIER_GUIDE),
+	unitOfMeasure: z.string().trim().min(1).max(20).default('ea').describe(UNIT_GUIDE),
 	/** Default: the tier's default tracking. */
-	trackingType: z.enum(TRACKING_TYPES).optional(),
+	trackingType: z.enum(TRACKING_TYPES).optional().describe(TRACKING_GUIDE),
 	/** Default: buy when an external PN is given, else make. */
 	procurement: z.enum(PROCUREMENT).optional(),
 	/** Also add the new part to this assembly's BOM. */
@@ -98,7 +139,7 @@ export type PartCreate = z.input<typeof zPartCreate>;
 
 export const zPartUpdate = z.object({
 	id: zId,
-	name: z.string().trim().min(1).max(255).optional(),
+	name: zPartName.optional(),
 	tier: z.number().int().min(1).optional(),
 	unitOfMeasure: z.string().trim().min(1).max(20).optional(),
 	trackingType: z.enum(TRACKING_TYPES).optional(),
@@ -115,7 +156,7 @@ export type VariantBom = (typeof VARIANT_BOM)[number];
 /** Omit a field to copy it from the source; send null to clear a nullable field. */
 export const zVariantCreate = z.object({
 	id: zId,
-	name: z.string().trim().min(1).max(255).optional(),
+	name: zPartName.optional(),
 	unitOfMeasure: z.string().trim().min(1).max(20).optional(),
 	trackingType: z.enum(TRACKING_TYPES).optional(),
 	procurement: z.enum(PROCUREMENT).optional(),
@@ -429,7 +470,7 @@ const parts_ = {
 		name: 'parts.importPreview',
 		method: 'POST',
 		path: '/parts/import/preview',
-		summary: 'Parse and check CSV text for a parts import. Creates nothing.',
+		summary: 'Parse and check CSV text for a parts import. Creates nothing. Name parts as the name field of parts_create describes.',
 		input: z.object({ csv: z.string().max(MAX_CSV).min(1) }),
 		output: zImportPreview,
 		access: 'signed-in',
@@ -593,7 +634,7 @@ const parts_ = {
 		method: 'POST',
 		path: '/parts/:id/revise',
 		summary:
-			'File a draft copy of an active part with its BOM, under a new number, to change the design once copies exist. The part stays as it is. A reason is required.',
+			'File a draft copy of an active part with its BOM, under a new number, to change the design once copies exist. The part stays as it is. A reason is required. Revise when the new design replaces the old one; when both are meant to exist side by side (machined and coated, left and right), make a variant with parts_variants_create instead.',
 		input: z.object({ id: zId, reason: z.string().trim().min(1).max(MAX_TEXT) }),
 		output: zPart,
 		access: 'signed-in',
@@ -713,7 +754,7 @@ const variants = {
 		method: 'POST',
 		path: '/parts/:id/variants',
 		summary:
-			'Create a draft variant of a part: the next variant code of its family, same tier, attributes copied unless given. `bom` is source (one line: the source part), copy (its BOM lines) or empty. Refused while variants are off.',
+			'Create a draft variant of a part: the next variant code of its family, same tier, attributes copied unless given. `bom` is source (one line: the source part), copy (its BOM lines) or empty. Refused while variants are off. A variant is a different configuration that exists alongside the source (machined and coated, left and right). When the new design replaces the old one, use parts_revise.',
 		input: zVariantCreate,
 		output: zPart,
 		access: 'signed-in',

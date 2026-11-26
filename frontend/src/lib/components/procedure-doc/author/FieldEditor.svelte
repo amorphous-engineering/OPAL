@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { ActionLink } from '#lib/components/opal/index.js';
-	// One data-capture field's definition, under the live input the operator
-	// will get. Edits write the step's schema.
+	// One data-capture field's definition: label, type, unit and spec on one or two lines. The key
+	// it records under is internal and never shown. Edits write the step's schema.
+	import { BankKey, KeyBank } from '#lib/components/opal/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
-	import { specFromLabel, specText, unitByCode, zDecimal, zSpec, SPEC_KINDS } from '@opal/shared';
+	import { specFromLabel, specText, zDecimal, zSpec, SPEC_KINDS } from '@opal/shared';
 	import type { Spec, SpecKind } from '@opal/shared';
 	import UnitPicker from '#lib/components/opal/UnitPicker.svelte';
 	import { useDoc } from '../controller.js';
@@ -160,7 +160,8 @@
 
 	function setType(type: string) {
 		const drop: (keyof DocField)[] = [];
-		if (type !== 'number') drop.push('min', 'max', 'step', 'spec');
+		// Only a number has a unit or a spec.
+		if (type !== 'number') drop.push('min', 'max', 'step', 'spec', 'unit');
 		if (type !== 'select') drop.push('options');
 		if (type !== 'photo') drop.push('multiple');
 		if (type === 'select' && !f.options?.length) patch({ type, options: ['A', 'B'] }, drop);
@@ -171,14 +172,11 @@
 </script>
 
 {#if f}
-	<div
-		class="mt-1 grid grid-cols-1 gap-1.5 border border-dashed border-border bg-muted/30 p-1.5"
-		data-field-editor
-	>
-		<div class="grid grid-cols-2 gap-1.5">
+	<div class="grid grid-cols-1 gap-1.5 py-1.5" data-field-editor>
+		<div class="flex flex-wrap items-center gap-1.5">
 			<Input
 				id={`${id}-label`}
-				class="h-7"
+				class="h-7 min-w-48 flex-1"
 				aria-label="Label"
 				placeholder="Label"
 				value={f.label ?? ''}
@@ -192,58 +190,15 @@
 			>
 				{#each FIELD_TYPES as [v, l] (v)}<option value={v}>{l}</option>{/each}
 			</NativeSelect>
-		</div>
-		<div class="flex flex-wrap items-center gap-1.5">
-			<span
-				class="w-32 truncate font-mono text-xs text-muted-foreground"
-				title="Key under which the value is recorded">{f.name}</span
-			>
 			{#if f.type === 'number'}
 				<UnitPicker
 					value={f.unit}
 					onchange={(code) => patch(code ? { unit: code } : {}, code ? [] : ['unit'])}
 				/>
-				{#if f.unit && !unitByCode(f.unit)}
-					<span class="text-xs text-warn">Free-text unit: pick a unit</span>
-				{/if}
-			{:else if f.type === 'text'}
-				<Input
-					class="h-7 w-16 font-mono"
-					aria-label="Unit"
-					placeholder="Unit"
-					value={f.unit ?? ''}
-					onkeydown={stop}
-					oninput={(e) =>
-						patch({ unit: e.currentTarget.value }, e.currentTarget.value ? [] : ['unit'])}
-				/>
 			{/if}
-			<label class="flex items-center gap-1.5 text-xs">
-				<Checkbox
-					checked={!!f.required}
-					onCheckedChange={(c) => patch({ required: c ? true : undefined }, c ? [] : ['required'])}
-				/>Required
-			</label>
-			{#if f.type === 'photo'}
-				<label class="flex items-center gap-1.5 text-xs">
-					<Checkbox
-						checked={!!f.multiple}
-						onCheckedChange={(c) =>
-							patch({ multiple: c ? true : undefined }, c ? [] : ['multiple'])}
-					/>Several
-				</label>
-			{/if}
-			<span class="ml-auto flex items-center gap-0.5">
-				<Button size="sm" variant="ghost" aria-label="Move field up" onclick={() => move(-1)}
-					>↑</Button
-				>
-				<Button size="sm" variant="ghost" aria-label="Move field down" onclick={() => move(1)}
-					>↓</Button
-				>
-				<ActionLink aria-label="Remove field" onclick={remove}>REMOVE</ActionLink>
-			</span>
 		</div>
-		{#if f.type === 'number'}
-			<div class="flex flex-wrap items-center gap-1.5" data-spec-editor>
+		<div class="flex flex-wrap items-center gap-1.5 text-xs">
+			{#if f.type === 'number'}
 				<NativeSelect
 					aria-label="Spec kind"
 					value={draft.kind}
@@ -255,13 +210,12 @@
 				</NativeSelect>
 				{#if draft.kind !== 'none'}
 					{#each KIND_INPUTS[draft.kind] as [key, name] (key)}
-						{@const label = draft.kind === 'nominal' && key === 'minus' ? 'Minus' : name}
-						<span class="label">{label}</span>
 						<Input
 							type="text"
 							inputmode="decimal"
 							class="h-7 w-24 font-mono"
-							aria-label={label}
+							aria-label={name}
+							placeholder={name}
 							aria-invalid={!!built.errors[key]}
 							value={draft[key as keyof SpecDraft]}
 							onkeydown={stop}
@@ -269,7 +223,7 @@
 						/>
 					{/each}
 				{/if}
-				{#if suggestion?.spec}
+				{#if suggestion?.spec && !f.spec}
 					<Button
 						size="sm"
 						variant="outline"
@@ -277,35 +231,58 @@
 						onclick={applySuggestion}>SUGGEST SPEC</Button
 					>
 				{/if}
+			{:else if f.type === 'select'}
+				<Input
+					class="h-7 min-w-48 flex-1"
+					aria-label="Options"
+					placeholder="Options, comma separated"
+					value={(f.options ?? []).join(', ')}
+					onkeydown={stop}
+					onchange={(e) =>
+						patch({
+							options: e.currentTarget.value
+								.split(',')
+								.map((x) => x.trim())
+								.filter(Boolean)
+						})}
+				/>
+			{/if}
+			<label class="flex items-center gap-1.5">
+				<Checkbox
+					checked={!!f.required}
+					onCheckedChange={(c) => patch({ required: c ? true : undefined }, c ? [] : ['required'])}
+				/>Required
+			</label>
+			{#if f.type === 'photo'}
+				<label class="flex items-center gap-1.5">
+					<Checkbox
+						checked={!!f.multiple}
+						onCheckedChange={(c) =>
+							patch({ multiple: c ? true : undefined }, c ? [] : ['multiple'])}
+					/>Several
+				</label>
+			{/if}
+			<span class="ml-auto"></span>
+			<KeyBank label="Field tools">
+				<BankKey aria-label="Move field up" disabled={index === 0} onclick={() => move(-1)}
+					>↑</BankKey
+				>
+				<BankKey
+					aria-label="Move field down"
+					disabled={index === fields.length - 1}
+					onclick={() => move(1)}>↓</BankKey
+				>
+				<BankKey aria-label="Remove field" onclick={remove}>REMOVE</BankKey>
+			</KeyBank>
+		</div>
+		{#each Object.entries(built.errors) as [k, msg] (k)}
+			<p class="text-xs text-error">{msg}</p>
+		{/each}
+		{#if legacy}
+			<div class="flex flex-wrap items-center gap-1.5 font-mono text-xs text-muted-foreground">
+				<span>Min {f.min ?? '…'}</span><span>Max {f.max ?? '…'}</span>
+				<Button size="sm" variant="outline" onclick={convertLimits}>CONVERT TO SPEC</Button>
 			</div>
-			{#each Object.entries(built.errors) as [k, msg] (k)}
-				<p class="text-xs text-error">{msg}</p>
-			{/each}
-			{#if legacy}
-				<div class="flex flex-wrap items-center gap-1.5 font-mono text-xs text-muted-foreground">
-					<span>Min {f.min ?? '…'}</span><span>Max {f.max ?? '…'}</span>
-					<Button size="sm" variant="outline" onclick={convertLimits}>CONVERT TO SPEC</Button>
-				</div>
-			{/if}
-			{#if f.spec}
-				<p class="font-mono text-xs text-muted-foreground">Spec {specText(f.spec, f.unit)}</p>
-			{/if}
-		{/if}
-		{#if f.type === 'select'}
-			<Input
-				class="h-7"
-				aria-label="Options"
-				placeholder="Options, comma separated"
-				value={(f.options ?? []).join(', ')}
-				onkeydown={stop}
-				onchange={(e) =>
-					patch({
-						options: e.currentTarget.value
-							.split(',')
-							.map((x) => x.trim())
-							.filter(Boolean)
-					})}
-			/>
 		{/if}
 	</div>
 {/if}

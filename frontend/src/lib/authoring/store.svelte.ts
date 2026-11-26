@@ -32,6 +32,7 @@ import type {
 	WorkcenterOption
 } from '#lib/components/procedure-doc/index.js';
 import type { DraftStep } from './types.js';
+import { focusWhenDrawn } from '#lib/components/procedure-doc/author/focus.js';
 import {
 	formatQty,
 	parseQty,
@@ -681,12 +682,11 @@ export class AuthorStore implements DocController {
 
 	focusTitle(order: number) {
 		this.focusedOrder = order;
-		setTimeout(() => {
-			const el = document.querySelector<HTMLInputElement>(`[data-title-input="${order}"]`);
-			el?.focus();
-			el?.select();
-			el?.scrollIntoView({ block: 'nearest' });
-		}, 40);
+		focusWhenDrawn(
+			() => document.querySelector<HTMLInputElement>(`[data-title-input="${order}"]`),
+			true,
+			(el) => el.scrollIntoView({ block: 'nearest' })
+		);
 	}
 
 	addOp = async (opts: { after?: DocOp; contingency?: boolean } = {}) => {

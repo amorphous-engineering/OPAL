@@ -368,17 +368,26 @@ const MAX_PO_SEQUENCE = 9_999_999_999;
  */
 export function nextReference(ctx: DbCtx): string {
 	const row = ctx.db.select().from(designatorSequence).where(eq(designatorSequence.prefix, PO_PREFIX)).get();
-	if (!row) {
-		let max = 0;
-		for (const r of ctx.db.select({ r: purchase.reference }).from(purchase).where(like(purchase.reference, 'PO-%')).all()) {
-			const m = /^PO-(\d{1,10})$/.exec(r.r);
-			if (m) max = Math.max(max, Number(m[1]));
-		}
-		ctx.db.insert(designatorSequence).values({ prefix: PO_PREFIX, lastValue: max }).run();
-	}
+	if (!row) ctx.db.insert(designatorSequence).values({ prefix: PO_PREFIX, lastValue: highestReference(ctx) }).run();
 	const sequence = nextValue(ctx, PO_PREFIX);
 	if (sequence > MAX_PO_SEQUENCE) throw conflict('numbers_exhausted', 'No free PO number found');
 	return storeDesignator('PO', sequence);
+}
+
+/** The reference `nextReference` would hand out, without taking it. */
+export function peekReference(ctx: DbCtx): string {
+	const row = ctx.db.select().from(designatorSequence).where(eq(designatorSequence.prefix, PO_PREFIX)).get();
+	return storeDesignator('PO', (row?.lastValue ?? highestReference(ctx)) + 1);
+}
+
+/** The highest PO-<digits> reference in use, for a database from before the counter. */
+function highestReference(ctx: DbCtx): number {
+	let max = 0;
+	for (const r of ctx.db.select({ r: purchase.reference }).from(purchase).where(like(purchase.reference, 'PO-%')).all()) {
+		const m = /^PO-(\d{1,10})$/.exec(r.r);
+		if (m) max = Math.max(max, Number(m[1]));
+	}
+	return max;
 }
 
 function resolveSupplier(ctx: DbCtx, id: number) {

@@ -17,7 +17,7 @@
 	import { api } from '#lib/api.js';
 	import { qty, stateLabel } from '#lib/format.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
-	import FormField from '../FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import { act } from '../actions.js';
 	import type { PartDetail, RequirementAllocation, TestTemplate } from './legacy-types.js';
 

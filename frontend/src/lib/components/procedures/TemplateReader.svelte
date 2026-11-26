@@ -1,6 +1,6 @@
 <script lang="ts">
 	// The template page for reading, in the same shape as the editor: OP index and facts on the
-	// left, the document (or GRAPH, DETAILS) in the centre, the surrounding record on the right.
+	// left, the document (or SEQUENCE, DETAILS) in the centre, the surrounding record on the right.
 	// It shows what the floor works from: the released version, or the draft of a template that
 	// was never published. Nothing here starts an editor or saves anything.
 	import { tick } from 'svelte';
@@ -47,7 +47,7 @@
 
 	const tabs = [
 		{ id: 'document', label: 'Document' },
-		{ id: 'graph', label: 'Graph' },
+		{ id: 'sequence', label: 'Sequence' },
 		{ id: 'details', label: 'Details' }
 	];
 	const tab = $derived(
@@ -118,12 +118,12 @@
 		<div
 			class={cn(
 				'min-h-0 min-w-0 flex-1 lg:pb-4',
-				tab === 'graph' ? 'min-h-80 lg:overflow-hidden' : 'lg:overflow-y-auto'
+				tab === 'sequence' ? 'min-h-80 lg:overflow-hidden' : 'lg:overflow-y-auto'
 			)}
 		>
 			{#if tab === 'details'}
 				<TemplateDetails {data} editing={false} onchange={onreload} />
-			{:else if tab === 'graph'}
+			{:else if tab === 'sequence'}
 				<OpGraph
 					class="h-full min-h-80 border border-border"
 					nodes={graph.nodes}

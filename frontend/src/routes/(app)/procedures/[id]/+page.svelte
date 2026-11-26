@@ -145,7 +145,7 @@
 					<Button onclick={() => (publishing = true)}>PUBLISH v{nextVersion}</Button>
 				{/if}
 				{#if editing}
-					<Button variant="outline" onclick={() => (editingDetails = true)}>DETAILS</Button>
+					<Button variant="outline" onclick={() => (editingDetails = true)}>EDIT DETAILS</Button>
 				{/if}
 				{#if p.status !== 'obsolete'}
 					<EditToggle label={p.status === 'released' ? 'EDIT DRAFT' : 'EDIT'} />

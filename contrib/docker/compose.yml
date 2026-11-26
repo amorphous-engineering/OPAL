@@ -1,0 +1,63 @@
+# OPAL behind a Cloudflare Tunnel, with no port open on the host.
+#
+#   1. Create a tunnel in Cloudflare Zero Trust with a public hostname pointing at
+#      http://opal:8080, and put its token in .env as TUNNEL_TOKEN=...
+#   2. Set OPAL_PUBLIC_URL below to that hostname.
+#   3. mkdir -p data backups && sudo chown 65532:65532 data backups && chmod 700 data
+#   4. docker compose up -d
+#
+# Update: docker compose pull && docker compose up -d. OPAL copies its database before a
+# migration changes it, so a new version needs no backup step first.
+# Back up: docker compose exec opal /opal backup /backups --keep 14 (from cron or a timer).
+#
+# Without a tunnel or proxy, drop the cloudflared service and OPAL_TRUST_PROXY, and publish
+# the port instead: ports: ["8080:8080"].
+
+services:
+  opal:
+    image: ghcr.io/amorphous-engineering/opal:2
+    restart: unless-stopped
+    # OPAL as PID 1 would ignore SIGTERM, and docker stop would kill it after 10 s. An init passes it on.
+    init: true
+    # Must own ./data and ./backups. On Unraid, use 99:100 and chown the folders to nobody:users.
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    pids_limit: 256
+    environment:
+      OPAL_PUBLIC_URL: https://opal.example.com
+      # Trust X-Forwarded-For and -Proto: right only when every request comes through the proxy.
+      OPAL_TRUST_PROXY: "1"
+      # Plugins run code from GitHub. Leave them off unless you use one.
+      OPAL_PLUGINS: "0"
+    volumes:
+      # SQLite needs a real local filesystem. On Unraid that is /mnt/cache/..., never /mnt/user/....
+      - ./data:/data
+      - ./backups:/backups
+    networks: [opal]
+    labels:
+      # Choose when OPAL changes: an automatic updater must leave it alone.
+      com.centurylinklabs.watchtower.enable: "false"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    init: true
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    networks: [opal]
+    depends_on: [opal]
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+networks:
+  opal: {}

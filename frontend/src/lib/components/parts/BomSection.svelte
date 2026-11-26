@@ -24,7 +24,7 @@
 	} from '@opal/shared';
 	import { qty, qtyUnit } from '#lib/format.js';
 	import { ActionLink } from '#lib/components/opal/index.js';
-	import FormField from './FormField.svelte';
+	import { Field as FormField } from '#lib/components/opal/index.js';
 	import PartPicker from './PartPicker.svelte';
 	import { act } from './actions.js';
 	import type { PartRef } from './types.js';

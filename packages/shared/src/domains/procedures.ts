@@ -67,7 +67,7 @@ export const zProcedureDataField = z.object({
 	// `checkbox` is the old name of `boolean`: accepted on input, never sent.
 	type: z.preprocess((t) => (t === 'checkbox' ? 'boolean' : t), z.enum(DATA_FIELD_TYPES)),
 	required: z.boolean().optional(),
-	/** A unit code from `UNITS` (units.ts). Older versions may hold free text: show it as is. */
+	/** A unit code from `UNITS` (units.ts), or a unit the author typed: show it as written. */
 	unit: z.string().max(MAX_SHORT).optional(),
 	/** Numbers only: what a good value is. Out-of-spec values are recorded and flagged. */
 	spec: zSpec.optional(),
@@ -476,7 +476,7 @@ const steps = {
 		method: 'POST',
 		path: '/procedures/:id/steps',
 		summary:
-			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C901, C902; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) and an optional spec.',
+			'Add an OP (no parentId) or a sub-step to the draft. Numbers follow: OP 1, 2; contingency C901, C902; sub-steps 1.1, 1.2. A number data field takes a unit code (such as in, mm, in_lbf, psi) or a unit written out, and an optional spec.',
 		input: zStepAdd,
 		output: zProcedureStep,
 		access: 'signed-in',
@@ -498,7 +498,7 @@ const steps = {
 		method: 'PATCH',
 		path: '/procedures/:id/steps/:stepId',
 		summary:
-			'Change a step. Absent fields stay; null clears instructions, data schema, duration, workcenter, callouts or sign-offs. A number data field takes a unit code (UNITS, such as in, mm, in_lbf, psi) and an optional spec (range, nominal, min, max, reference) as decimal strings; a spec is not combined with min or max. An out-of-spec value is recorded and needs a note or an NC before the step completes.',
+			'Change a step. Absent fields stay; null clears instructions, data schema, duration, workcenter, callouts or sign-offs. A number data field takes a unit code (UNITS, such as in, mm, in_lbf, psi) or a unit written out, and an optional spec (range, nominal, min, max, reference) as decimal strings; a spec is not combined with min or max. An out-of-spec value is recorded and needs a note or an NC before the step completes.',
 		input: zStepUpdate,
 		output: zProcedureStep,
 		access: 'signed-in',

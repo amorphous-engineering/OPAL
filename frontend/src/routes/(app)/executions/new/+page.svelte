@@ -3,16 +3,18 @@
 	import { opal } from '#lib/api.js';
 	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte';
 	import {
+		DataTable,
+		ErrorBanner,
+		Field,
+		FormKeys,
+		NextNumber,
+		needs,
 		PageHeader,
 		Section,
 		State,
 		toastError,
-		ErrorBanner
+		type Column
 	} from '#lib/components/opal/index.js';
-	import type { Column } from '#lib/components/opal/index.js';
-	import { DataTable, EmptyLine } from '#lib/components/opal/index.js';
-	import FormRow from '#lib/components/executions/FormRow.svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect } from '#lib/components/ui/native-select/index.js';
 	import { fromInput, qty } from '#lib/format.js';
@@ -40,6 +42,7 @@
 	let preview = $state<CutPreview | null>(null);
 	let previewError = $state<string | null>(null);
 
+	const missing = $derived(needs({ procedure: procedureId, project: projectId }));
 	const n = $derived(Math.min(100, Math.max(1, Math.floor(Number(quantity)) || 1)));
 
 	// Context pre-fill: the preview follows procedure, version and quantity.
@@ -124,88 +127,91 @@
 />
 
 <div class="grid grid-cols-1 items-start gap-4 p-4 lg:grid-cols-[26rem_minmax(0,1fr)]">
-	<Section title="Cut">
-		<form class="grid grid-cols-1 gap-3 p-3" onsubmit={submit}>
-			<FormRow label="Procedure" for="cut-procedure" required>
-				<NativeSelect
-					id="cut-procedure"
-					class="w-full"
-					required
-					value={procedureId}
-					onchange={(e) => pickProcedure(e.currentTarget.value)}
-				>
-					<option value="">Select procedure</option>
-					{#each data.procedures as p (p.id)}<option value={String(p.id)}
-							>{p.templateNumber} {p.name}</option
-						>{/each}
-				</NativeSelect>
-			</FormRow>
-			{#if !data.procedures.length}
-				<p class="text-xs text-warn">No procedure has a published version.</p>
-			{/if}
-			<FormRow label="Project" for="cut-project" required>
-				<div role="presentation" onchangecapture={() => (projectTouched = true)}>
-					<ProjectSelect id="cut-project" bind:value={projectId} class="w-full" />
-				</div>
-			</FormRow>
-			<div class="grid grid-cols-2 gap-3">
-				<FormRow label="Version" for="cut-version">
+	<form class="grid grid-cols-1 gap-3" onsubmit={submit}>
+		<Section title="Cut">
+			<div class="grid grid-cols-1 gap-3 p-3">
+				<NextNumber kind="workOrder" count={n} />
+				<Field label="Procedure" for="cut-procedure" required>
 					<NativeSelect
-						id="cut-version"
+						id="cut-procedure"
 						class="w-full"
-						disabled={!preview}
-						value={versionId}
-						onchange={(e) => (versionId = e.currentTarget.value)}
-					>
-						{#if preview}
-							{#each preview.versions as v (v.id)}
-								<option value={String(v.id)}>v{v.number}{v.isCurrent ? ' (current)' : ''}</option>
-							{/each}
-						{:else}<option value="">—</option>{/if}
-					</NativeSelect>
-				</FormRow>
-				<FormRow label="Quantity" for="cut-qty">
-					<Input
-						id="cut-qty"
-						type="number"
-						min="1"
-						max="100"
-						step="1"
-						class="font-mono"
-						bind:value={quantity}
 						required
-					/>
-				</FormRow>
+						value={procedureId}
+						onchange={(e) => pickProcedure(e.currentTarget.value)}
+					>
+						<option value="">—</option>
+						{#each data.procedures as p (p.id)}<option value={String(p.id)}
+								>{p.templateNumber} {p.name}</option
+							>{/each}
+					</NativeSelect>
+				</Field>
+				{#if !data.procedures.length}
+					<p class="text-xs text-warn">No procedure has a published version.</p>
+				{/if}
+				<Field label="Project" for="cut-project" required>
+					<div role="presentation" onchangecapture={() => (projectTouched = true)}>
+						<ProjectSelect id="cut-project" bind:value={projectId} class="w-full" />
+					</div>
+				</Field>
+				<div class="grid grid-cols-2 gap-3">
+					<Field label="Version" for="cut-version">
+						<NativeSelect
+							id="cut-version"
+							class="w-full"
+							disabled={!preview}
+							value={versionId}
+							onchange={(e) => (versionId = e.currentTarget.value)}
+						>
+							{#if preview}
+								{#each preview.versions as v (v.id)}
+									<option value={String(v.id)}>v{v.number}{v.isCurrent ? ' (current)' : ''}</option>
+								{/each}
+							{:else}<option value="">—</option>{/if}
+						</NativeSelect>
+					</Field>
+					<Field label="Quantity" for="cut-qty">
+						<Input
+							id="cut-qty"
+							type="number"
+							min="1"
+							max="100"
+							step="1"
+							class="font-mono"
+							bind:value={quantity}
+							required
+						/>
+					</Field>
+				</div>
+				<div class="grid grid-cols-2 gap-3">
+					<Field label="Scheduled start" for="cut-sched">
+						<Input id="cut-sched" type="datetime-local" class="font-mono" bind:value={scheduled} />
+					</Field>
+					<Field label="Target completion" for="cut-target">
+						<Input id="cut-target" type="datetime-local" class="font-mono" bind:value={target} />
+					</Field>
+				</div>
+				<Field label="Priority" for="cut-priority">
+					<NativeSelect id="cut-priority" class="w-48" bind:value={priority}>
+						{#each EXECUTION_PRIORITIES as p (p)}<option value={p}>{p.toUpperCase()}</option>{/each}
+					</NativeSelect>
+				</Field>
 			</div>
-			<div class="grid grid-cols-2 gap-3">
-				<FormRow label="Scheduled start" for="cut-sched">
-					<Input id="cut-sched" type="datetime-local" class="font-mono" bind:value={scheduled} />
-				</FormRow>
-				<FormRow label="Target completion" for="cut-target">
-					<Input id="cut-target" type="datetime-local" class="font-mono" bind:value={target} />
-				</FormRow>
-			</div>
-			<FormRow label="Priority" for="cut-priority">
-				<NativeSelect id="cut-priority" class="w-48" bind:value={priority}>
-					{#each EXECUTION_PRIORITIES as p (p)}<option value={p}>{p.toUpperCase()}</option>{/each}
-				</NativeSelect>
-			</FormRow>
-			{#if error}<p role="alert" class="text-xs text-error">{error}</p>{/if}
-			<div class="flex gap-2">
-				<Button type="submit" disabled={busy || !procedureId || !preview || !projectId}
-					>{n === 1 ? 'CUT WORK ORDER' : `CUT ${n} WORK ORDERS`}</Button
-				>
-				<Button variant="outline" href="/executions">CANCEL</Button>
-			</div>
-		</form>
-	</Section>
+		</Section>
+		<!-- The preview has to load before a cut: it settles the version. -->
+		<FormKeys
+			submit={n === 1 ? 'CUT WORK ORDER' : `CUT ${n} WORK ORDERS`}
+			cancel="/executions"
+			{missing}
+			busy={busy || (!!procedureId && !preview)}
+			{error}
+		/>
+	</form>
 
 	<div class="grid min-w-0 grid-cols-1 content-start gap-4">
+		<!-- Nothing until a procedure is picked: there is nothing to preview yet. -->
 		{#if previewError}
 			<ErrorBanner message={previewError} />
-		{:else if !preview}
-			<EmptyLine label="Preview" empty="Nothing to preview." />
-		{:else}
+		{:else if preview}
 			<Section title="Procedure">
 				<div class="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-xs">
 					<span class="font-mono text-muted-foreground">{preview.procedureNumber}</span>

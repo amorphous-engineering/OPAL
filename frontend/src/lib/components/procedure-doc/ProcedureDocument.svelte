@@ -50,12 +50,9 @@
 	{#if au}
 		<div class="flex flex-wrap items-center gap-2">
 			<Button size="sm" variant="outline" onclick={() => au.addOp()}>+ OP</Button>
-			<Button size="sm" variant="ghost" onclick={() => au.addOp({ contingency: true })}
+			<Button size="sm" variant="outline" onclick={() => au.addOp({ contingency: true })}
 				>+ CONTINGENCY OP</Button
 			>
-			{#if !ops.length && !contingency.length}
-				<span class="font-mono text-xs text-muted-foreground">OPERATIONS — none</span>
-			{/if}
 		</div>
 	{/if}
 </div>

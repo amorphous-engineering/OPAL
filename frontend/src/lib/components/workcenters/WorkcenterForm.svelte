@@ -1,12 +1,12 @@
 <script lang="ts">
-	// One form for create (page) and edit (dialog). Code is uppercased by the server.
-	import { ErrorBanner } from '#lib/components/opal/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
+	// One form for create (page) and edit (in its section). Code is uppercased by the server. With
+	// a title it draws its own box and puts its keys below it, as every create page does.
+	import { Field, FormKeys, needs, Section } from '#lib/components/opal/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { untrack, type Snippet } from 'svelte';
+	import { untrack } from 'svelte';
 	import type { WorkcenterInput } from './types.js';
 
 	let {
@@ -16,16 +16,18 @@
 		error = null,
 		onsubmit,
 		cancel,
-		showActive = true
+		showActive = true,
+		title
 	}: {
 		initial?: Partial<WorkcenterInput>;
 		submitLabel: string;
 		busy?: boolean;
 		error?: string | null;
 		onsubmit: (v: WorkcenterInput) => void;
-		cancel: Snippet;
+		cancel?: string | (() => void);
 		/** The active switch. Off on the edit page, where DEACTIVATE is its own act. */
 		showActive?: boolean;
+		title?: string;
 	} = $props();
 
 	// The form seeds once; callers remount it ({#key}) to reseed.
@@ -35,6 +37,8 @@
 	let location = $state(init?.location ?? '');
 	let description = $state(init?.description ?? '');
 	let active = $state(init?.isActive ?? true);
+
+	const missing = $derived(needs({ code: code.trim(), name: name.trim() }));
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -49,38 +53,40 @@
 </script>
 
 <form class="grid grid-cols-1 gap-3" onsubmit={submit}>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="wc-code">Code</Label>
+	{#if title}
+		<Section {title}>
+			<div class="grid grid-cols-1 gap-3 p-3">{@render fields()}</div>
+		</Section>
+	{:else}
+		{@render fields()}
+	{/if}
+	<FormKeys submit={submitLabel} {cancel} {missing} {busy} {error} />
+</form>
+
+{#snippet fields()}
+	<Field label="Code" for="wc-code" required>
 		<Input
 			id="wc-code"
 			class="w-40 font-mono uppercase"
 			bind:value={code}
 			required
 			maxlength={50}
-			placeholder="AB1"
+			autocomplete="off"
 		/>
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="wc-name">Name</Label>
+	</Field>
+	<Field label="Name" for="wc-name" required>
 		<Input id="wc-name" bind:value={name} required maxlength={255} />
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="wc-loc">Location</Label>
+	</Field>
+	<Field label="Location" for="wc-loc">
 		<Input id="wc-loc" bind:value={location} maxlength={255} />
-	</div>
-	<div class="grid grid-cols-1 gap-1.5">
-		<Label for="wc-desc">Description</Label>
+	</Field>
+	<Field label="Description" for="wc-desc">
 		<Textarea id="wc-desc" bind:value={description} rows={3} />
-	</div>
+	</Field>
 	{#if showActive}
 		<div class="flex items-center gap-2">
 			<Switch id="wc-active" bind:checked={active} />
 			<Label for="wc-active">Active</Label>
 		</div>
 	{/if}
-	<ErrorBanner message={error} />
-	<div class="flex justify-end gap-2">
-		{@render cancel()}
-		<Button type="submit" disabled={busy || !code.trim() || !name.trim()}>{submitLabel}</Button>
-	</div>
-</form>
+{/snippet}

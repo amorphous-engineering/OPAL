@@ -21,6 +21,11 @@
 	);
 
 	const grouped = $derived(groupOps(steps));
+	// A step alone with one roleless slot is the routine tick: anyone completes it, and there is
+	// nothing to show. An OP with sub-steps that has a slot signs after its steps, so it shows.
+	const heads = $derived(new Set(steps.map((s) => s.parentId).filter((id) => id != null)));
+	const routine = (s: SnapshotStep) =>
+		!heads.has(s.id) && s.signoffs.length === 1 && !s.signoffs[0].role;
 
 	// Same threshold the editor uses to open a document fully.
 	const SMALL_DOC = 12;
@@ -121,14 +126,16 @@
 {/snippet}
 
 {#snippet signoffs(s: SnapshotStep)}
-	{#if s.signoffs.length}
+	{#if s.signoffs.length && !routine(s)}
 		<div class="my-1 max-w-xl overflow-hidden border border-border">
 			<table class="w-full font-mono text-xs" aria-label="Sign-offs">
 				<tbody>
 					{#each s.signoffs as so, i (i)}
 						<tr class="border-b border-border last:border-b-0" data-signoff={i}>
-							<td class="w-44 px-2 py-1 font-sans text-sm font-medium">{so.label}</td>
-							<td class="px-2 py-1 text-muted-foreground">{so.role ?? '–'}</td>
+							<td class="w-44 px-2 py-1 font-sans text-sm font-medium"
+								>{i === 0 ? 'Sign-off' : 'Second sign-off'}</td
+							>
+							<td class="px-2 py-1 text-muted-foreground">{so.role ?? 'Any role'}</td>
 						</tr>
 					{/each}
 				</tbody>

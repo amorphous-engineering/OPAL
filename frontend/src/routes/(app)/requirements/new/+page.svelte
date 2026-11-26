@@ -1,12 +1,18 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { PageHeader, Section, toastError, ErrorBanner } from '#lib/components/opal/index.js';
+	import {
+		Field,
+		FormKeys,
+		NextNumber,
+		needs,
+		PageHeader,
+		Section,
+		toastError
+	} from '#lib/components/opal/index.js';
 	import { opal, ApiError } from '#lib/api.js';
 	import ProjectSelect from '#lib/components/projects/ProjectSelect.svelte'; // added by projects
 	import LintEditor from '#lib/components/requirements/LintEditor.svelte';
@@ -46,6 +52,10 @@
 		if (!categoryTouched && parent?.category) category = parent.category;
 	});
 
+	const missing = $derived(
+		needs({ project: projectId, title: title.trim(), 'shall statement': statement.trim() })
+	);
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		busy = true;
@@ -79,114 +89,87 @@
 	crumbs={[{ label: 'Requirements', href: '/requirements' }, { label: 'New' }]}
 />
 
-<form class="max-w-3xl p-4" onsubmit={submit}>
-	<Section title="DRAFT">
-		<div class="grid grid-cols-1 gap-4 p-4">
-			<ErrorBanner message={error} />
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="project">Project</Label>
+<form class="grid max-w-3xl grid-cols-1 gap-3 p-4" onsubmit={submit}>
+	<Section title="Requirement">
+		<div class="grid grid-cols-1 gap-3 p-3">
+			<NextNumber kind="requirement" />
+			<Field label="Project" for="project" required>
 				<ProjectSelect id="project" bind:value={projectId} />
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="title">Title</Label>
-				<Input
-					id="title"
-					bind:value={title}
-					maxlength={255}
-					required
-					placeholder="Short name, e.g. Operating temperature"
-				/>
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="statement">Shall statement</Label>
-				<LintEditor
-					id="statement"
-					bind:value={statement}
-					required
-					placeholder="The <subject> shall <one thought>, e.g. The enclosure shall operate from −20 °C to 50 °C."
-				/>
-			</div>
-			<div class="grid grid-cols-1 gap-1.5">
-				<Label for="rationale">Rationale</Label>
-				<Textarea
-					id="rationale"
-					bind:value={rationale}
-					rows={2}
-					placeholder="Where the number came from and what it protects. Required before baseline."
-				/>
-			</div>
-			<div class="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
-				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="parent">Parent</Label>
+			</Field>
+			<Field label="Title" for="title" required>
+				<Input id="title" bind:value={title} maxlength={255} required autofocus />
+			</Field>
+			<Field
+				label="Shall statement"
+				for="statement"
+				required
+				hint="The <subject> shall <one thought>."
+			>
+				<LintEditor id="statement" bind:value={statement} required />
+			</Field>
+			<Field
+				label="Rationale"
+				for="rationale"
+				hint="Where the number came from and what it protects."
+			>
+				<Textarea id="rationale" bind:value={rationale} rows={2} />
+			</Field>
+			<div class="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+				<Field label="Parent" for="parent" hint={parent ? `Level ${parent.level + 1}` : null}>
 					<NativeSelect id="parent" bind:value={parentId} class="w-full">
-						<NativeSelectOption value="">None (level 0)</NativeSelectOption>
+						<NativeSelectOption value="">—</NativeSelectOption>
 						{#each candidates as p (p.id)}
 							<NativeSelectOption value={String(p.id)}
 								>{p.reqNumber} L{p.level} {p.title}</NativeSelectOption
 							>
 						{/each}
 					</NativeSelect>
-					<p class="font-mono text-xs text-muted-foreground">
-						Level {parent ? parent.level + 1 : 0}
-					</p>
-				</div>
-				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="method">Verification method</Label>
+				</Field>
+				<Field label="Verification method" for="method">
 					<NativeSelect id="method" bind:value={method} class="w-full">
-						<NativeSelectOption value="">Not set</NativeSelectOption>
+						<NativeSelectOption value="">—</NativeSelectOption>
 						{#each VERIFICATION_METHODS as m (m)}
 							<NativeSelectOption value={m}>{m.toUpperCase()}</NativeSelectOption>
 						{/each}
 					</NativeSelect>
-				</div>
-				<div class="grid grid-cols-1 gap-1.5">
-					<Label for="category">Category</Label>
+				</Field>
+				<Field label="Category" for="category">
 					<Input
 						id="category"
 						bind:value={category}
 						maxlength={50}
 						list="req-categories"
 						oninput={() => (categoryTouched = true)}
-						placeholder="functional, performance, interface"
 					/>
 					<datalist id="req-categories">
 						{#each categories as c (c)}<option value={c!}></option>{/each}
 					</datalist>
-				</div>
+				</Field>
 			</div>
 			<div class="flex flex-wrap gap-x-6 gap-y-2">
-				<label class="flex items-center gap-2 text-xs">
+				<label class="flex items-center gap-2 text-xs" title="To be determined">
 					<Checkbox bind:checked={tbd} /> <span class="mono">TBD</span>
-					<span class="text-muted-foreground">value not yet determined</span>
 				</label>
-				<label class="flex items-center gap-2 text-xs">
+				<label class="flex items-center gap-2 text-xs" title="To be reviewed">
 					<Checkbox bind:checked={tbr} /> <span class="mono">TBR</span>
-					<span class="text-muted-foreground">value to be reviewed</span>
 				</label>
 			</div>
 			{#if tbr}
-				<div class="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
-					<div class="grid grid-cols-1 gap-1.5">
-						<Label for="owner">TBR owner</Label>
+				<div class="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+					<Field label="TBR owner" for="owner">
 						<NativeSelect id="owner" bind:value={owner} class="w-full">
-							<NativeSelectOption value="">Not set</NativeSelectOption>
+							<NativeSelectOption value="">—</NativeSelectOption>
 							{#each data.assignees as u (u.id)}
 								<NativeSelectOption value={String(u.id)}>{u.name}</NativeSelectOption>
 							{/each}
 						</NativeSelect>
-					</div>
-					<div class="grid grid-cols-1 gap-1.5">
-						<Label for="due">TBR due</Label>
+					</Field>
+					<Field label="TBR due" for="due">
 						<Input id="due" type="date" bind:value={due} class="w-44 font-mono" />
-					</div>
+					</Field>
 				</div>
 			{/if}
 		</div>
-		<div class="flex justify-end gap-2 border-t border-border px-4 py-3">
-			<Button variant="outline" href="/requirements">CANCEL</Button>
-			<Button type="submit" disabled={busy || !title.trim() || !statement.trim() || !projectId}
-				>CREATE DRAFT</Button
-			>
-		</div>
 	</Section>
+	<FormKeys submit="CREATE" cancel="/requirements" {missing} {busy} {error} />
 </form>

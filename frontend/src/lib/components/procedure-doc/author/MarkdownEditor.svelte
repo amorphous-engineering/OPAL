@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Instructions as markdown in the shared editor (LIVE, HYBRID or SOURCE). Images upload
-	// (button, paste or drop) and insert at the cursor. Host snippets add the step's own
-	// buttons, callout boxes and save badge to the one header row.
+	// (button, paste or drop) and insert at the cursor. The toolbar shows only while the box has
+	// focus: a template has hundreds of boxes, and only the one being typed in needs it.
 	import type { Snippet } from 'svelte';
 	import * as Toolbar from '#lib/components/ui/toolbar/index.js';
 	import { MarkdownField } from '#lib/components/markdown/index.js';
@@ -48,11 +48,12 @@
 
 <MarkdownField
 	{id}
-	{label}
+	ariaLabel={label}
+	toolbarOnFocus
 	value={text}
 	{onchange}
 	bind:this={field}
-	placeholder="Instructions in markdown. Paste or drop an image to add it."
+	placeholder={label}
 	minRows={3}
 	onfiles={upload}
 	{between}

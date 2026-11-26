@@ -139,7 +139,7 @@ export const datasets = {
 		method: 'POST',
 		path: '/datasets',
 		summary:
-			'Create a dataset with a field schema. A number field takes a unit code (such as in, mm, in_lbf, psi) and a spec (range, nominal, min, max or reference) as decimal strings; out-of-spec points are stored and flagged, never refused. Legacy min and max still refuse.',
+			'Create a dataset with a field schema. A number field takes a unit code (such as in, mm, in_lbf, psi) or a unit written out, and a spec (range, nominal, min, max or reference) as decimal strings; out-of-spec points are stored and flagged, never refused. Legacy min and max still refuse.',
 		input: z.object({
 			projectId: zId, // added by projects
 			name: zName,
