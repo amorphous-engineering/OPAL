@@ -101,9 +101,9 @@
 				<Input id="title" bind:value={title} maxlength={255} required autofocus />
 			</Field>
 
-			<!-- The hints are the risk statement's grammar: each part is scored by a different
-			     number, so they stay beside the boxes. -->
-			<Field label="Condition" for="condition" hint="A present fact, true now.">
+			<!-- The labels are the NASA risk statement (NPR 8000.4C), the sentence the risk page
+			     builds from these four boxes. -->
+			<Field label="Given that" for="condition">
 				<LintField
 					id="condition"
 					field="condition"
@@ -112,11 +112,7 @@
 				/>
 			</Field>
 
-			<Field
-				label="Departure"
-				for="departure"
-				hint="The future undesired event. Probability scores this."
-			>
+			<Field label="there is a possibility of" for="departure">
 				<LintField
 					id="departure"
 					field="departure"
@@ -125,7 +121,7 @@
 				/>
 			</Field>
 
-			<Field label="Asset" for="asset-text" hint="What is exposed: a part, or a name.">
+			<Field label="adversely impacting" for="asset-text">
 				<div class="flex flex-wrap items-center gap-2">
 					{#if asset}
 						<a class="font-mono text-xs text-info hover:underline" href={`/parts/${asset.id}`}
@@ -147,11 +143,7 @@
 				</div>
 			</Field>
 
-			<Field
-				label="Consequence"
-				for="consequence"
-				hint="The measurable impact. Impact scores this."
-			>
+			<Field label="thereby leading to" for="consequence">
 				<LintField
 					id="consequence"
 					field="consequence"
